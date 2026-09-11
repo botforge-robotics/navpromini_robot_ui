@@ -303,13 +303,22 @@ class _InteractiveUiOverlayState extends State<InteractiveUiOverlay> {
               )
             else if (f.type == 'select')
               DropdownButtonFormField<String>(
-                initialValue: f.options.isNotEmpty ? f.options.first : null,
+                key: ValueKey('field_${f.key}_${_formData[f.key]}'),
+                isExpanded: true,
+                initialValue: f.options.contains(_formData[f.key])
+                    ? _formData[f.key]
+                    : (f.options.isNotEmpty ? f.options.first : null),
                 dropdownColor: RobotTheme.card,
                 style: const TextStyle(color: Colors.white, fontSize: 16),
-                decoration: const InputDecoration(),
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
                 items: [
                   for (final opt in f.options)
-                    DropdownMenuItem(value: opt, child: Text(opt)),
+                    DropdownMenuItem(
+                      value: opt,
+                      child: Text(opt, overflow: TextOverflow.ellipsis),
+                    ),
                 ],
                 onChanged: (v) => _formData[f.key] = v,
                 onSaved: (v) => _formData[f.key] = v,

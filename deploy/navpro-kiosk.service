@@ -1,0 +1,17 @@
+[Unit]
+Description=NavPro Mini Touchscreen Kiosk UI
+After=network.target navpro-sdk.service lightdm.service
+Wants=navpro-sdk.service
+
+[Service]
+Type=simple
+User=navpromini
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/navpromini/.Xauthority
+WorkingDirectory=/home/navpromini/navpromini_robot_ui
+ExecStart=/bin/bash /home/navpromini/navpromini_robot_ui/deploy/start_kiosk.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=graphical.target

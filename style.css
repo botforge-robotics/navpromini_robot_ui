@@ -227,6 +227,27 @@ body, html {
   color: var(--text-secondary);
 }
 
+.keyboard-btn {
+  padding: 8px 14px;
+  background: var(--surface-card);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.keyboard-btn:active {
+  transform: scale(0.94);
+  border-color: var(--accent);
+  background: var(--surface-elevated);
+}
+
 .estop-btn {
   padding: 8px 18px;
   background: linear-gradient(135deg, #EF4444, #B91C1C);
@@ -392,7 +413,7 @@ body, html {
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .hub-card::before {
@@ -406,27 +427,32 @@ body, html {
   transition: background 0.2s;
 }
 
-.hub-card:hover, .hub-card:active {
-  transform: translateY(-4px) scale(0.99);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65);
+/* Hover ONLY for fine pointer devices (mouse), NEVER on touch to prevent blinking/triggering */
+@media (hover: hover) and (pointer: fine) {
+  .hub-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+  }
 }
 
 .hub-card:active {
-  transform: scale(0.96);
+  background: #1C2438 !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* Tile Themes */
 .tile-missions::before { background: linear-gradient(90deg, #CB3C00, #FE6829); }
-.tile-missions:hover, .tile-missions:active { border-color: var(--primary); }
+.tile-missions:active { border-color: var(--primary) !important; }
 
 .tile-locations::before { background: linear-gradient(90deg, #3B82F6, #60A5FA); }
-.tile-locations:hover, .tile-locations:active { border-color: var(--accent); }
+.tile-locations:active { border-color: var(--accent) !important; }
 
 .tile-schedules::before { background: linear-gradient(90deg, #8B5CF6, #A78BFA); }
-.tile-schedules:hover, .tile-schedules:active { border-color: var(--purple); }
+.tile-schedules:active { border-color: var(--purple) !important; }
 
 .tile-quick-action::before { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
-.tile-quick-action:hover, .tile-quick-action:active { border-color: var(--warning); }
+.tile-quick-action:active { border-color: var(--warning) !important; }
 
 .hub-card-header {
   display: flex;
@@ -981,7 +1007,7 @@ body, html {
   color: #FFFFFF;
 }
 
-.kiosk-input, .form-input, .form-select {
+.kiosk-input, .form-input {
   width: 100%;
   height: 60px;
   padding: 0 20px;
@@ -989,15 +1015,81 @@ body, html {
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius-md);
   color: #FFFFFF;
-  font-size: 17px;
+  font-size: 18px;
   font-family: var(--font-main);
   outline: none;
   transition: all 0.2s;
 }
 
-.kiosk-input:focus, .form-input:focus, .form-select:focus {
+.kiosk-input:focus, .form-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 4px var(--accent-glow);
+}
+
+/* Custom High-Contrast Dropdown (Select & Options) */
+.kiosk-select-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.kiosk-select-arrow {
+  position: absolute;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #60A5FA;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+select.kiosk-input,
+select.kiosk-select,
+.form-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  height: 64px;
+  padding: 0 54px 0 22px;
+  background-color: #1A2234 !important;
+  color: #FFFFFF !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  font-family: var(--font-main) !important;
+  border: 2px solid #334155 !important;
+  border-radius: var(--radius-md) !important;
+  outline: none;
+  cursor: pointer;
+}
+
+select.kiosk-input:focus,
+select.kiosk-select:focus,
+.form-select:focus {
+  border-color: #3B82F6 !important;
+  background-color: #202B42 !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25) !important;
+}
+
+/* Explicit option styling for WebKit/GTK popups */
+select.kiosk-input option,
+select.kiosk-select option,
+.form-select option {
+  background-color: #1A2234 !important;
+  color: #FFFFFF !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  padding: 16px 20px !important;
+  min-height: 52px !important;
+  line-height: 2 !important;
+}
+
+select.kiosk-input option:checked,
+select.kiosk-input option:hover,
+select.kiosk-select option:checked,
+select.kiosk-select option:hover {
+  background-color: #3B82F6 !important;
+  color: #FFFFFF !important;
 }
 
 .kiosk-checkbox-group {

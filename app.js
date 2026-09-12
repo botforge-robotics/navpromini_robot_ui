@@ -58,38 +58,61 @@ function switchTab(tabId) {
 
 // Hub Quick Navigation Tiles & Demo Dynamic Popup
 function initHubTiles() {
-  document.getElementById("hub-tile-missions")?.addEventListener("click", () => {
+  let lastClickTime = 0;
+  const debounce = (fn) => (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    const now = Date.now();
+    if (now - lastClickTime < 450) return;
+    lastClickTime = now;
+    fn();
+  };
+
+  document.getElementById("hub-tile-missions")?.addEventListener("click", debounce(() => {
     switchTab("missions");
-  });
+  }));
 
-  document.getElementById("hub-tile-locations")?.addEventListener("click", () => {
+  document.getElementById("hub-tile-locations")?.addEventListener("click", debounce(() => {
     switchTab("locations");
-  });
+  }));
 
-  document.getElementById("hub-tile-schedules")?.addEventListener("click", () => {
+  document.getElementById("hub-tile-schedules")?.addEventListener("click", debounce(() => {
     showToast("Opening automated schedules routine...");
     switchTab("missions");
-  });
+  }));
 
   const triggerTestPopup = () => {
     showToast("Triggering interactive UI popup on robot screen...");
     handleActiveInteraction({
       interaction_id: "test_dynamic_" + Date.now(),
       target: "robot_screen",
-      subtype: "choice",
-      title: "Patient Delivery Confirmation",
-      message: "Robot has arrived at Destination (Room 302). Please inspect the parcel and confirm receipt using touch buttons below:",
-      options: ["Accept Package", "Return to Station", "Ask for Assistance"],
-      timeout_sec: 45
+      subtype: "form",
+      title: "Patient Intake & Delivery Verification",
+      message: "Please select department and review instructions before dispatch:",
+      fields: [
+        { key: "department", label: "Destination Department", type: "select", options: ["ICU - Room 402", "Emergency Ward B", "Cardiology Clinic", "Central Pharmacy"], required: true },
+        { key: "notes", label: "Nurse / Attendant Notes", type: "text", default_value: "" },
+        { key: "verified", label: "Medication Checked by Staff", type: "checkbox", default_value: true }
+      ],
+      timeout_sec: 60
     });
   };
 
-  document.getElementById("hub-tile-random")?.addEventListener("click", triggerTestPopup);
-  document.getElementById("btn-trigger-test-popup")?.addEventListener("click", triggerTestPopup);
+  document.getElementById("hub-tile-random")?.addEventListener("click", debounce(triggerTestPopup));
+  document.getElementById("btn-trigger-test-popup")?.addEventListener("click", debounce(triggerTestPopup));
 }
 
 // Action Buttons
 function initActionButtons() {
+  // Keyboard Toggle
+  document.getElementById("btn-keyboard-toggle")?.addEventListener("click", async () => {
+    try {
+      await fetch(`${API_BASE}/api/v1/system/keyboard/toggle`, { method: "POST" });
+    } catch (e) {
+      console.warn("Keyboard toggle endpoint not reachable", e);
+    }
+  });
+
   // E-Stop
   document.getElementById("btn-estop")?.addEventListener("click", async () => {
     if (confirm("Trigger EMERGENCY STOP?")) {
@@ -688,7 +711,10 @@ function renderInteractionForm(interaction) {
       return `
         <div class="kiosk-field-group">
           <label>${label}</label>
-          <select name="${key}" class="kiosk-input" ${req}>${opts}</select>
+          <div class="kiosk-select-wrap">
+            <select name="${key}" class="kiosk-input kiosk-select" ${req}>${opts}</select>
+            <div class="kiosk-select-arrow">▼</div>
+          </div>
         </div>
       `;
     } else {

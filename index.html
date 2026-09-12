@@ -108,6 +108,56 @@
             </div>
           </div>
 
+          <!-- Main Robot Quick Hub Grid: Missions, Locations, Schedules, Random/Test Action -->
+          <div class="card hub-navigation-card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <span class="card-tag">ROBOT OPERATION HUB</span>
+                <h3>Navigation & Task Hub</h3>
+              </div>
+              <button class="btn-sm btn-outline" id="btn-trigger-test-popup" title="Simulate Dynamic Mission Interaction">
+                🧪 Test Dynamic UI Popup
+              </button>
+            </div>
+            <div class="hub-tiles-grid">
+              <div class="hub-tile tile-missions" id="hub-tile-missions">
+                <div class="hub-icon">📜</div>
+                <div class="hub-details">
+                  <h4>Missions</h4>
+                  <p>Autonomous graph workflows</p>
+                </div>
+                <span class="hub-badge" id="hub-missions-count">Missions</span>
+              </div>
+
+              <div class="hub-tile tile-locations" id="hub-tile-locations">
+                <div class="hub-icon">📍</div>
+                <div class="hub-details">
+                  <h4>Locations</h4>
+                  <p>Saved stations & waypoints</p>
+                </div>
+                <span class="hub-badge" id="hub-locations-count">Map Points</span>
+              </div>
+
+              <div class="hub-tile tile-schedules" id="hub-tile-schedules">
+                <div class="hub-icon">⏰</div>
+                <div class="hub-details">
+                  <h4>Schedules</h4>
+                  <p>Recurring patrol routines</p>
+                </div>
+                <span class="hub-badge">Automated</span>
+              </div>
+
+              <div class="hub-tile tile-random" id="hub-tile-random">
+                <div class="hub-icon">⚡</div>
+                <div class="hub-details">
+                  <h4>Random / Test</h4>
+                  <p>Trigger dynamic popup UI</p>
+                </div>
+                <span class="hub-badge">Interactive</span>
+              </div>
+            </div>
+          </div>
+
           <div class="dashboard-grid">
             <!-- Quick Station Dispatch -->
             <div class="card quick-locations-card">

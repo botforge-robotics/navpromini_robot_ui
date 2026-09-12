@@ -15,6 +15,7 @@ let interactionTotal = 0;
 document.addEventListener("DOMContentLoaded", () => {
   initClock();
   initTabs();
+  initHubTiles();
   initActionButtons();
   initModals();
   startPolling();
@@ -53,6 +54,38 @@ function switchTab(tabId) {
 
   if (tabId === "locations") loadWaypoints();
   if (tabId === "missions") loadMissions();
+}
+
+// Hub Quick Navigation Tiles & Demo Dynamic Popup
+function initHubTiles() {
+  document.getElementById("hub-tile-missions")?.addEventListener("click", () => {
+    switchTab("missions");
+  });
+
+  document.getElementById("hub-tile-locations")?.addEventListener("click", () => {
+    switchTab("locations");
+  });
+
+  document.getElementById("hub-tile-schedules")?.addEventListener("click", () => {
+    showToast("Opening automated schedules routine...");
+    switchTab("missions");
+  });
+
+  const triggerTestPopup = () => {
+    showToast("Triggering interactive UI popup on robot screen...");
+    handleActiveInteraction({
+      interaction_id: "test_dynamic_" + Date.now(),
+      target: "robot_screen",
+      subtype: "choice",
+      title: "Patient Delivery Confirmation",
+      message: "Robot has arrived at Destination (Room 302). Please inspect the parcel and confirm receipt using touch buttons below:",
+      options: ["Accept Package", "Return to Station", "Ask for Assistance"],
+      timeout_sec: 45
+    });
+  };
+
+  document.getElementById("hub-tile-random")?.addEventListener("click", triggerTestPopup);
+  document.getElementById("btn-trigger-test-popup")?.addEventListener("click", triggerTestPopup);
 }
 
 // Action Buttons

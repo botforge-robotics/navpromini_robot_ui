@@ -796,6 +796,17 @@ body, html {
   color: var(--text-primary);
 }
 
+.btn-outline-danger {
+  background: transparent;
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  color: #EF4444;
+}
+
+.btn-outline-danger:active {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #EF4444;
+}
+
 .btn-sm {
   padding: 8px 14px;
   font-size: 12px;

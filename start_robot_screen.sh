@@ -66,9 +66,15 @@ fi
 
 # Ensure window is set to borderless full-screen via wmctrl / xdotool
 (
-    for i in {1..8}; do
+    for i in {1..10}; do
         sleep 0.5
-        if command -v wmctrl >/dev/null 2>&1; then
+        if command -v xdotool >/dev/null 2>&1; then
+            WID=$(xdotool search --onlyvisible --class epiphany 2>/dev/null | tail -n 1 || true)
+            if [ -n "${WID}" ]; then
+                xdotool windowactivate "${WID}" key F11 2>/dev/null || true
+                break
+            fi
+        elif command -v wmctrl >/dev/null 2>&1; then
             if wmctrl -l | grep -qi "NavPro"; then
                 wmctrl -r "NavPro" -b add,fullscreen 2>/dev/null || true
                 break

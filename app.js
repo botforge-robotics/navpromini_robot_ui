@@ -515,11 +515,34 @@ function renderMissions(missions) {
             <p class="mission-item-desc">${desc}</p>
           </div>
         </div>
-        <button class="btn btn-primary" onclick="executeMission('${id}')">Run Mission</button>
+        <div class="mission-item-actions" style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn btn-outline-danger btn-sm" onclick="deleteMission('${id}', '${name.replace(/'/g, "\\'")}')" title="Delete Mission">🗑️ Delete</button>
+          <button class="btn btn-primary" onclick="executeMission('${id}')">Run Mission</button>
+        </div>
       </div>
     `;
   }).join("");
 }
+
+window.deleteMission = async function(id, name) {
+  if (!confirm(`Are you sure you want to permanently delete mission "${name || id}"?\n\nThis action cannot be undone.`)) {
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    });
+    if (res.ok) {
+      showToast(`Mission deleted.`);
+      loadMissions();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`Delete failed: ${err.message || err.detail || "Error"}`, true);
+    }
+  } catch (e) {
+    showToast(`Delete error: ${e.message}`, true);
+  }
+};
 
 window.executeMission = async function(id) {
   if (confirm(`Launch mission ${id}?`)) {

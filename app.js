@@ -360,29 +360,21 @@ function updateHeader(state) {
 
 function updateDashboard(state) {
   const mission = state.active_mission || state.mission || null;
-  const card = document.getElementById("mission-status-card");
+  const banner = document.getElementById("mission-floating-banner");
   const title = document.getElementById("active-mission-title");
-  const controls = document.getElementById("mission-controls");
   const progressBar = document.getElementById("mission-progress-bar");
-  const statusLabel = document.getElementById("mission-status-label");
   const nodeLabel = document.getElementById("mission-node-label");
-  const mapLabel = document.getElementById("mission-map-label");
 
-  if (mission && (mission.status === "running" || mission.status === "in_progress" || mission.status === "paused")) {
-    title.textContent = mission.mission_name || mission.name || "Active Mission";
-    controls.style.display = "flex";
-    const progress = mission.progress_pct || mission.progress || 0;
-    progressBar.style.width = `${progress}%`;
-    statusLabel.textContent = (mission.status || "").toUpperCase();
-    nodeLabel.textContent = mission.current_node_title || mission.current_node_id || mission.active_step || "--";
-    mapLabel.textContent = mission.map_name || state.active_map || "--";
+  const isRunning = mission && (mission.status === "running" || mission.status === "in_progress" || mission.status === "waiting_for_user" || mission.status === "paused" || state.status === "running");
+
+  if (isRunning) {
+    if (banner) banner.style.display = "flex";
+    if (title) title.textContent = mission?.mission_name || mission?.name || "Active Mission";
+    const progress = mission?.progress_pct || mission?.progress || 0;
+    if (progressBar) progressBar.style.width = `${progress}%`;
+    if (nodeLabel) nodeLabel.textContent = `Node: ${mission?.current_node_title || mission?.current_node_id || mission?.active_step || "--"}`;
   } else {
-    title.textContent = "No Mission Active";
-    controls.style.display = "none";
-    progressBar.style.width = "0%";
-    statusLabel.textContent = "Idle";
-    nodeLabel.textContent = "--";
-    mapLabel.textContent = state.active_map || "--";
+    if (banner) banner.style.display = "none";
   }
 }
 
@@ -572,9 +564,29 @@ function handleActiveInteraction(interaction) {
   const timerChip = document.getElementById("interaction-timer-sec");
   const progressFill = document.getElementById("timer-progress-fill");
 
+  const timerChipWrap = document.getElementById("interaction-timer-chip");
+
+  function applyTimerTheme(rem) {
+    if (!timerChipWrap || !progressFill) return;
+    if (rem > 15) {
+      timerChip.style.color = "var(--success)";
+      timerChipWrap.style.borderColor = "var(--success)";
+      progressFill.style.background = "linear-gradient(90deg, var(--success), var(--accent))";
+    } else if (rem > 5) {
+      timerChip.style.color = "var(--warning)";
+      timerChipWrap.style.borderColor = "var(--warning)";
+      progressFill.style.background = "linear-gradient(90deg, var(--warning), #FBBF24)";
+    } else {
+      timerChip.style.color = "var(--danger)";
+      timerChipWrap.style.borderColor = "var(--danger)";
+      progressFill.style.background = "linear-gradient(90deg, var(--danger), #F87171)";
+    }
+  }
+
   if (timeoutSec > 0) {
     timerChip.textContent = `${timeoutSec.toFixed(1)}s`;
     progressFill.style.width = "100%";
+    applyTimerTheme(timeoutSec);
 
     interactionTimerInterval = setInterval(() => {
       interactionRemaining -= 0.2;
@@ -585,11 +597,13 @@ function handleActiveInteraction(interaction) {
         timerChip.textContent = `${interactionRemaining.toFixed(1)}s`;
         const pct = (interactionRemaining / interactionTotal) * 100;
         progressFill.style.width = `${pct}%`;
+        applyTimerTheme(interactionRemaining);
       }
     }, 200);
   } else {
     timerChip.textContent = "No Limit";
     progressFill.style.width = "100%";
+    applyTimerTheme(999);
   }
 
   // Render Mode Content

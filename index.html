@@ -7,15 +7,15 @@
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="kiosk-mode">
   <div id="app" class="app-container">
     <!-- Top Header Bar -->
     <header class="top-bar">
-      <div class="robot-identity">
+      <div class="robot-identity" onclick="switchTab('dashboard')">
         <div class="robot-avatar">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="10" rx="4"></rect>
             <circle cx="12" cy="5" r="2"></circle>
             <path d="M12 7v4"></path>
@@ -38,7 +38,7 @@
 
       <div class="header-telemetry">
         <!-- Battery Meter -->
-        <div class="battery-chip" id="battery-chip">
+        <div class="battery-chip" id="battery-chip" onclick="switchTab('power')">
           <div class="battery-icon-wrapper">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
               <path d="M16 20H8V6h8m0-2h-1V3a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v1H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
@@ -60,206 +60,242 @@
       </div>
     </header>
 
-    <!-- Main Content Area with Navigation Tabs -->
+    <!-- Main Content Area -->
     <div class="body-layout">
-      <!-- Left Sidebar Navigation -->
-      <nav class="side-nav">
-        <button class="nav-tab active" data-tab="dashboard">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-          <span>Dashboard</span>
-        </button>
-        <button class="nav-tab" data-tab="locations">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-          <span>Locations</span>
-        </button>
-        <button class="nav-tab" data-tab="missions">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-          <span>Missions</span>
-        </button>
-        <button class="nav-tab" data-tab="power">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-          <span>Power</span>
-        </button>
-      </nav>
-
-      <!-- Tab Pages -->
       <main class="content-viewport">
-        <!-- 1. DASHBOARD TAB -->
+        <!-- ============================================================= -->
+        <!-- 1. DASHBOARD TAB: CLEAN SIMPLE 2X2 GRID                        -->
+        <!-- ============================================================= -->
         <section id="tab-dashboard" class="tab-page active">
-          <!-- Active Mission Card -->
-          <div class="card mission-status-card" id="mission-status-card">
-            <div class="card-header">
-              <div class="card-title-group">
-                <span class="card-tag">MISSION EXECUTION</span>
-                <h3 id="active-mission-title">No Mission Active</h3>
-              </div>
-              <div class="mission-controls" id="mission-controls" style="display: none;">
-                <button class="btn btn-secondary" id="btn-mission-pause">Pause</button>
-                <button class="btn btn-danger" id="btn-mission-cancel">Abort</button>
+          <!-- Active Mission Floating Bar (shows when mission is executing) -->
+          <div class="mission-floating-banner" id="mission-floating-banner" style="display: none;">
+            <div class="mission-banner-left">
+              <span class="mission-pulse-dot"></span>
+              <div class="mission-banner-info">
+                <span class="mission-banner-tag">ACTIVE MISSION</span>
+                <h4 id="active-mission-title">Mission In Progress</h4>
               </div>
             </div>
-            <div class="mission-progress-bar-wrap">
-              <div class="mission-progress-bar" id="mission-progress-bar" style="width: 0%;"></div>
+            <div class="mission-banner-mid">
+              <span class="mission-node-pill" id="mission-node-label">Node: --</span>
+              <div class="mission-banner-progress">
+                <div class="mission-progress-bar" id="mission-progress-bar" style="width: 0%;"></div>
+              </div>
             </div>
-            <div class="mission-meta-row" id="mission-meta-row">
-              <span>Status: <strong id="mission-status-label">Idle</strong></span>
-              <span>Node: <strong id="mission-node-label">--</strong></span>
-              <span>Map: <strong id="mission-map-label">--</strong></span>
-            </div>
-          </div>
-
-          <!-- Main Robot Quick Hub Grid: Missions, Locations, Schedules, Random/Test Action -->
-          <div class="card hub-navigation-card">
-            <div class="card-header">
-              <div class="card-title-group">
-                <span class="card-tag">ROBOT OPERATION HUB</span>
-                <h3>Navigation & Task Hub</h3>
-              </div>
-              <button class="btn-sm btn-outline" id="btn-trigger-test-popup" title="Simulate Dynamic Mission Interaction">
-                🧪 Test Dynamic UI Popup
-              </button>
-            </div>
-            <div class="hub-tiles-grid">
-              <div class="hub-tile tile-missions" id="hub-tile-missions">
-                <div class="hub-icon">📜</div>
-                <div class="hub-details">
-                  <h4>Missions</h4>
-                  <p>Autonomous graph workflows</p>
-                </div>
-                <span class="hub-badge" id="hub-missions-count">Missions</span>
-              </div>
-
-              <div class="hub-tile tile-locations" id="hub-tile-locations">
-                <div class="hub-icon">📍</div>
-                <div class="hub-details">
-                  <h4>Locations</h4>
-                  <p>Saved stations & waypoints</p>
-                </div>
-                <span class="hub-badge" id="hub-locations-count">Map Points</span>
-              </div>
-
-              <div class="hub-tile tile-schedules" id="hub-tile-schedules">
-                <div class="hub-icon">⏰</div>
-                <div class="hub-details">
-                  <h4>Schedules</h4>
-                  <p>Recurring patrol routines</p>
-                </div>
-                <span class="hub-badge">Automated</span>
-              </div>
-
-              <div class="hub-tile tile-random" id="hub-tile-random">
-                <div class="hub-icon">⚡</div>
-                <div class="hub-details">
-                  <h4>Random / Test</h4>
-                  <p>Trigger dynamic popup UI</p>
-                </div>
-                <span class="hub-badge">Interactive</span>
-              </div>
+            <div class="mission-banner-actions">
+              <button class="btn btn-sm btn-secondary" id="btn-mission-pause">Pause</button>
+              <button class="btn btn-sm btn-danger" id="btn-mission-cancel">Abort</button>
             </div>
           </div>
 
-          <div class="dashboard-grid">
-            <!-- Quick Station Dispatch -->
-            <div class="card quick-locations-card">
-              <div class="card-header">
-                <h3>Quick Dispatch Waypoints</h3>
-                <button class="btn-sm btn-primary" id="btn-quick-save-location">+ Save Location</button>
+          <!-- THE 2X2 OPERATION HUB GRID -->
+          <div class="hub-grid-wrapper">
+            <div class="hub-2x2-grid">
+              <!-- Tile 1: Missions -->
+              <div class="hub-card tile-missions" id="hub-tile-missions">
+                <div class="hub-card-header">
+                  <div class="hub-card-icon-box icon-missions">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                      <polyline points="2 17 12 22 22 17"></polyline>
+                      <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                  </div>
+                  <span class="hub-card-badge" id="hub-missions-count">Workflows</span>
+                </div>
+                <div class="hub-card-body">
+                  <h2 class="hub-card-title">Missions</h2>
+                  <p class="hub-card-desc">Execute visual node graphs & autonomous routines</p>
+                </div>
+                <div class="hub-card-footer">
+                  <span class="hub-action-link">Open Missions</span>
+                  <span class="hub-action-arrow">→</span>
+                </div>
               </div>
-              <div class="locations-quick-grid" id="locations-quick-grid">
-                <div class="empty-state">Loading waypoints...</div>
-              </div>
-            </div>
 
-            <!-- Docking & Motion Actions -->
-            <div class="card actions-card">
-              <div class="card-header">
-                <h3>Autonomous Actions</h3>
+              <!-- Tile 2: Locations -->
+              <div class="hub-card tile-locations" id="hub-tile-locations">
+                <div class="hub-card-header">
+                  <div class="hub-card-icon-box icon-locations">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                      <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                  </div>
+                  <span class="hub-card-badge" id="hub-locations-count">Stations</span>
+                </div>
+                <div class="hub-card-body">
+                  <h2 class="hub-card-title">Locations</h2>
+                  <p class="hub-card-desc">Dispatch to mapped stations & saved points</p>
+                </div>
+                <div class="hub-card-footer">
+                  <span class="hub-action-link">Select Waypoint</span>
+                  <span class="hub-action-arrow">→</span>
+                </div>
               </div>
-              <div class="actions-grid">
-                <button class="action-tile" id="btn-dock">
-                  <div class="action-icon dock-icon">🔌</div>
-                  <div class="action-label">Auto-Dock</div>
-                  <div class="action-sub">Align & Charge</div>
-                </button>
-                <button class="action-tile" id="btn-undock">
-                  <div class="action-icon undock-icon">🚀</div>
-                  <div class="action-label">Undock</div>
-                  <div class="action-sub">Back Out & Clear</div>
-                </button>
-                <button class="action-tile" id="btn-relocalize">
-                  <div class="action-icon scan-icon">📡</div>
-                  <div class="action-label">Relocalize</div>
-                  <div class="action-sub">Global Spin Scan</div>
-                </button>
-                <button class="action-tile" id="btn-stop-all">
-                  <div class="action-icon stop-icon">🛑</div>
-                  <div class="action-label">Halt Wheels</div>
-                  <div class="action-sub">cmd_vel zero</div>
-                </button>
+
+              <!-- Tile 3: Schedules -->
+              <div class="hub-card tile-schedules" id="hub-tile-schedules">
+                <div class="hub-card-header">
+                  <div class="hub-card-icon-box icon-schedules">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                  </div>
+                  <span class="hub-card-badge">Automated</span>
+                </div>
+                <div class="hub-card-body">
+                  <h2 class="hub-card-title">Schedules</h2>
+                  <p class="hub-card-desc">Automated recurring patrols & timed dispatches</p>
+                </div>
+                <div class="hub-card-footer">
+                  <span class="hub-action-link">View Schedules</span>
+                  <span class="hub-action-arrow">→</span>
+                </div>
+              </div>
+
+              <!-- Tile 4: Quick Action -->
+              <div class="hub-card tile-quick-action" id="hub-tile-random">
+                <div class="hub-card-header">
+                  <div class="hub-card-icon-box icon-quick">
+                    <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                  </div>
+                  <span class="hub-card-badge badge-interactive">Touch Prompt</span>
+                </div>
+                <div class="hub-card-body">
+                  <h2 class="hub-card-title">Quick Action</h2>
+                  <p class="hub-card-desc">Simulate dynamic UI interaction dialog with timer</p>
+                </div>
+                <div class="hub-card-footer">
+                  <span class="hub-action-link">Test Dynamic UI</span>
+                  <span class="hub-action-arrow">⚡</span>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- 2. LOCATIONS TAB -->
+        <!-- ============================================================= -->
+        <!-- 2. LOCATIONS SUBPAGE                                           -->
+        <!-- ============================================================= -->
         <section id="tab-locations" class="tab-page">
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Saved Waypoints</h2>
-                <p class="subtitle">Select any mapped location to dispatch the robot immediately.</p>
+          <div class="subpage-container">
+            <div class="subpage-header">
+              <div class="subpage-header-left">
+                <button class="btn btn-secondary btn-back-home" onclick="switchTab('dashboard')">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  <span>Home</span>
+                </button>
+                <div class="subpage-titles">
+                  <h2>Saved Locations</h2>
+                  <p class="subtitle">Select any mapped location to dispatch the robot immediately.</p>
+                </div>
               </div>
-              <button class="btn btn-primary" id="btn-add-location">+ Save Current Position</button>
+              <button class="btn btn-primary" id="btn-add-location">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Save Position</span>
+              </button>
             </div>
             <div class="locations-full-list" id="locations-full-list"></div>
           </div>
         </section>
 
-        <!-- 3. MISSIONS TAB -->
+        <!-- ============================================================= -->
+        <!-- 3. MISSIONS SUBPAGE                                            -->
+        <!-- ============================================================= -->
         <section id="tab-missions" class="tab-page">
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <h2>Mission Library</h2>
-                <p class="subtitle">Launch visual node missions or linear waypoint sequences.</p>
+          <div class="subpage-container">
+            <div class="subpage-header">
+              <div class="subpage-header-left">
+                <button class="btn btn-secondary btn-back-home" onclick="switchTab('dashboard')">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  <span>Home</span>
+                </button>
+                <div class="subpage-titles">
+                  <h2>Mission Library</h2>
+                  <p class="subtitle">Launch visual graph missions or waypoint patrol routines.</p>
+                </div>
               </div>
+              <button class="btn btn-outline btn-sm" onclick="loadMissions()">Refresh</button>
             </div>
             <div class="missions-list" id="missions-list"></div>
           </div>
         </section>
 
-        <!-- 4. POWER & TELEMETRY TAB -->
-        <section id="tab-power" class="tab-page">
-          <div class="power-cards-grid">
-            <div class="card power-gauge-card">
-              <h3>BMS Battery Monitor</h3>
-              <div class="gauge-center">
-                <div class="circular-progress" id="circular-progress">
-                  <div class="inner-circle">
-                    <span class="gauge-value" id="gauge-battery-pct">--%</span>
-                    <span class="gauge-label" id="gauge-battery-status">Discharging</span>
-                  </div>
-                </div>
-              </div>
-              <div class="power-stats-table">
-                <div class="stat-row">
-                  <span>Battery Voltage</span>
-                  <strong id="stat-voltage">--.- V</strong>
-                </div>
-                <div class="stat-row">
-                  <span>Charging State</span>
-                  <strong id="stat-charging-state">Unknown</strong>
+        <!-- ============================================================= -->
+        <!-- 4. SCHEDULES SUBPAGE                                           -->
+        <!-- ============================================================= -->
+        <section id="tab-schedules" class="tab-page">
+          <div class="subpage-container">
+            <div class="subpage-header">
+              <div class="subpage-header-left">
+                <button class="btn btn-secondary btn-back-home" onclick="switchTab('dashboard')">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  <span>Home</span>
+                </button>
+                <div class="subpage-titles">
+                  <h2>Automated Schedules</h2>
+                  <p class="subtitle">Cron-scheduled automated missions configured on this robot.</p>
                 </div>
               </div>
             </div>
+            <div class="schedules-list" id="schedules-list">
+              <div class="empty-state">No recurring schedules active.</div>
+            </div>
+          </div>
+        </section>
 
-            <div class="card system-health-card">
-              <h3>Robot Hardware Health</h3>
-              <div class="health-checklist" id="health-checklist">
-                <div class="health-item"><span class="badge badge-ok">ONLINE</span> Base Motion Motors</div>
-                <div class="health-item"><span class="badge badge-ok">ONLINE</span> RPLidar 360 Laser</div>
-                <div class="health-item"><span class="badge badge-ok">ONLINE</span> Nav2 Local Costmap</div>
-                <div class="health-item"><span class="badge badge-ok">ONLINE</span> AMCL Localization</div>
+        <!-- ============================================================= -->
+        <!-- 5. POWER & TELEMETRY SUBPAGE                                   -->
+        <!-- ============================================================= -->
+        <section id="tab-power" class="tab-page">
+          <div class="subpage-container">
+            <div class="subpage-header">
+              <div class="subpage-header-left">
+                <button class="btn btn-secondary btn-back-home" onclick="switchTab('dashboard')">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  <span>Home</span>
+                </button>
+                <div class="subpage-titles">
+                  <h2>Power & System Health</h2>
+                  <p class="subtitle">Battery management, charger status, and hardware devices.</p>
+                </div>
+              </div>
+            </div>
+            <div class="power-cards-grid">
+              <div class="card power-gauge-card">
+                <h3>BMS Battery Status</h3>
+                <div class="gauge-center">
+                  <div class="circular-progress" id="circular-progress">
+                    <div class="inner-circle">
+                      <span class="gauge-value" id="gauge-battery-pct">--%</span>
+                      <span class="gauge-label" id="gauge-battery-status">Discharging</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="power-stats-table">
+                  <div class="stat-row">
+                    <span>Battery Voltage</span>
+                    <strong id="stat-voltage">--.- V</strong>
+                  </div>
+                  <div class="stat-row">
+                    <span>Charging State</span>
+                    <strong id="stat-charging-state">Unknown</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card system-health-card">
+                <h3>Robot Hardware Health</h3>
+                <div class="health-checklist" id="health-checklist">
+                  <div class="health-item"><span class="badge badge-ok">ONLINE</span> Base Motion Motors</div>
+                  <div class="health-item"><span class="badge badge-ok">ONLINE</span> RPLidar 360 Laser</div>
+                  <div class="health-item"><span class="badge badge-ok">ONLINE</span> Nav2 Local Costmap</div>
+                  <div class="health-item"><span class="badge badge-ok">ONLINE</span> AMCL Localization</div>
+                </div>
               </div>
             </div>
           </div>
@@ -276,12 +312,15 @@
         <!-- Top countdown and title -->
         <div class="interaction-header">
           <div class="interaction-title-group">
-            <span class="kiosk-badge" id="kiosk-badge">OPERATOR ACTION REQUIRED</span>
+            <div class="kiosk-badge-row">
+              <span class="kiosk-badge-pulse"></span>
+              <span class="kiosk-badge" id="kiosk-badge">OPERATOR ACTION REQUIRED</span>
+            </div>
             <h1 class="interaction-title" id="interaction-title">Action Required</h1>
             <p class="interaction-message" id="interaction-message"></p>
           </div>
           <div class="interaction-timer-chip" id="interaction-timer-chip">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2">
               <circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>
             </svg>
             <span id="interaction-timer-sec">60.0s</span>
@@ -336,6 +375,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Toast Notification -->
+    <div class="kiosk-toast" id="kiosk-toast" style="display: none;"></div>
   </div>
 
   <script src="app.js"></script>

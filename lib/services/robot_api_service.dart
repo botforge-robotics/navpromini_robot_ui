@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/battery_info.dart';
 import '../models/mission.dart';
 import '../models/ui_interaction.dart';
@@ -181,5 +183,78 @@ class RobotApiService {
       'form_data': ?formData,
     };
     await _post('/api/v1/missions/ui_response', body);
+  }
+
+  // --- Real-time WebSocket Event Push (Zero-latency) ---
+  WebSocketChannel? _wsChannel;
+  StreamController<UiInteractionModel?>? _interactionStreamController;
+  Timer? _wsReconnectTimer;
+
+  Stream<UiInteractionModel?> get interactionStream {
+    _interactionStreamController ??= StreamController<UiInteractionModel?>.broadcast(
+      onListen: _connectWs,
+      onCancel: _disconnectWs,
+    );
+    return _interactionStreamController!.stream;
+  }
+
+  void _connectWs() {
+    try {
+      final base = baseUrl.replaceFirst(RegExp(r'^http'), 'ws');
+      final wsUri = Uri.parse('$base/api/v1/events');
+      _wsChannel = WebSocketChannel.connect(wsUri);
+      _wsChannel!.sink.add(jsonEncode({
+        'action': 'subscribe',
+        'streams': ['events', 'battery', 'dock_status'],
+      }));
+
+      _wsChannel!.stream.listen(
+        (data) {
+          try {
+            final msg = jsonDecode(data.toString());
+            if (msg is Map<String, dynamic> && msg['stream'] == 'events') {
+              final evt = msg['data'];
+              if (evt is Map<String, dynamic>) {
+                final name = evt['event'];
+                final evtData = evt['data'];
+                if (name == 'mission.ui_interaction' && evtData is Map<String, dynamic>) {
+                  _interactionStreamController?.add(UiInteractionModel.fromJson(evtData));
+                } else if (name == 'mission.ui_interaction_dismissed') {
+                  _interactionStreamController?.add(null);
+                }
+              }
+            }
+          } catch (_) {}
+        },
+        onError: (_) => _scheduleWsReconnect(),
+        onDone: () => _scheduleWsReconnect(),
+        cancelOnError: true,
+      );
+    } catch (_) {
+      _scheduleWsReconnect();
+    }
+  }
+
+  void _scheduleWsReconnect() {
+    _disconnectWs();
+    _wsReconnectTimer?.cancel();
+    _wsReconnectTimer = Timer(const Duration(seconds: 3), () {
+      if (_interactionStreamController?.hasListener == true) {
+        _connectWs();
+      }
+    });
+  }
+
+  void _disconnectWs() {
+    try {
+      _wsChannel?.sink.close();
+    } catch (_) {}
+    _wsChannel = null;
+  }
+
+  void dispose() {
+    _wsReconnectTimer?.cancel();
+    _disconnectWs();
+    _interactionStreamController?.close();
   }
 }

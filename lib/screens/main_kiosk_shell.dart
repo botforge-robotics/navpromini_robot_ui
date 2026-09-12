@@ -34,6 +34,7 @@ class _MainKioskShellState extends State<MainKioskShell> {
   UiInteractionModel? _activeInteraction;
   Timer? _pollerTimer;
   Timer? _clockTimer;
+  StreamSubscription<UiInteractionModel?>? _interactionSub;
   String _currentTime = '';
 
   @override
@@ -42,13 +43,22 @@ class _MainKioskShellState extends State<MainKioskShell> {
     _updateClock();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
     _loadAllData();
-    _pollerTimer = Timer.periodic(const Duration(milliseconds: 750), (_) => _pollRobotState());
+    _interactionSub = _api.interactionStream.listen((inter) {
+      if (mounted) {
+        setState(() {
+          _activeInteraction = inter;
+        });
+      }
+    });
+    _pollerTimer = Timer.periodic(const Duration(seconds: 2), (_) => _pollRobotState());
   }
 
   @override
   void dispose() {
     _clockTimer?.cancel();
     _pollerTimer?.cancel();
+    _interactionSub?.cancel();
+    _api.dispose();
     super.dispose();
   }
 

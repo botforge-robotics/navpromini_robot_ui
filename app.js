@@ -180,10 +180,89 @@ function initModals() {
   });
 }
 
-// Polling loop
+// WebSocket Real-time Event Subscription (Push-based, Instant Reactive UI)
+let eventsWs = null;
+let wsConnected = false;
+
+function initEventsWebSocket() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  let host = window.location.host;
+  if (!host || host === "") {
+    host = "127.0.0.1:8090";
+  }
+  const wsUrl = `${protocol}//${host}/api/v1/events`;
+
+  try {
+    eventsWs = new WebSocket(wsUrl);
+
+    eventsWs.onopen = () => {
+      console.log("[WebSocket] Connected to NavPro Mini event stream at", wsUrl);
+      wsConnected = true;
+      eventsWs.send(JSON.stringify({
+        action: "subscribe",
+        streams: ["events", "battery", "dock_status"]
+      }));
+      checkActiveInteraction();
+    };
+
+    eventsWs.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.stream === "events" && msg.data) {
+          const e = msg.data;
+          if (e.event === "mission.ui_interaction" && e.data) {
+            handleActiveInteraction(e.data);
+          } else if (e.event === "mission.ui_interaction_dismissed") {
+            dismissInteraction();
+          } else if (e.event === "mission.status") {
+            if (e.data && e.data.active_interaction) {
+              handleActiveInteraction(e.data.active_interaction);
+            } else if (e.data && !e.data.active_interaction) {
+              dismissInteraction();
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[WebSocket] Error handling event:", err);
+      }
+    };
+
+    eventsWs.onclose = () => {
+      wsConnected = false;
+      setTimeout(initEventsWebSocket, 3000);
+    };
+
+    eventsWs.onerror = () => {
+      wsConnected = false;
+    };
+  } catch (e) {
+    wsConnected = false;
+    setTimeout(initEventsWebSocket, 3000);
+  }
+}
+
+async function checkActiveInteraction() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`);
+    if (res.ok) {
+      const data = await res.json();
+      const inter = data && (data.interaction || data.active_interaction || (data.active && typeof data.active === "object" ? data.active : null));
+      if (inter && (inter.interaction_id || inter.node_id || inter.id)) {
+        handleActiveInteraction(inter);
+      } else {
+        dismissInteraction();
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+// Polling loop (State updates + fallback)
 function startPolling() {
+  initEventsWebSocket();
   pollStatus();
-  setInterval(pollStatus, 1000);
+  setInterval(pollStatus, 2000);
   loadWaypoints();
   loadMissions();
 }
@@ -200,20 +279,9 @@ async function pollStatus() {
     document.getElementById("robot-ip").textContent = "Offline / Connecting...";
   }
 
-  // Check Active Interaction
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`);
-    if (res.ok) {
-      const data = await res.json();
-      const inter = data && (data.interaction || data.active_interaction || (data.active && typeof data.active === "object" ? data.active : null));
-      if (inter && (inter.interaction_id || inter.node_id || inter.id)) {
-        handleActiveInteraction(inter);
-      } else {
-        dismissInteraction();
-      }
-    }
-  } catch (e) {
-    // ignore
+  // If WebSocket is not connected, use HTTP polling as fallback
+  if (!wsConnected) {
+    checkActiveInteraction();
   }
 }
 

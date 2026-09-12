@@ -205,8 +205,9 @@ async function pollStatus() {
     const res = await fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`);
     if (res.ok) {
       const data = await res.json();
-      if (data && data.active && data.interaction) {
-        handleActiveInteraction(data.interaction);
+      const inter = data && (data.interaction || data.active_interaction || (data.active && typeof data.active === "object" ? data.active : null));
+      if (inter && (inter.interaction_id || inter.node_id || inter.id)) {
+        handleActiveInteraction(inter);
       } else {
         dismissInteraction();
       }
@@ -437,7 +438,7 @@ function handleActiveInteraction(interaction) {
   }
 
   const overlay = document.getElementById("interaction-overlay");
-  const interId = interaction.interaction_id || interaction.id;
+  const interId = interaction.interaction_id || interaction.id || interaction.node_id;
 
   if (activeInteractionId === interId) {
     return; // Already rendering this interaction
@@ -449,6 +450,17 @@ function handleActiveInteraction(interaction) {
   // Set Title & Message
   document.getElementById("interaction-title").textContent = interaction.title || "Action Required";
   document.getElementById("interaction-message").textContent = interaction.message || "";
+
+  // Image / Media Banner
+  const mediaEl = document.getElementById("interaction-media");
+  const imgEl = document.getElementById("interaction-img");
+  const mediaUrl = interaction.media_url || interaction.image_url;
+  if (mediaUrl && mediaEl && imgEl) {
+    imgEl.src = mediaUrl;
+    mediaEl.style.display = "block";
+  } else if (mediaEl) {
+    mediaEl.style.display = "none";
+  }
 
   // Timer Setup
   clearInterval(interactionTimerInterval);
@@ -488,12 +500,12 @@ function handleActiveInteraction(interaction) {
   choicesEl.style.display = "none";
   destEl.style.display = "none";
 
-  const type = (interaction.interaction_type || interaction.type || "choices").toLowerCase();
+  const type = (interaction.subtype || interaction.interaction_type || interaction.type || (Array.isArray(interaction.fields) && interaction.fields.length ? "form" : "choices")).toLowerCase();
 
-  if (type === "form" && Array.isArray(interaction.fields) && interaction.fields.length > 0) {
+  if (type === "form" || type === "dynamic_form" || (Array.isArray(interaction.fields) && interaction.fields.length > 0 && type !== "choice" && type !== "choices")) {
     renderInteractionForm(interaction);
     formEl.style.display = "block";
-  } else if (type === "destination_picker") {
+  } else if (type === "destination_picker" || type === "kiosk") {
     renderInteractionDestinations(interaction);
     destEl.style.display = "block";
   } else {
@@ -505,7 +517,7 @@ function handleActiveInteraction(interaction) {
 
 function renderInteractionChoices(interaction) {
   const container = document.getElementById("choices-buttons-grid");
-  const choices = interaction.choices || interaction.buttons || ["Confirm", "Cancel"];
+  const choices = interaction.options || interaction.choices || interaction.buttons || ["Confirm", "Cancel"];
 
   container.innerHTML = choices.map(choice => {
     const label = typeof choice === "string" ? choice : (choice.label || choice.text || "Option");

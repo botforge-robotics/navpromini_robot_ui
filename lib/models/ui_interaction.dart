@@ -26,7 +26,7 @@ class UiInteractionModel {
   factory UiInteractionModel.fromJson(Map<String, dynamic> json) {
     final params = (json['params'] as Map<String, dynamic>?) ?? json;
 
-    final rawChoices = params['choices'] ?? params['options'];
+    final rawChoices = params['choices'] ?? params['options'] ?? params['buttons'];
     final choicesList = rawChoices is List
         ? rawChoices.map((e) => e.toString()).toList()
         : <String>[];
@@ -37,10 +37,17 @@ class UiInteractionModel {
         .map((f) => InteractionFormField.fromJson(f))
         .toList();
 
+    final rawSubtype = (params['subtype'] ?? params['interaction_type'] ?? params['type'])?.toString().toLowerCase();
+    final subtype = (rawSubtype == 'choice' || rawSubtype == 'choices')
+        ? 'choices'
+        : (rawSubtype == 'form' || rawSubtype == 'dynamic_form')
+            ? 'form'
+            : (rawSubtype ?? (fieldsList.isNotEmpty ? 'form' : (choicesList.isNotEmpty ? 'choices' : 'modal')));
+
     return UiInteractionModel(
       interactionId: json['interaction_id']?.toString() ?? '',
       nodeId: json['node_id']?.toString() ?? '',
-      subtype: params['subtype']?.toString() ?? (fieldsList.isNotEmpty ? 'form' : (choicesList.isNotEmpty ? 'choices' : 'modal')),
+      subtype: subtype,
       title: params['title']?.toString() ?? 'Action Required',
       message: params['message']?.toString() ?? '',
       timeoutSec: (params['timeout_sec'] as num?)?.toDouble() ?? 60.0,

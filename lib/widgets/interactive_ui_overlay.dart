@@ -216,14 +216,14 @@ class _InteractiveUiOverlayState extends State<InteractiveUiOverlay> {
                       ],
 
                       // Subtypes
-                      if (widget.interaction.subtype == 'form' || widget.interaction.fields.isNotEmpty)
+                      if (widget.interaction.subtype == 'form' || (widget.interaction.fields.isNotEmpty && widget.interaction.subtype != 'choices' && widget.interaction.subtype != 'choice'))
                         _buildForm()
-                      else if (widget.interaction.subtype == 'choices')
+                      else if (widget.interaction.subtype == 'choices' || widget.interaction.subtype == 'choice' || widget.interaction.choices.isNotEmpty)
                         _buildChoices()
-                      else if (widget.interaction.subtype == 'kiosk_destination_picker')
+                      else if (widget.interaction.subtype == 'kiosk_destination_picker' || widget.interaction.subtype == 'kiosk' || widget.interaction.subtype == 'destination_picker')
                         _buildKioskPicker()
                       else
-                        const SizedBox.shrink(),
+                        _buildChoices(),
                     ],
                   ),
                 ),

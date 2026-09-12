@@ -81,8 +81,11 @@
           <!-- ============================================================= -->
           <div class="swipe-slide" id="slide-face">
             <div class="robot-face-wrapper" id="robot-face-container">
-              <!-- Rive Animation Canvas -->
-              <canvas id="rive-face-canvas" class="rive-face-canvas" width="540" height="540"></canvas>
+              <!-- Rive Animation Canvas (Fitted to device width & Watermark covered) -->
+              <div class="rive-face-box">
+                <canvas id="rive-face-canvas" class="rive-face-canvas" width="800" height="800"></canvas>
+                <div class="rive-watermark-cover"></div>
+              </div>
 
               <!-- Fallback animated face if Rive is loading or offline -->
               <div class="fallback-face" id="fallback-face" style="display: none;">
@@ -497,46 +500,68 @@
         <!-- Setup Step 1: Wi-Fi Setup -->
         <div class="setup-step-page active" id="setup-step-1">
           <div class="setup-content-card">
-            <h1>👋 Welcome to NavPro Mini</h1>
-            <p class="setup-desc">Connect your robot to Wi-Fi so it can navigate autonomously and connect to your phone and computer.</p>
+            <div class="setup-card-title-group">
+              <h1>Wi-Fi Network Setup</h1>
+              <p class="setup-desc">Connect NavPro Mini to your local Wi-Fi network so you can control it wirelessly from your phone or PC.</p>
+            </div>
+
+            <!-- Connected Network Box -->
             <div class="wifi-current-status-box" id="wifi-current-box">
-              <span class="wifi-status-icon">📶</span>
+              <div class="wifi-status-icon-badge">
+                <span class="wifi-icon-symbol">📶</span>
+              </div>
               <div class="wifi-status-info">
-                <span class="wifi-status-label">CURRENT NETWORK</span>
-                <strong id="wifi-current-name">Scanning...</strong>
-                <span class="wifi-status-ip" id="wifi-current-ip">Checking connection...</span>
+                <div class="wifi-status-header-line">
+                  <span class="wifi-status-label">CONNECTED WI-FI</span>
+                  <span class="wifi-connected-pill" id="wifi-connected-badge">Connected</span>
+                </div>
+                <strong id="wifi-current-name" class="wifi-current-name">Scanning...</strong>
+                <span class="wifi-status-ip" id="wifi-current-ip">IP: Checking...</span>
               </div>
             </div>
-            <div class="wifi-scanner-header">
-              <h3>Choose Your Wi-Fi Network</h3>
-              <button class="btn btn-outline btn-sm" onclick="scanWifiNetworks()">Rescan</button>
+
+            <!-- Available Networks List -->
+            <div class="wifi-scanner-section">
+              <div class="wifi-scanner-header">
+                <h3>Available Networks</h3>
+                <button class="btn btn-secondary btn-sm" onclick="scanWifiNetworks()">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                  <span>Rescan</span>
+                </button>
+              </div>
+              <div class="wifi-list-container" id="wifi-list-container">
+                <div class="wifi-loading-box">Scanning nearby Wi-Fi networks...</div>
+              </div>
             </div>
-            <div class="wifi-list-container" id="wifi-list-container">
-              <div class="loading-spinner">Scanning nearby networks...</div>
-            </div>
+
             <div class="setup-bottom-actions">
-              <button class="btn btn-primary btn-lg" id="btn-step2-continue" onclick="advanceSetupToStep(2)">Continue to Dock Setup ➔</button>
+              <button class="btn btn-primary btn-xl" id="btn-step2-continue" onclick="advanceSetupToStep(2)">Continue to Dock Setup ➔</button>
             </div>
           </div>
         </div>
 
         <!-- Setup Step 2: Place Dock & Create Map -->
         <div class="setup-step-page" id="setup-step-2">
-          <div class="setup-content-card">
-            <h1>Set Up Charging Dock</h1>
-            <p class="setup-desc">Place your charging station flat against a wall on a level floor, then place NavPro Mini near the dock.</p>
-            <!-- High-Res Mobile Dock Instruction Infographic (Centered & Fitted) -->
+          <div class="setup-content-card setup-card-step2">
+            <div class="setup-card-title-group">
+              <h1>Set Up Charging Dock</h1>
+              <p class="setup-desc">Place your charging station flat against a wall on a level floor, then place NavPro Mini near the dock facing outward.</p>
+            </div>
+
+            <!-- High-Res Mobile Dock Instruction Infographic (Full width & expanded height) -->
             <div class="dock-instruction-frame">
               <img src="assets/mobilDockInstruction.png" alt="Dock Placement Instruction" class="dock-instruction-img">
             </div>
+
             <div class="dock-setup-tips">
               <div class="dock-tip-item"><span>1</span> Dock flat against wall</div>
-              <div class="dock-tip-item"><span>2</span> 0.5m open space on sides</div>
+              <div class="dock-tip-item"><span>2</span> 0.5m clearance on sides</div>
               <div class="dock-tip-item"><span>3</span> Robot facing outward</div>
             </div>
+
             <div class="dock-setup-actions-row">
-              <button class="btn btn-secondary btn-lg" id="btn-skip-mapping" onclick="skipMappingSetup()">Skip for Now (Explore Robot)</button>
-              <button class="btn btn-primary btn-lg" id="btn-create-map-setup" onclick="startMappingFromSetup()">🗺️ Create First Map</button>
+              <button class="btn btn-secondary btn-xl" id="btn-skip-mapping" onclick="skipMappingSetup()">Skip for Now</button>
+              <button class="btn btn-primary btn-xl" id="btn-create-map-setup" onclick="startMappingFromSetup()">🗺️ Create First Map</button>
             </div>
           </div>
         </div>

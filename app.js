@@ -68,9 +68,9 @@ function initRiveFace() {
   const canvas = document.getElementById("rive-face-canvas");
   if (!canvas) return;
 
-  // Enforce crisp 1:1 internal buffer dimensions
-  canvas.width = 540;
-  canvas.height = 540;
+  // Enforce crisp 800x800 internal buffer dimensions matching device width
+  canvas.width = 800;
+  canvas.height = 800;
 
   try {
     if (typeof rive === "undefined" || !rive.Rive) {
@@ -568,17 +568,42 @@ window.advanceSetupToStep = function(stepNum) {
   if (label) label.textContent = `Step ${stepNum} of 2`;
 };
 
+function sanitizeWifiSsid(ssid) {
+  if (!ssid) return "";
+  // Strip any netplan internal prefix like 'netplan-wlan0-' or 'netplan-'
+  return String(ssid).replace(/^netplan-[a-zA-Z0-9_-]+-/, '').replace(/^netplan-/, '');
+}
+
 async function fetchWifiStatus() {
   try {
     const res = await fetch(`${API_BASE}/api/v1/system/wifi/status`);
+    if (!res.ok) return;
     const data = await res.json();
     const nameEl = document.getElementById("wifi-current-name");
     const ipEl = document.getElementById("wifi-current-ip");
+    const badgeEl = document.getElementById("wifi-connected-badge");
     const headerIp = document.getElementById("robot-ip");
-    if (nameEl) nameEl.textContent = data.ssid || (data.connected ? "Connected" : "Not Connected");
-    const liveIp = data.ip || data.ip_address || "10.42.0.1";
-    if (ipEl) ipEl.textContent = liveIp;
-    if (headerIp && liveIp) headerIp.textContent = liveIp;
+
+    const cleanSsid = sanitizeWifiSsid(data.ssid);
+    if (nameEl) {
+      nameEl.textContent = cleanSsid || (data.connected ? "Connected Network" : "No Wi-Fi Connected");
+    }
+    const liveIp = data.ip || data.ip_address || "";
+    if (ipEl) {
+      ipEl.textContent = liveIp ? `IP Address: ${liveIp}` : (data.connected ? "Acquiring IP..." : "Offline");
+    }
+    if (badgeEl) {
+      if (data.connected) {
+        badgeEl.textContent = "Connected";
+        badgeEl.className = "wifi-connected-pill connected";
+      } else {
+        badgeEl.textContent = "Disconnected";
+        badgeEl.className = "wifi-connected-pill disconnected";
+      }
+    }
+    if (headerIp && liveIp) {
+      headerIp.textContent = liveIp;
+    }
   } catch (e) {
     console.warn("Wi-Fi status error:", e);
   }
@@ -587,43 +612,60 @@ async function fetchWifiStatus() {
 window.scanWifiNetworks = async function() {
   const list = document.getElementById("wifi-list-container");
   if (!list) return;
-  list.innerHTML = `<div class="loading-spinner">Scanning nearby Wi-Fi networks...</div>`;
+  list.innerHTML = `<div class="wifi-loading-box">Scanning nearby Wi-Fi networks...</div>`;
 
   try {
     const res = await fetch(`${API_BASE}/api/v1/system/wifi/scan`);
     const data = await res.json();
     const networks = data.networks || [];
     if (networks.length === 0) {
-      list.innerHTML = `<p style="color: var(--text-secondary); padding: 12px;">No Wi-Fi networks found. Try scanning again.</p>`;
+      list.innerHTML = `
+        <div class="wifi-empty-box">
+          <p>No Wi-Fi networks found.</p>
+          <button class="btn btn-secondary btn-sm" onclick="scanWifiNetworks()">Scan Again</button>
+        </div>`;
       return;
     }
 
-    list.innerHTML = networks.map(net => `
-      <div class="wifi-item" onclick="promptWifiConnect('${escapeQuotes(net.ssid)}')">
-        <span class="wifi-item-name">${escapeHtml(net.ssid)}</span>
-        <div class="wifi-item-meta">
-          <span>${net.signal || 70}%</span>
-          <span>${net.security ? "🔒" : "🔓"}</span>
+    list.innerHTML = networks.map(net => {
+      const rawSsid = net.raw_ssid || net.ssid;
+      const displaySsid = sanitizeWifiSsid(net.ssid);
+      const isSecured = net.protected !== false && (net.security && net.security !== "--");
+      return `
+        <div class="wifi-item" onclick="promptWifiConnect('${escapeQuotes(rawSsid)}', '${escapeQuotes(displaySsid)}')">
+          <div class="wifi-item-left">
+            <span class="wifi-signal-icon">${(net.signal || 50) >= 60 ? "📶" : "🛜"}</span>
+            <div class="wifi-item-text">
+              <span class="wifi-item-name">${escapeHtml(displaySsid)}</span>
+              <span class="wifi-item-sec">${isSecured ? "Secured (" + (net.security || "WPA2") + ")" : "Open Network"}</span>
+            </div>
+          </div>
+          <div class="wifi-item-meta">
+            <span class="wifi-signal-pct">${net.signal || 50}%</span>
+            <span class="wifi-lock-badge">${isSecured ? "🔒" : "🔓"}</span>
+            <span class="wifi-connect-btn">Connect ➔</span>
+          </div>
         </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
   } catch (e) {
-    list.innerHTML = `<p style="color: var(--danger); padding: 12px;">Error scanning Wi-Fi: ${escapeHtml(e.message)}</p>`;
+    list.innerHTML = `<div class="wifi-empty-box"><p style="color: var(--danger);">Error scanning Wi-Fi: ${escapeHtml(e.message)}</p></div>`;
   }
 };
 
-window.promptWifiConnect = function(ssid) {
-  openTouchKeyboard(`Enter Password for "${ssid}":`, async (password) => {
+window.promptWifiConnect = function(rawSsid, displaySsid) {
+  const nameToShow = displaySsid || sanitizeWifiSsid(rawSsid);
+  openTouchKeyboard(`Enter Password for "${nameToShow}":`, async (password) => {
     try {
-      showToast(`Connecting to ${ssid}...`);
+      showToast(`Connecting to ${nameToShow}...`);
       const res = await fetch(`${API_BASE}/api/v1/system/wifi/connect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssid, password })
+        body: JSON.stringify({ ssid: rawSsid, password: password })
       });
       const data = await res.json();
       if (data.status === "ok" || data.success) {
-        showToast(`Connected to ${ssid}!`);
+        showToast(`Connected to ${nameToShow}!`);
         fetchWifiStatus();
       } else {
         showToast(`Failed: ${data.message || "Connection error"}`, true);
@@ -1343,31 +1385,39 @@ function startPolling() {
         }
       }
 
+      // Parallelize status queries for maximum responsiveness and zero UI stutter
+      const [navResult, batResult, misResult, uiResult] = await Promise.allSettled([
+        fetch(`${API_BASE}/api/v1/navigation/status`).then(r => r.ok ? r.json() : null),
+        fetch(`${API_BASE}/api/v1/state/battery`).then(r => r.ok ? r.json() : null),
+        fetch(`${API_BASE}/api/v1/missions/status`).then(r => r.ok ? r.json() : null),
+        fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`).then(r => r.ok ? r.json() : null)
+      ]);
+
+      // 1. Navigation
+      if (navResult.status === "fulfilled" && navResult.value) {
+        updateNavigationState(navResult.value);
+      }
+
       // 2. Battery & Power
-      const batRes = await fetch(`${API_BASE}/api/v1/state/battery`);
-      if (batRes.ok) {
-        const batData = await batRes.json();
-        updatePowerState(batData);
+      if (batResult.status === "fulfilled" && batResult.value) {
+        updatePowerState(batResult.value);
       }
 
       // 3. Missions Status
-      const misRes = await fetch(`${API_BASE}/api/v1/missions/status`);
-      if (misRes.ok) {
-        const misData = await misRes.json();
-        updateMissionExecutionScreen(misData);
+      if (misResult.status === "fulfilled" && misResult.value) {
+        updateMissionExecutionScreen(misResult.value);
       }
 
       // 4. Interactive UI Node
-      const uiRes = await fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`);
-      if (uiRes.ok) {
-        const uiData = await uiRes.json();
+      if (uiResult.status === "fulfilled" && uiResult.value) {
+        const uiData = uiResult.value;
         if (uiData && uiData.interaction_id && uiData.interaction_id !== activeInteractionId) {
           handleActiveInteraction(uiData);
         }
       }
 
-      // 5. Wi-Fi & IP
-      if (!window._lastWifiCheck || Date.now() - window._lastWifiCheck > 5000) {
+      // 5. Wi-Fi & IP (debounced to every 10 seconds)
+      if (!window._lastWifiCheck || Date.now() - window._lastWifiCheck > 10000) {
         window._lastWifiCheck = Date.now();
         fetchWifiStatus();
       }
@@ -1378,7 +1428,7 @@ function startPolling() {
   };
 
   poll();
-  setInterval(poll, 1500);
+  setInterval(poll, 2000);
 
   // Check for app software updates 5 seconds after boot
   setTimeout(() => checkAppUpdates(true), 5000);

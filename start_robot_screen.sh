@@ -74,25 +74,18 @@ else
     xdg-open "${URL}" &
 fi
 
-# Ensure window is set to borderless full-screen and always on top of all
+# Ensure window is set to borderless full-screen and always on top of all (quick 2s check)
 (
-    for i in {1..20}; do
+    for i in {1..4}; do
         sleep 0.5
         WID=""
         if command -v xdotool >/dev/null 2>&1; then
             WID=$(xdotool search --onlyvisible --name "NavPro" 2>/dev/null | tail -n 1 || true)
-            if [ -z "${WID}" ]; then
-                WID=$(xdotool search --onlyvisible --class epiphany 2>/dev/null | tail -n 1 || true)
-            fi
         fi
 
         if [ -n "${WID}" ]; then
             if command -v wmctrl >/dev/null 2>&1; then
                 wmctrl -i -r "${WID}" -b add,fullscreen,above 2>/dev/null || true
-            fi
-            if command -v xdotool >/dev/null 2>&1; then
-                xdotool windowactivate "${WID}" 2>/dev/null || true
-                xdotool key --window "${WID}" F11 2>/dev/null || xdotool key F11 2>/dev/null || true
             fi
             break
         fi

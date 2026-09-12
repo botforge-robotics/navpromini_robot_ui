@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "name": "navpromini_robot_ui",
+  "build": 1,
+  "release_date": "2026-09-13",
+  "description": "NavPro Mini Touchscreen Operations Hub & Rive Face Kiosk",
+  "repository": "https://github.com/botforge-robotics/navpromini_robot_ui"
+}

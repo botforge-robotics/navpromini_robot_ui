@@ -44,40 +44,32 @@ if ! curl -s -m 1 "http://127.0.0.1:${PORT}/" > /dev/null 2>&1; then
     URL="http://127.0.0.1:${PORT}/"
 fi
 
-# Clean up previous instances of the kiosk browser to ensure clean single-window
+# Clean up previous instances to ensure single clean instance
+pkill -9 -f NavProMiniRobotUI 2>/dev/null || true
+pkill -9 -f navpromini_robot_ui_runner 2>/dev/null || true
+pkill -9 -f test_runner 2>/dev/null || true
 pkill -9 -f epiphany 2>/dev/null || true
+pkill -9 -f .mount_NavPro 2>/dev/null || true
+fusermount -u /tmp/.mount_NavPro* 2>/dev/null || true
 rm -rf /tmp/navpro_ui_profile
 sleep 0.5
 
-# Launch browser in borderless kiosk / application mode
-if command -v epiphany-browser > /dev/null 2>&1 || command -v epiphany > /dev/null 2>&1; then
+APPIMAGE_BIN="/home/navpromini/navpromini_robot_ui_app/current/NavProMiniRobotUI-aarch64.AppImage"
+LOCAL_APPIMAGE="${UI_DIR}/NavProMiniRobotUI-$(uname -m).AppImage"
+
+# Launch Headless AppImage or Native WebKitGTK Runner (No browser)
+if [ -x "${APPIMAGE_BIN}" ]; then
+    echo "[Robot Screen] Launching Headless AppImage: ${APPIMAGE_BIN}..."
+    setsid "${APPIMAGE_BIN}" </dev/null >/tmp/navpro_screen.log 2>&1 &
+elif [ -x "${LOCAL_APPIMAGE}" ]; then
+    echo "[Robot Screen] Launching Local Headless AppImage: ${LOCAL_APPIMAGE}..."
+    setsid "${LOCAL_APPIMAGE}" </dev/null >/tmp/navpro_screen.log 2>&1 &
+elif [ -f "${UI_DIR}/navpromini_robot_ui_runner.py" ]; then
+    echo "[Robot Screen] Launching Native Headless WebKitGTK Kiosk Runner..."
+    setsid python3 "${UI_DIR}/navpromini_robot_ui_runner.py" </dev/null >/tmp/navpro_screen.log 2>&1 &
+elif command -v epiphany-browser > /dev/null 2>&1 || command -v epiphany > /dev/null 2>&1; then
     BROWSER_CMD="$(command -v epiphany-browser || command -v epiphany)"
-    setsid "${BROWSER_CMD}" \
-        --profile=/tmp/navpro_ui_profile \
-        --new-window \
-        "${URL}" </dev/null >/tmp/navpro_screen.log 2>&1 &
-elif command -v google-chrome > /dev/null 2>&1; then
-    setsid google-chrome \
-        --app="${URL}" \
-        --start-fullscreen \
-        --kiosk \
-        --user-data-dir="/tmp/navpro_robot_screen_profile" \
-        --no-first-run \
-        --no-default-browser-check </dev/null >/tmp/navpro_screen.log 2>&1 &
-elif command -v chromium-browser > /dev/null 2>&1; then
-    setsid chromium-browser \
-        --app="${URL}" \
-        --start-fullscreen \
-        --kiosk \
-        --user-data-dir="/tmp/navpro_robot_screen_profile" </dev/null >/tmp/navpro_screen.log 2>&1 &
-elif command -v chromium > /dev/null 2>&1; then
-    setsid chromium \
-        --app="${URL}" \
-        --start-fullscreen \
-        --kiosk \
-        --user-data-dir="/tmp/navpro_robot_screen_profile" </dev/null >/tmp/navpro_screen.log 2>&1 &
-elif command -v firefox > /dev/null 2>&1; then
-    setsid firefox --kiosk "${URL}" </dev/null >/tmp/navpro_screen.log 2>&1 &
+    setsid "${BROWSER_CMD}" "${URL}" </dev/null >/tmp/navpro_screen.log 2>&1 &
 else
     xdg-open "${URL}" &
 fi

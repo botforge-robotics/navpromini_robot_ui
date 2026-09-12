@@ -5,25 +5,54 @@ const API_BASE = window.location.port === "8090"
   ? window.location.origin 
   : "http://" + (window.location.hostname || "127.0.0.1") + ":8090";
 
-let currentTab = "dashboard";
+// State
+let currentSwipeIndex = 0; // 0 = Face, 1 = Dashboard
+let activeMapName = "";
+let isLocalized = false;
+let isRobotCharging = false;
+let wasCharging = false;
+let chargingScreenDismissed = false;
+let isRobotDocking = false;
+let isRobotUndocking = false;
+let isNavigating = false;
+let activeMissionId = null;
+let activeMissionState = "idle";
+let relocalizeDismissedUntil = 0;
+let mappingStartTime = null;
+let mappingTimerInterval = null;
+let jogInterval = null;
+
+// Rive Instance & Expression Inputs
+let riveInstance = null;
+let riveInputs = {};
+
+// Touch Keyboard Callback
+let touchKeyboardCallback = null;
+
+// Dynamic Interaction State
 let activeInteractionId = null;
 let interactionTimerInterval = null;
-let interactionRemaining = 0;
-let interactionTotal = 0;
 
-// Initialize
+// Initialize on DOM Ready
 document.addEventListener("DOMContentLoaded", () => {
   initClock();
-  initTabs();
+  initRiveFace();
+  initSwipeGestures();
   initHubTiles();
   initActionButtons();
+  initSetupWizard();
+  initMappingControls();
+  initTouchKeyboard();
   initModals();
   startPolling();
 });
 
-// Clock
+/* --------------------------------------------------------------------------
+   1. Real-Time Clock
+   -------------------------------------------------------------------------- */
 function initClock() {
   const clockEl = document.getElementById("clock-display");
+  if (!clockEl) return;
   function update() {
     const now = new Date();
     clockEl.textContent = now.toTimeString().split(" ")[0];
@@ -32,56 +61,247 @@ function initClock() {
   setInterval(update, 1000);
 }
 
-// Tab Switching
-function initTabs() {
-  const tabs = document.querySelectorAll(".nav-tab");
-  tabs.forEach(tab => {
-    tab.addEventListener("click", () => {
-      const target = tab.getAttribute("data-tab");
-      switchTab(target);
+/* --------------------------------------------------------------------------
+   2. Rive Robot Face Animations (rio.riv)
+   -------------------------------------------------------------------------- */
+function initRiveFace() {
+  const canvas = document.getElementById("rive-face-canvas");
+  if (!canvas) return;
+
+  // Enforce crisp 1:1 internal buffer dimensions
+  canvas.width = 540;
+  canvas.height = 540;
+
+  try {
+    if (typeof rive === "undefined" || !rive.Rive) {
+      console.warn("Rive runtime not loaded, falling back to CSS face.");
+      showFallbackFace();
+      return;
+    }
+
+    riveInstance = new rive.Rive({
+      src: "assets/rio.riv",
+      canvas: canvas,
+      autoplay: true,
+      stateMachines: "expressions",
+      onLoad: () => {
+        console.log("Rive animation loaded successfully with crisp 1:1 aspect ratio!");
+        window.riveInstance = riveInstance;
+        try {
+          const inputs = riveInstance.stateMachineInputs("expressions");
+          if (inputs && inputs.length > 0) {
+            inputs.forEach(input => {
+              riveInputs[input.name] = input;
+            });
+            window.riveInputs = riveInputs;
+            console.log("Registered Rive expression triggers:", Object.keys(riveInputs));
+          }
+          triggerFaceExpression("idle");
+        } catch (err) {
+          console.warn("Error enumerating Rive state machine inputs:", err);
+        }
+      },
+      onError: (err) => {
+        console.error("Rive canvas error:", err);
+        showFallbackFace();
+      }
     });
+
+    window.riveInstance = riveInstance;
+
+    // Touch / click on face gives random cute reaction
+    canvas.addEventListener("click", () => {
+      const reactions = ["happy", "curios", "blush", "surprise", "thinking"];
+      const pick = reactions[Math.floor(Math.random() * reactions.length)];
+      triggerFaceExpression(pick);
+      showSpeechBubble(getRandomReactionQuote(pick));
+    });
+
+  } catch (e) {
+    console.error("Failed to initialize Rive:", e);
+    showFallbackFace();
+  }
+}
+
+function showFallbackFace() {
+  const fb = document.getElementById("fallback-face");
+  const cv = document.getElementById("rive-face-canvas");
+  if (fb) fb.style.display = "flex";
+  if (cv) cv.style.display = "none";
+}
+
+window.triggerFaceExpression = function(name) {
+  if (riveInputs[name]) {
+    try {
+      riveInputs[name].fire();
+      console.log(`Triggered expression: ${name}`);
+    } catch (e) {
+      console.warn(`Failed to fire trigger ${name}:`, e);
+    }
+  } else {
+    console.log(`Expression trigger '${name}' not found in Rive model.`);
+  }
+};
+
+function showSpeechBubble(text, durationMs = 4000) {
+  const bubble = document.getElementById("face-speech-bubble");
+  const textEl = document.getElementById("face-speech-text");
+  if (!bubble || !textEl) return;
+  textEl.textContent = text;
+  bubble.style.display = "flex";
+  clearTimeout(bubble._timer);
+  bubble._timer = setTimeout(() => {
+    bubble.style.display = "none";
+  }, durationMs);
+}
+
+function getRandomReactionQuote(type) {
+  const quotes = {
+    happy: ["Feeling great and ready to assist!", "Always happy to serve!", "Beep boop! Hello there!"],
+    curios: ["Scanning local surroundings...", "What are we exploring next?", "Observing navigation obstacles."],
+    blush: ["Thank you! You're very kind.", "Aww, glad to be working together!", "(＾▽＾)"],
+    thinking: ["Computing optimal path trajectory...", "Processing environmental telemetry...", "Calculating next waypoint."],
+    surprise: ["Oh! Something caught my lidar!", "Whoa, that was unexpected!", "Sensor alert!"]
+  };
+  const list = quotes[type] || ["Ready for missions!"];
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+/* --------------------------------------------------------------------------
+   3. Horizontal Swiping Viewport & Navigation
+   -------------------------------------------------------------------------- */
+function initSwipeGestures() {
+  const viewport = document.getElementById("swipe-viewport");
+  const track = document.getElementById("swipe-track");
+  if (!viewport || !track) return;
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchDeltaX = 0;
+  let isSwiping = false;
+
+  viewport.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchDeltaX = 0;
+      isSwiping = true;
+    }
+  }, { passive: true });
+
+  viewport.addEventListener("touchmove", (e) => {
+    if (!isSwiping || e.touches.length !== 1) return;
+    touchDeltaX = e.touches[0].clientX - touchStartX;
+  }, { passive: true });
+
+  viewport.addEventListener("touchend", (e) => {
+    if (!isSwiping) return;
+    isSwiping = false;
+    const touchDeltaY = (e.changedTouches && e.changedTouches[0]) ? (e.changedTouches[0].clientY - touchStartY) : 0;
+    if (Math.abs(touchDeltaX) > 40 && Math.abs(touchDeltaX) > Math.abs(touchDeltaY)) {
+      if (touchDeltaX < 0) {
+        setSwipeIndex(1);
+      } else {
+        setSwipeIndex(0);
+      }
+    }
+  });
+
+  // Mouse drag support
+  let mouseStartX = 0;
+  let isMouseDown = false;
+  viewport.addEventListener("mousedown", (e) => {
+    mouseStartX = e.clientX;
+    isMouseDown = true;
+  });
+  window.addEventListener("mouseup", (e) => {
+    if (!isMouseDown) return;
+    isMouseDown = false;
+    const deltaX = e.clientX - mouseStartX;
+    if (deltaX < -40) setSwipeIndex(1);
+    if (deltaX > 40) setSwipeIndex(0);
+  });
+
+  // Explicit click handlers for pill buttons
+  document.getElementById("pill-btn-face")?.addEventListener("click", () => setSwipeIndex(0));
+  document.getElementById("pill-btn-dashboard")?.addEventListener("click", () => setSwipeIndex(1));
+  document.getElementById("face-swipe-to-dash")?.addEventListener("click", () => setSwipeIndex(1));
+  document.getElementById("dash-swipe-to-face")?.addEventListener("click", () => setSwipeIndex(0));
+
+  // Keyboard navigation shortcuts
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight" || e.key === "2" || e.key.toLowerCase() === "d") {
+      setSwipeIndex(1);
+    } else if (e.key === "ArrowLeft" || e.key === "1" || e.key.toLowerCase() === "f") {
+      setSwipeIndex(0);
+    } else if (e.key === "Escape") {
+      closeSubpage();
+    }
   });
 }
 
-function switchTab(tabId) {
-  currentTab = tabId;
-  document.querySelectorAll(".nav-tab").forEach(t => {
-    t.classList.toggle("active", t.getAttribute("data-tab") === tabId);
-  });
-  document.querySelectorAll(".tab-page").forEach(page => {
-    page.classList.toggle("active", page.id === "tab-" + tabId);
-  });
+window.setSwipeIndex = function(index) {
+  currentSwipeIndex = index;
+  const track = document.getElementById("swipe-track");
+  const slideFace = document.getElementById("slide-face");
+  const slideDash = document.getElementById("slide-dashboard");
+  const pillFace = document.getElementById("pill-btn-face");
+  const pillDash = document.getElementById("pill-btn-dashboard");
 
-  if (tabId === "locations") loadWaypoints();
-  if (tabId === "missions") loadMissions();
-}
+  if (track) {
+    if (index === 1) {
+      track.classList.add("show-dashboard");
+      track.style.transform = "translateX(-100vw)";
+      track.style.webkitTransform = "translateX(-100vw)";
+    } else {
+      track.classList.remove("show-dashboard");
+      track.style.transform = "translateX(0vw)";
+      track.style.webkitTransform = "translateX(0vw)";
+    }
+  }
+  if (pillFace) pillFace.classList.toggle("active", index === 0);
+  if (pillDash) pillDash.classList.toggle("active", index === 1);
 
-// Hub Quick Navigation Tiles & Demo Dynamic Popup
+  // If opening dashboard, make sure subpages are closed
+  closeSubpage();
+};
+
+window.showDashboardView = function() {
+  closeSubpage();
+  setSwipeIndex(1);
+};
+
+/* --------------------------------------------------------------------------
+   4. Hub 2x2 Grid & Subpage Management
+   -------------------------------------------------------------------------- */
 function initHubTiles() {
   let lastClickTime = 0;
   const debounce = (fn) => (e) => {
     e?.preventDefault();
     e?.stopPropagation();
     const now = Date.now();
-    if (now - lastClickTime < 450) return;
+    if (now - lastClickTime < 400) return;
     lastClickTime = now;
     fn();
   };
 
   document.getElementById("hub-tile-missions")?.addEventListener("click", debounce(() => {
-    switchTab("missions");
+    openSubpage("missions");
   }));
 
   document.getElementById("hub-tile-locations")?.addEventListener("click", debounce(() => {
-    switchTab("locations");
+    openSubpage("locations");
   }));
 
   document.getElementById("hub-tile-schedules")?.addEventListener("click", debounce(() => {
-    showToast("Opening automated schedules routine...");
-    switchTab("missions");
+    openSubpage("schedules");
   }));
 
-  const triggerTestPopup = () => {
+  document.getElementById("hub-tile-maps")?.addEventListener("click", debounce(() => {
+    openSubpage("maps");
+  }));
+
+  document.getElementById("btn-trigger-test-popup")?.addEventListener("click", debounce(() => {
     showToast("Triggering interactive UI popup on robot screen...");
     handleActiveInteraction({
       interaction_id: "test_dynamic_" + Date.now(),
@@ -96,745 +316,1239 @@ function initHubTiles() {
       ],
       timeout_sec: 60
     });
-  };
-
-  document.getElementById("hub-tile-random")?.addEventListener("click", debounce(triggerTestPopup));
-  document.getElementById("btn-trigger-test-popup")?.addEventListener("click", debounce(triggerTestPopup));
+  }));
 }
 
-// Action Buttons
+function openSubpage(subpageName) {
+  const container = document.getElementById("subpages-viewport");
+  if (!container) return;
+  container.style.display = "flex";
+
+  document.querySelectorAll(".tab-page").forEach(page => {
+    page.classList.toggle("active", page.id === "tab-" + subpageName);
+  });
+
+  if (subpageName === "locations") loadWaypoints();
+  if (subpageName === "missions") loadMissions();
+  if (subpageName === "schedules") loadSchedules();
+  if (subpageName === "maps") loadMaps();
+  if (subpageName === "power") loadPowerHealth();
+}
+
+window.closeSubpage = function() {
+  const container = document.getElementById("subpages-viewport");
+  if (container) container.style.display = "none";
+};
+
+window.switchTab = function(tabName) {
+  openSubpage(tabName);
+};
+
+/* --------------------------------------------------------------------------
+   5. Action Buttons & Header Controls
+   -------------------------------------------------------------------------- */
 function initActionButtons() {
-  // Keyboard Toggle
-  document.getElementById("btn-keyboard-toggle")?.addEventListener("click", async () => {
-    try {
-      await fetch(`${API_BASE}/api/v1/system/keyboard/toggle`, { method: "POST" });
-    } catch (e) {
-      console.warn("Keyboard toggle endpoint not reachable", e);
-    }
-  });
-
-  // E-Stop
+  // Emergency Stop Button
   document.getElementById("btn-estop")?.addEventListener("click", async () => {
-    if (confirm("Trigger EMERGENCY STOP?")) {
-      try {
-        await fetch(`${API_BASE}/api/v1/robot/emergency_stop`, { method: "POST" });
-        alert("EMERGENCY STOP TRIGGERED!");
-      } catch (e) {
-        console.error("Estop error:", e);
-      }
-    }
-  });
-
-  // Dock
-  document.getElementById("btn-dock")?.addEventListener("click", async () => {
     try {
-      await fetch(`${API_BASE}/api/v1/robot/dock`, { method: "POST" });
-      showToast("Auto-docking initiated...");
+      await fetch(`${API_BASE}/api/v1/motion/stop`, { method: "POST" });
+      showToast("EMERGENCY STOP TRIGGERED!", true);
+      triggerFaceExpression("afraid");
     } catch (e) {
-      showToast("Docking failed: " + e.message, true);
+      console.error("Estop error:", e);
     }
   });
 
-  // Undock
-  document.getElementById("btn-undock")?.addEventListener("click", async () => {
+  // Setup Button in Header
+  document.getElementById("btn-open-setup")?.addEventListener("click", () => {
+    openSetupScreen();
+  });
+
+  // Charging Undock Button
+  document.getElementById("btn-charging-undock")?.addEventListener("click", async () => {
     try {
-      await fetch(`${API_BASE}/api/v1/robot/undock`, { method: "POST" });
-      showToast("Undocking initiated...");
+      showToast("Undocking from charging station...");
+      await fetch(`${API_BASE}/api/v1/undock`, { method: "POST" });
+      dismissChargingScreen();
     } catch (e) {
       showToast("Undock failed: " + e.message, true);
     }
   });
 
-  // Relocalize
-  document.getElementById("btn-relocalize")?.addEventListener("click", async () => {
+  // Cancel Docking
+  document.getElementById("btn-cancel-docking")?.addEventListener("click", async () => {
     try {
-      await fetch(`${API_BASE}/api/v1/navigation/relocalize`, { method: "POST" });
-      showToast("Global relocalization triggered");
+      await fetch(`${API_BASE}/api/v1/dock/goal`, { method: "DELETE" });
+      document.getElementById("screen-docking-progress").style.display = "none";
+      showToast("Docking canceled.");
     } catch (e) {
-      showToast("Relocalization failed: " + e.message, true);
+      console.warn(e);
     }
   });
 
-  // Stop All / Halt
-  document.getElementById("btn-stop-all")?.addEventListener("click", async () => {
+  // Cancel Navigation
+  document.getElementById("btn-cancel-navigation")?.addEventListener("click", async () => {
     try {
-      await fetch(`${API_BASE}/api/v1/navigation/cancel`, { method: "POST" });
-      showToast("Motion halted");
+      await fetch(`${API_BASE}/api/v1/navigation/goal`, { method: "DELETE" });
+      document.getElementById("screen-nav-progress").style.display = "none";
+      showToast("Navigation canceled.");
     } catch (e) {
-      showToast("Halt failed: " + e.message, true);
+      console.warn(e);
     }
   });
 
-  // Mission Pause/Abort
-  document.getElementById("btn-mission-pause")?.addEventListener("click", async () => {
+  // Relocalization Buttons
+  document.getElementById("btn-relocalize-dock")?.addEventListener("click", async () => {
     try {
-      await fetch(`${API_BASE}/api/v1/missions/pause`, { method: "POST" });
-      showToast("Mission pause requested");
+      // Localize at dock position
+      await fetch(`${API_BASE}/api/v1/navigation/localize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pose_name: "dock" })
+      });
+      dismissRelocalizationModal();
+      showToast("Initial pose set to charging dock.");
+      triggerFaceExpression("happy");
     } catch (e) {
-      showToast("Pause failed: " + e.message, true);
+      showToast("Localization failed: " + e.message, true);
     }
   });
 
-  document.getElementById("btn-mission-cancel")?.addEventListener("click", async () => {
-    if (confirm("Abort active mission?")) {
-      try {
-        await fetch(`${API_BASE}/api/v1/missions/cancel`, { method: "POST" });
-        showToast("Mission cancelled");
-      } catch (e) {
-        showToast("Cancel failed: " + e.message, true);
-      }
+  document.getElementById("btn-relocalize-global")?.addEventListener("click", async () => {
+    try {
+      await fetch(`${API_BASE}/api/v1/navigation/relocalize/global`, { method: "POST" });
+      dismissRelocalizationModal();
+      showToast("360° global lidar relocalization initiated...");
+      triggerFaceExpression("curios");
+    } catch (e) {
+      showToast("Global relocalization failed: " + e.message, true);
     }
+  });
+
+  // Start Mapping from Maps Subpage
+  document.getElementById("btn-start-mapping")?.addEventListener("click", () => {
+    startSlamMapping();
+  });
+
+  // Save Location Button in Locations Subpage
+  document.getElementById("btn-add-location")?.addEventListener("click", () => {
+    promptSaveCurrentLocation();
   });
 }
 
-// Modal handling
-function initModals() {
-  const modal = document.getElementById("save-location-modal");
-  const openBtns = [document.getElementById("btn-quick-save-location"), document.getElementById("btn-add-location")];
-  const cancelBtn = document.getElementById("btn-cancel-save-location");
-  const confirmBtn = document.getElementById("btn-confirm-save-location");
-  const input = document.getElementById("new-wp-name");
+/* --------------------------------------------------------------------------
+   6. Auto-Charging & Docked Screen Watcher
+   -------------------------------------------------------------------------- */
+function updatePowerState(pState) {
+  if (!pState) return;
+  const b = pState.data || pState;
+  const isCharging = !!(b.charging || b.is_charging || b.status === "charging" || b.status === "Charging" || b.power_supply_status === "Charging" || b.adapter_connected || (pState.detail && pState.detail.charger_connected));
+  const rawPct = b.percentage !== undefined ? b.percentage : (b.soc_percent !== undefined ? b.soc_percent : (b.battery_level || 0));
+  const pct = Math.max(0, Math.min(100, Math.round(rawPct)));
 
-  openBtns.forEach(btn => {
-    btn?.addEventListener("click", () => {
-      input.value = "";
+  // Update header battery chip
+  const pctEl = document.getElementById("battery-pct");
+  const boltEl = document.getElementById("charging-bolt");
+  if (pctEl) pctEl.textContent = `${pct}%`;
+  if (boltEl) boltEl.style.display = isCharging ? "inline" : "none";
+
+  // Update full-screen charging overlay if visible
+  const chargingScreen = document.getElementById("screen-charging");
+  const chargingPct = document.getElementById("charging-screen-pct");
+  if (chargingPct) chargingPct.textContent = `${pct}%`;
+
+  // Auto-display charging screen when docked and charging
+  if (isCharging && !wasCharging) {
+    wasCharging = true;
+    chargingScreenDismissed = false;
+    if (chargingScreen) chargingScreen.style.display = "flex";
+    triggerFaceExpression("sleep");
+  } else if (!isCharging && wasCharging) {
+    // Robot undocked / disconnected
+    wasCharging = false;
+    chargingScreenDismissed = false;
+    if (chargingScreen) chargingScreen.style.display = "none";
+    triggerFaceExpression("wakeup");
+  }
+
+  isRobotCharging = isCharging;
+}
+
+window.dismissChargingScreen = function() {
+  const chargingScreen = document.getElementById("screen-charging");
+  if (chargingScreen) chargingScreen.style.display = "none";
+  chargingScreenDismissed = true;
+  setSwipeIndex(1); // Go to Dashboard
+};
+
+/* --------------------------------------------------------------------------
+   7. Relocalization Prompt & Auto-Dismissal
+   -------------------------------------------------------------------------- */
+function checkRelocalizationRequired(stateData) {
+  const modal = document.getElementById("modal-relocalization");
+  if (!modal) return;
+
+  const isLoc = !!(stateData && (stateData.is_localized || (stateData.localization && (stateData.localization.status === "LOCALIZED" || stateData.localization.status === "OK"))));
+
+  // Auto-dismiss immediately if operator sets initial pose from any source
+  if (isLoc) {
+    if (modal.style.display === "flex") {
+      modal.style.display = "none";
+      showToast("Robot successfully localized!");
+      triggerFaceExpression("happy");
+    }
+    isLocalized = true;
+    return;
+  }
+
+  isLocalized = false;
+
+  // Do not prompt if currently mapping, or if dismissed recently
+  if (stateData && (stateData.mode === "mapping" || stateData.state === "mapping")) return;
+  if (Date.now() < relocalizeDismissedUntil) return;
+
+  const currentLoadedMap = (stateData && (stateData.map || stateData.current_map)) || activeMapName;
+
+  // If a map is loaded and robot is not localized, prompt
+  if (currentLoadedMap && currentLoadedMap.trim() !== "") {
+    const mapNameEl = document.getElementById("relocalize-map-name");
+    if (mapNameEl) mapNameEl.textContent = currentLoadedMap;
+    if (modal.style.display !== "flex") {
       modal.style.display = "flex";
-      input.focus();
-    });
-  });
+    }
+  }
+}
 
-  cancelBtn?.addEventListener("click", () => {
-    modal.style.display = "none";
-  });
+window.dismissRelocalizationModal = function() {
+  const modal = document.getElementById("modal-relocalization");
+  if (modal) modal.style.display = "none";
+  relocalizeDismissedUntil = Date.now() + 60000; // Dismiss for 1 minute
+};
 
-  confirmBtn?.addEventListener("click", async () => {
-    const name = input.value.trim();
-    if (!name) {
-      alert("Please enter a waypoint name");
+/* --------------------------------------------------------------------------
+   8. Setup Wizard (Wi-Fi + Place Dock & Create Map)
+   -------------------------------------------------------------------------- */
+function initSetupWizard() {
+  document.getElementById("btn-step2-continue")?.addEventListener("click", () => {
+    advanceSetupToStep(2);
+  });
+  document.getElementById("btn-skip-mapping")?.addEventListener("click", () => {
+    skipMappingSetup();
+  });
+  document.getElementById("btn-create-map-setup")?.addEventListener("click", () => {
+    startMappingFromSetup();
+  });
+}
+
+window.openSetupScreen = function() {
+  const screen = document.getElementById("screen-setup");
+  if (!screen) return;
+  screen.style.display = "flex";
+  advanceSetupToStep(1);
+  fetchWifiStatus();
+  scanWifiNetworks();
+};
+
+window.dismissSetupScreen = function() {
+  const screen = document.getElementById("screen-setup");
+  if (screen) screen.style.display = "none";
+};
+
+window.advanceSetupToStep = function(stepNum) {
+  document.querySelectorAll(".setup-step-page").forEach(p => p.classList.remove("active"));
+  const targetPage = document.getElementById(`setup-step-${stepNum}`);
+  if (targetPage) targetPage.classList.add("active");
+
+  const dot1 = document.getElementById("setup-dot-1");
+  const dot2 = document.getElementById("setup-dot-2");
+  const label = document.getElementById("setup-step-label");
+
+  if (dot1) dot1.classList.toggle("active", stepNum === 1);
+  if (dot2) dot2.classList.toggle("active", stepNum === 2);
+  if (label) label.textContent = `Step ${stepNum} of 2`;
+};
+
+async function fetchWifiStatus() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/system/wifi/status`);
+    const data = await res.json();
+    const nameEl = document.getElementById("wifi-current-name");
+    const ipEl = document.getElementById("wifi-current-ip");
+    const headerIp = document.getElementById("robot-ip");
+    if (nameEl) nameEl.textContent = data.ssid || (data.connected ? "Connected" : "Not Connected");
+    const liveIp = data.ip || data.ip_address || "10.42.0.1";
+    if (ipEl) ipEl.textContent = liveIp;
+    if (headerIp && liveIp) headerIp.textContent = liveIp;
+  } catch (e) {
+    console.warn("Wi-Fi status error:", e);
+  }
+}
+
+window.scanWifiNetworks = async function() {
+  const list = document.getElementById("wifi-list-container");
+  if (!list) return;
+  list.innerHTML = `<div class="loading-spinner">Scanning nearby Wi-Fi networks...</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/system/wifi/scan`);
+    const data = await res.json();
+    const networks = data.networks || [];
+    if (networks.length === 0) {
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 12px;">No Wi-Fi networks found. Try scanning again.</p>`;
       return;
     }
-    confirmBtn.disabled = true;
+
+    list.innerHTML = networks.map(net => `
+      <div class="wifi-item" onclick="promptWifiConnect('${escapeQuotes(net.ssid)}')">
+        <span class="wifi-item-name">${escapeHtml(net.ssid)}</span>
+        <div class="wifi-item-meta">
+          <span>${net.signal || 70}%</span>
+          <span>${net.security ? "🔒" : "🔓"}</span>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    list.innerHTML = `<p style="color: var(--danger); padding: 12px;">Error scanning Wi-Fi: ${escapeHtml(e.message)}</p>`;
+  }
+};
+
+window.promptWifiConnect = function(ssid) {
+  openTouchKeyboard(`Enter Password for "${ssid}":`, async (password) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/waypoints/save_current_location`, {
+      showToast(`Connecting to ${ssid}...`);
+      const res = await fetch(`${API_BASE}/api/v1/system/wifi/connect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name })
+        body: JSON.stringify({ ssid, password })
       });
-      if (res.ok) {
-        showToast(`Saved waypoint "${name}"`);
-        modal.style.display = "none";
-        loadWaypoints();
+      const data = await res.json();
+      if (data.status === "ok" || data.success) {
+        showToast(`Connected to ${ssid}!`);
+        fetchWifiStatus();
       } else {
-        const err = await res.json().catch(() => ({}));
-        showToast(`Error: ${err.detail || "Failed to save"}`, true);
+        showToast(`Failed: ${data.message || "Connection error"}`, true);
       }
     } catch (e) {
-      showToast(`Error: ${e.message}`, true);
-    } finally {
-      confirmBtn.disabled = false;
+      showToast(`Connect error: ${e.message}`, true);
+    }
+  });
+};
+
+window.skipMappingSetup = function() {
+  dismissSetupScreen();
+  showToast("Setup completed! Welcome to NavPro Mini.");
+  setSwipeIndex(1); // Dashboard
+};
+
+window.startMappingFromSetup = function() {
+  dismissSetupScreen();
+  startSlamMapping();
+};
+
+/* --------------------------------------------------------------------------
+   9. SLAM Mapping Live Screen & Jog Controller
+   -------------------------------------------------------------------------- */
+function initMappingControls() {
+  const attachJog = (id, lin, ang) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const startJog = (e) => {
+      e.preventDefault();
+      sendVelocity(lin, ang);
+      clearInterval(jogInterval);
+      jogInterval = setInterval(() => sendVelocity(lin, ang), 150);
+    };
+    const stopJog = (e) => {
+      e?.preventDefault();
+      clearInterval(jogInterval);
+      stopVelocity();
+    };
+
+    btn.addEventListener("mousedown", startJog);
+    btn.addEventListener("touchstart", startJog, { passive: false });
+    btn.addEventListener("mouseup", stopJog);
+    btn.addEventListener("mouseleave", stopJog);
+    btn.addEventListener("touchend", stopJog);
+  };
+
+  attachJog("drive-fwd", 0.16, 0.0);
+  attachJog("drive-back", -0.12, 0.0);
+  attachJog("drive-left", 0.0, 0.45);
+  attachJog("drive-right", 0.0, -0.45);
+
+  document.getElementById("drive-stop")?.addEventListener("click", stopVelocity);
+
+  document.getElementById("btn-abort-mapping")?.addEventListener("click", async () => {
+    try {
+      await fetch(`${API_BASE}/api/v1/mode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "navigation" })
+      });
+    } catch (e) {
+      console.warn(e);
+    }
+    stopMappingLive();
+    showToast("Mapping session aborted.");
+  });
+
+  document.getElementById("btn-save-finish-map")?.addEventListener("click", () => {
+    openTouchKeyboard("Enter New Map Name:", async (mapName) => {
+      if (!mapName || !mapName.trim()) return;
+      try {
+        showToast(`Saving map "${mapName}"...`);
+        const res = await fetch(`${API_BASE}/api/v1/mapping/finish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: mapName.trim() })
+        });
+        const data = await res.json();
+        stopMappingLive();
+        showToast(`Map "${mapName}" saved & activated! Setup completed.`);
+        loadMaps();
+        setSwipeIndex(1); // Dashboard
+      } catch (e) {
+        showToast(`Error saving map: ${e.message}`, true);
+      }
+    });
+  });
+}
+
+async function sendVelocity(linear, angular) {
+  try {
+    await fetch(`${API_BASE}/api/v1/motion/velocity`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ linear, angular })
+    });
+  } catch (e) {
+    console.warn("Velocity error:", e);
+  }
+}
+
+async function stopVelocity() {
+  try {
+    await fetch(`${API_BASE}/api/v1/motion/stop`, { method: "POST" });
+  } catch (e) {
+    console.warn("Stop error:", e);
+  }
+}
+
+window.startSlamMapping = async function() {
+  try {
+    showToast("Initializing SLAM mapping mode...");
+    await fetch(`${API_BASE}/api/v1/mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "mapping" })
+    });
+
+    const screen = document.getElementById("screen-mapping-live");
+    if (screen) screen.style.display = "flex";
+
+    mappingStartTime = Date.now();
+    const timerEl = document.getElementById("mapping-timer");
+    clearInterval(mappingTimerInterval);
+    mappingTimerInterval = setInterval(() => {
+      if (!mappingStartTime || !timerEl) return;
+      const elapsed = Math.floor((Date.now() - mappingStartTime) / 1000);
+      const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
+      const s = String(elapsed % 60).padStart(2, "0");
+      timerEl.textContent = `${m}:${s}`;
+    }, 1000);
+
+    triggerFaceExpression("curios");
+  } catch (e) {
+    showToast("Failed to start mapping: " + e.message, true);
+  }
+};
+
+function stopMappingLive() {
+  const screen = document.getElementById("screen-mapping-live");
+  if (screen) screen.style.display = "none";
+  clearInterval(mappingTimerInterval);
+  mappingStartTime = null;
+}
+
+/* --------------------------------------------------------------------------
+   10. Maps Subpage & Scoping
+   -------------------------------------------------------------------------- */
+async function loadMaps() {
+  const list = document.getElementById("maps-list");
+  if (!list) return;
+  list.innerHTML = `<div class="loading-spinner">Loading maps...</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/maps`);
+    const data = await res.json();
+    const maps = data.maps || [];
+
+    // Also get active map info
+    const curRes = await fetch(`${API_BASE}/api/v1/maps/current`);
+    const curData = await curRes.json();
+    activeMapName = curData.name || curData.map_name || curData.current || data.current || (typeof maps[0] === 'string' ? maps[0] : maps[0]?.name) || "";
+
+    // Update Hub Badge & Card Subtitle
+    const hubMapDesc = document.getElementById("hub-active-map-name");
+    if (hubMapDesc) hubMapDesc.textContent = activeMapName ? `Active: ${activeMapName}` : "No map loaded";
+
+    const locSub = document.getElementById("locations-map-subtitle");
+    if (locSub) locSub.textContent = `Showing stations on "${activeMapName || 'all'}"`;
+
+    if (maps.length === 0) {
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No saved maps available. Click "+ Create New Map" to start SLAM.</p>`;
+      return;
+    }
+
+    list.innerHTML = maps.map(m => {
+      const mapName = typeof m === 'string' ? m : (m.name || m.id);
+      const isCur = mapName === activeMapName;
+      const resText = typeof m === 'object' && m.resolution ? `${m.resolution}m/px` : "2D Grid Map";
+      const dateText = typeof m === 'object' && m.created_at ? new Date(m.created_at).toLocaleDateString() : "Ready";
+      return `
+        <div class="map-item-card ${isCur ? 'is-active-map' : ''}">
+          <div class="map-item-info">
+            <h3>${escapeHtml(mapName)}</h3>
+            <p>${resText} • ${dateText}</p>
+          </div>
+          <div>
+            ${isCur 
+              ? `<span class="badge badge-ok">CURRENT ACTIVE MAP</span>`
+              : `<button class="btn btn-secondary btn-sm" onclick="activateMap('${escapeQuotes(mapName)}')">Switch to this Map</button>`
+            }
+          </div>
+        </div>
+      `;
+    }).join("");
+  } catch (e) {
+    list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load maps: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+window.activateMap = async function(mapName) {
+  try {
+    showToast(`Activating map "${mapName}"...`);
+    await fetch(`${API_BASE}/api/v1/maps/${encodeURIComponent(mapName)}/activate`, {
+      method: "POST"
+    });
+    activeMapName = mapName;
+    showToast(`Map "${mapName}" activated!`);
+    loadMaps();
+    loadWaypoints();
+    loadSchedules();
+  } catch (e) {
+    showToast(`Failed to activate map: ${e.message}`, true);
+  }
+};
+
+/* --------------------------------------------------------------------------
+   11. Locations Subpage (Current Map Scoped)
+   -------------------------------------------------------------------------- */
+async function loadWaypoints() {
+  const list = document.getElementById("locations-full-list");
+  if (!list) return;
+  list.innerHTML = `<div class="loading-spinner">Loading locations for "${activeMapName}"...</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/waypoints`);
+    const data = await res.json();
+    let waypoints = data.waypoints || [];
+
+    // Filter to current active map if waypoint has map metadata
+    if (activeMapName) {
+      waypoints = waypoints.filter(wp => !wp.map || wp.map === activeMapName);
+    }
+
+    // Update hub count
+    const hubCount = document.getElementById("hub-locations-count");
+    if (hubCount) hubCount.textContent = `${waypoints.length} Stations`;
+
+    if (waypoints.length === 0) {
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No saved locations on "${activeMapName}". Tap "+ Save Position" to record a waypoint.</p>`;
+      return;
+    }
+
+    list.innerHTML = waypoints.map(wp => `
+      <div class="location-item">
+        <div class="location-item-info">
+          <h3>${escapeHtml(wp.name)}</h3>
+          <p>X: ${(wp.x || 0).toFixed(2)}m • Y: ${(wp.y || 0).toFixed(2)}m</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary btn-sm" onclick="navigateToLocation('${escapeQuotes(wp.name)}')">Dispatch Here</button>
+          <button class="btn btn-secondary btn-sm" onclick="deleteWaypoint('${escapeQuotes(wp.name)}')">✕</button>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load locations: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+window.navigateToLocation = async function(wpName) {
+  try {
+    showToast(`Navigating to "${wpName}"...`);
+    await fetch(`${API_BASE}/api/v1/navigation/goto`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ waypoint: wpName })
+    });
+
+    // Show navigation progress screen
+    const navScreen = document.getElementById("screen-nav-progress");
+    const destEl = document.getElementById("nav-screen-destination");
+    if (destEl) destEl.textContent = wpName;
+    if (navScreen) navScreen.style.display = "flex";
+
+    triggerFaceExpression("thinking");
+  } catch (e) {
+    showToast(`Navigation failed: ${e.message}`, true);
+  }
+};
+
+window.deleteWaypoint = async function(wpName) {
+  if (confirm(`Delete waypoint "${wpName}"?`)) {
+    try {
+      await fetch(`${API_BASE}/api/v1/waypoints/${encodeURIComponent(wpName)}`, { method: "DELETE" });
+      showToast(`Deleted "${wpName}".`);
+      loadWaypoints();
+    } catch (e) {
+      showToast(`Delete failed: ${e.message}`, true);
+    }
+  }
+};
+
+function promptSaveCurrentLocation() {
+  openTouchKeyboard("Enter Station Name:", async (wpName) => {
+    if (!wpName || !wpName.trim()) return;
+    try {
+      showToast(`Saving position "${wpName}"...`);
+      await fetch(`${API_BASE}/api/v1/waypoints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: wpName.trim(), map: activeMapName })
+      });
+      showToast(`Saved location "${wpName}"!`);
+      loadWaypoints();
+    } catch (e) {
+      showToast(`Failed to save location: ${e.message}`, true);
     }
   });
 }
 
-// WebSocket Real-time Event Subscription (Push-based, Instant Reactive UI)
-let eventsWs = null;
-let wsConnected = false;
-
-function initEventsWebSocket() {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  let host = window.location.host;
-  if (!host || host === "") {
-    host = "127.0.0.1:8090";
-  }
-  const wsUrl = `${protocol}//${host}/api/v1/events`;
-
-  try {
-    eventsWs = new WebSocket(wsUrl);
-
-    eventsWs.onopen = () => {
-      console.log("[WebSocket] Connected to NavPro Mini event stream at", wsUrl);
-      wsConnected = true;
-      eventsWs.send(JSON.stringify({
-        action: "subscribe",
-        streams: ["events", "battery", "dock_status"]
-      }));
-      checkActiveInteraction();
-    };
-
-    eventsWs.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data);
-        if (msg.stream === "events" && msg.data) {
-          const e = msg.data;
-          if (e.event === "mission.ui_interaction" && e.data) {
-            handleActiveInteraction(e.data);
-          } else if (e.event === "mission.ui_interaction_dismissed") {
-            dismissInteraction();
-          } else if (e.event === "mission.status") {
-            if (e.data && e.data.active_interaction) {
-              handleActiveInteraction(e.data.active_interaction);
-            } else if (e.data && !e.data.active_interaction) {
-              dismissInteraction();
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("[WebSocket] Error handling event:", err);
-      }
-    };
-
-    eventsWs.onclose = () => {
-      wsConnected = false;
-      setTimeout(initEventsWebSocket, 3000);
-    };
-
-    eventsWs.onerror = () => {
-      wsConnected = false;
-    };
-  } catch (e) {
-    wsConnected = false;
-    setTimeout(initEventsWebSocket, 3000);
-  }
-}
-
-async function checkActiveInteraction() {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`);
-    if (res.ok) {
-      const data = await res.json();
-      const inter = data && (data.interaction || data.active_interaction || (data.active && typeof data.active === "object" ? data.active : null));
-      if (inter && (inter.interaction_id || inter.node_id || inter.id)) {
-        handleActiveInteraction(inter);
-      } else {
-        dismissInteraction();
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-}
-
-// Polling loop (State updates + fallback)
-function startPolling() {
-  initEventsWebSocket();
-  pollStatus();
-  setInterval(pollStatus, 2000);
-  loadWaypoints();
-  loadMissions();
-}
-
-async function pollStatus() {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/state`);
-    if (res.ok) {
-      const state = await res.json();
-      updateHeader(state);
-      updateDashboard(state);
-    }
-  } catch (e) {
-    document.getElementById("robot-ip").textContent = "Offline / Connecting...";
-  }
-
-  // If WebSocket is not connected, use HTTP polling as fallback
-  if (!wsConnected) {
-    checkActiveInteraction();
-  }
-}
-
-function updateHeader(state) {
-  document.getElementById("robot-ip").textContent = window.location.hostname || "127.0.0.1";
-  
-  const stateText = document.getElementById("state-text");
-  const statePill = document.getElementById("state-pill");
-  const currentStatus = (state.status || state.navigation_status || "IDLE").toUpperCase();
-  stateText.textContent = currentStatus;
-
-  if (currentStatus.includes("ERROR") || currentStatus.includes("ESTOP")) {
-    statePill.style.background = "rgba(239, 68, 68, 0.2)";
-    statePill.style.borderColor = "#ef4444";
-  } else if (currentStatus.includes("NAVIGATING") || currentStatus.includes("RUNNING")) {
-    statePill.style.background = "rgba(16, 185, 129, 0.2)";
-    statePill.style.borderColor = "#10b981";
-  } else {
-    statePill.style.background = "rgba(255, 255, 255, 0.06)";
-    statePill.style.borderColor = "rgba(255, 255, 255, 0.12)";
-  }
-
-  // Battery
-  const batt = state.battery || {};
-  const pct = batt.percentage !== undefined ? Math.round(batt.percentage) : "--";
-  const volt = batt.voltage !== undefined ? batt.voltage.toFixed(1) : "--.-";
-  const charging = batt.charging || batt.is_charging || false;
-
-  document.getElementById("battery-pct").textContent = `${pct}%`;
-  document.getElementById("battery-volt").textContent = `${volt}V`;
-  document.getElementById("charging-bolt").style.display = charging ? "inline" : "none";
-
-  // Power Tab Stats
-  const gaugePct = document.getElementById("gauge-battery-pct");
-  if (gaugePct) gaugePct.textContent = `${pct}%`;
-  const gaugeStatus = document.getElementById("gauge-battery-status");
-  if (gaugeStatus) gaugeStatus.textContent = charging ? "Charging" : "Discharging";
-  const statVolt = document.getElementById("stat-voltage");
-  if (statVolt) statVolt.textContent = `${volt} V`;
-  const statCharge = document.getElementById("stat-charging-state");
-  if (statCharge) statCharge.textContent = charging ? "Connected to Charger" : "Operating on Battery";
-}
-
-function updateDashboard(state) {
-  const mission = state.active_mission || state.mission || null;
-  const banner = document.getElementById("mission-floating-banner");
-  const title = document.getElementById("active-mission-title");
-  const progressBar = document.getElementById("mission-progress-bar");
-  const nodeLabel = document.getElementById("mission-node-label");
-
-  const isRunning = mission && (mission.status === "running" || mission.status === "in_progress" || mission.status === "waiting_for_user" || mission.status === "paused" || state.status === "running");
-
-  if (isRunning) {
-    if (banner) banner.style.display = "flex";
-    if (title) title.textContent = mission?.mission_name || mission?.name || "Active Mission";
-    const progress = mission?.progress_pct || mission?.progress || 0;
-    if (progressBar) progressBar.style.width = `${progress}%`;
-    if (nodeLabel) nodeLabel.textContent = `Node: ${mission?.current_node_title || mission?.current_node_id || mission?.active_step || "--"}`;
-  } else {
-    if (banner) banner.style.display = "none";
-  }
-}
-
-// Waypoints
-async function loadWaypoints() {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/waypoints`);
-    if (!res.ok) return;
-    const data = await res.json();
-    const wps = Array.isArray(data) ? data : (data.waypoints || []);
-    renderQuickWaypoints(wps);
-    renderFullWaypoints(wps);
-  } catch (e) {
-    console.error("Failed to load waypoints:", e);
-  }
-}
-
-function renderQuickWaypoints(wps) {
-  const grid = document.getElementById("locations-quick-grid");
-  if (!grid) return;
-  if (!wps || wps.length === 0) {
-    grid.innerHTML = `<div class="empty-state">No saved waypoints found.</div>`;
-    return;
-  }
-  grid.innerHTML = wps.map(wp => {
-    const name = wp.name || wp.id;
-    return `
-      <div class="location-chip" onclick="navigateToWaypoint('${name}')">
-        <span class="chip-pin">📍</span>
-        <div class="chip-info">
-          <div class="chip-name">${name}</div>
-          <div class="chip-coords">x: ${(wp.x || 0).toFixed(2)}, y: ${(wp.y || 0).toFixed(2)}</div>
-        </div>
-        <button class="chip-go-btn" title="Navigate Here">GO</button>
-      </div>
-    `;
-  }).join("");
-}
-
-function renderFullWaypoints(wps) {
-  const list = document.getElementById("locations-full-list");
-  if (!list) return;
-  if (!wps || wps.length === 0) {
-    list.innerHTML = `<div class="empty-state">No saved locations found.</div>`;
-    return;
-  }
-  list.innerHTML = wps.map(wp => {
-    const name = wp.name || wp.id;
-    return `
-      <div class="location-item-row">
-        <div class="item-left">
-          <span class="location-icon">📍</span>
-          <div>
-            <h4 class="location-item-name">${name}</h4>
-            <span class="location-item-coords">X: ${(wp.x||0).toFixed(3)} | Y: ${(wp.y||0).toFixed(3)} | Yaw: ${(wp.yaw||wp.theta||0).toFixed(2)} rad</span>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="navigateToWaypoint('${name}')">Navigate Here</button>
-      </div>
-    `;
-  }).join("");
-}
-
-window.navigateToWaypoint = async function(name) {
-  if (confirm(`Navigate robot to waypoint "${name}"?`)) {
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/navigation/navigate_to_waypoint`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ waypoint_name: name })
-      });
-      if (res.ok) {
-        showToast(`Dispatched to ${name}`);
-        switchTab("dashboard");
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showToast(`Failed: ${err.detail || "Error"}`, true);
-      }
-    } catch (e) {
-      showToast(`Error: ${e.message}`, true);
-    }
-  }
-};
-
-// Missions
+/* --------------------------------------------------------------------------
+   12. Missions Subpage & Execution Screen
+   -------------------------------------------------------------------------- */
 async function loadMissions() {
+  const list = document.getElementById("missions-list");
+  if (!list) return;
+  list.innerHTML = `<div class="loading-spinner">Loading missions...</div>`;
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/missions`);
-    if (!res.ok) return;
     const data = await res.json();
-    const list = Array.isArray(data) ? data : (data.missions || []);
-    renderMissions(list);
-  } catch (e) {
-    console.error("Failed to load missions:", e);
-  }
-}
+    const missions = data.missions || [];
 
-function renderMissions(missions) {
-  const container = document.getElementById("missions-list");
-  if (!container) return;
-  if (!missions || missions.length === 0) {
-    container.innerHTML = `<div class="empty-state">No missions configured.</div>`;
-    return;
-  }
-  container.innerHTML = missions.map(m => {
-    const id = m.mission_id || m.id;
-    const name = m.mission_name || m.name || id;
-    const desc = m.description || (m.steps ? `${m.steps.length} steps` : "Mission Plan");
-    return `
-      <div class="mission-item-row">
-        <div class="item-left">
-          <span class="mission-icon">⚡</span>
-          <div>
-            <h4 class="mission-item-name">${name}</h4>
-            <p class="mission-item-desc">${desc}</p>
-          </div>
+    const hubCount = document.getElementById("hub-missions-count");
+    if (hubCount) hubCount.textContent = `${missions.length} Routines`;
+
+    if (missions.length === 0) {
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No visual missions found. Create missions using the desktop or mobile mission planner.</p>`;
+      return;
+    }
+
+    list.innerHTML = missions.map(m => `
+      <div class="mission-item-card">
+        <div class="mission-item-info">
+          <h3>${escapeHtml(m.name)}</h3>
+          <p>${escapeHtml(m.description || "Visual node workflow routine")}</p>
         </div>
-        <div class="mission-item-actions" style="display: flex; gap: 8px; align-items: center;">
-          <button class="btn btn-outline-danger btn-sm" onclick="deleteMission('${id}', '${name.replace(/'/g, "\\'")}')" title="Delete Mission">🗑️ Delete</button>
-          <button class="btn btn-primary" onclick="executeMission('${id}')">Run Mission</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary btn-sm" onclick="startMission('${escapeQuotes(m.id || m.name)}')">Launch Routine</button>
         </div>
       </div>
-    `;
-  }).join("");
+    `).join("");
+  } catch (e) {
+    list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load missions: ${escapeHtml(e.message)}</p>`;
+  }
 }
 
-window.deleteMission = async function(id, name) {
-  if (!confirm(`Are you sure you want to permanently delete mission "${name || id}"?\n\nThis action cannot be undone.`)) {
-    return;
-  }
+window.startMission = async function(missionId) {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(id)}`, {
-      method: "DELETE"
-    });
-    if (res.ok) {
-      showToast(`Mission deleted.`);
-      loadMissions();
-    } else {
-      const err = await res.json().catch(() => ({}));
-      showToast(`Delete failed: ${err.message || err.detail || "Error"}`, true);
-    }
+    showToast(`Starting mission...`);
+    await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(missionId)}/start`, { method: "POST" });
+    activeMissionId = missionId;
+    closeSubpage();
+    triggerFaceExpression("happy");
   } catch (e) {
-    showToast(`Delete error: ${e.message}`, true);
+    showToast(`Failed to start mission: ${e.message}`, true);
   }
 };
 
-window.executeMission = async function(id) {
-  if (confirm(`Launch mission ${id}?`)) {
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/missions/execute`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mission_id: id })
-      });
-      if (res.ok) {
-        showToast(`Mission started!`);
-        switchTab("dashboard");
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showToast(`Failed: ${err.detail || "Error starting mission"}`, true);
-      }
-    } catch (e) {
-      showToast(`Error: ${e.message}`, true);
-    }
-  }
-};
+function updateMissionExecutionScreen(mStatus) {
+  const missionScreen = document.getElementById("screen-mission-progress");
+  const floatingBanner = document.getElementById("mission-floating-banner");
 
-// =================================================================
-// DYNAMIC INTERACTIVE UI KIOSK MODAL
-// =================================================================
-function handleActiveInteraction(interaction) {
-  // Target filtering: If explicitly targeted ONLY at operator_app, do not show on robot screen
-  const target = (interaction.target || "robot_screen").toLowerCase();
-  if (target === "operator_app") {
-    dismissInteraction();
+  if (!mStatus || mStatus.state !== "running") {
+    if (missionScreen) missionScreen.style.display = "none";
+    if (floatingBanner) floatingBanner.style.display = "none";
+    activeMissionState = "idle";
     return;
   }
+
+  activeMissionState = "running";
+  const title = mStatus.mission_name || mStatus.mission_id || "Active Mission";
+  const activeNode = mStatus.active_node || mStatus.current_node || "In Progress";
+  const progressPct = mStatus.progress_pct || 0;
+
+  // Show mission progress screen if not already visible
+  if (missionScreen && missionScreen.style.display !== "flex") {
+    missionScreen.style.display = "flex";
+  }
+
+  const titleEl = document.getElementById("mission-screen-title");
+  const nodeEl = document.getElementById("mission-screen-node");
+  const fillEl = document.getElementById("mission-screen-fill");
+
+  if (titleEl) titleEl.textContent = title;
+  if (nodeEl) nodeEl.textContent = activeNode;
+  if (fillEl) fillEl.style.width = `${progressPct}%`;
+}
+
+/* --------------------------------------------------------------------------
+   13. Schedules Subpage
+   -------------------------------------------------------------------------- */
+async function loadSchedules() {
+  const list = document.getElementById("schedules-list");
+  if (!list) return;
+  list.innerHTML = `<div class="loading-spinner">Loading automated schedules...</div>`;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/schedules`);
+    const data = await res.json();
+    const schedules = data.schedules || [];
+
+    const hubCount = document.getElementById("hub-schedules-count");
+    if (hubCount) hubCount.textContent = `${schedules.length} Active`;
+
+    if (schedules.length === 0) {
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No automated schedules configured for this robot.</p>`;
+      return;
+    }
+
+    list.innerHTML = schedules.map(s => `
+      <div class="schedule-item-card">
+        <div class="schedule-item-info">
+          <h3>${escapeHtml(s.name || s.mission_id || "Patrol Routine")}</h3>
+          <p>Cron: <code>${escapeHtml(s.cron || s.expression || "Daily")}</code> • Next: ${s.next_run || "Scheduled"}</p>
+        </div>
+        <div>
+          <span class="badge badge-ok">${s.enabled !== false ? "ENABLED" : "PAUSED"}</span>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load schedules: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   14. Power & Health Subpage
+   -------------------------------------------------------------------------- */
+async function loadPowerHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/system/health`);
+    const data = await res.json();
+    const list = document.getElementById("health-checklist");
+    if (!list) return;
+    const items = data.components || [
+      { name: "Base Motion Controller", ok: true },
+      { name: "RPLidar 360 Laser", ok: true },
+      { name: "Nav2 Costmap Layers", ok: true },
+      { name: "AMCL Localization", ok: isLocalized }
+    ];
+    list.innerHTML = items.map(c => `
+      <div class="health-item">
+        <span class="badge ${c.ok ? 'badge-ok' : 'badge-danger'}">${c.ok ? 'ONLINE' : 'OFFLINE'}</span>
+        ${escapeHtml(c.name)}
+      </div>
+    `).join("");
+  } catch (e) {
+    console.warn("Health load error:", e);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   15. Fast Built-In On-Screen Touch Keyboard
+   -------------------------------------------------------------------------- */
+function initTouchKeyboard() {
+  const grid = document.getElementById("touch-keyboard-grid");
+  if (!grid) return;
+
+  const rows = [
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l", "_"],
+    ["z", "x", "c", "v", "b", "n", "m", "-", "."]
+  ];
+
+  let html = rows.map(row => `
+    <div class="keyboard-row">
+      ${row.map(k => `<button type="button" class="keyboard-key" onclick="appendKeyChar('${k}')">${k}</button>`).join("")}
+    </div>
+  `).join("");
+
+  html += `
+    <div class="keyboard-row">
+      <button type="button" class="keyboard-key keyboard-key-wide" onclick="backspaceKey()">⌫ Del</button>
+      <button type="button" class="keyboard-key keyboard-key-space" onclick="appendKeyChar(' ')">Space</button>
+      <button type="button" class="keyboard-key keyboard-key-wide" onclick="clearKeyInput()">Clear</button>
+    </div>
+  `;
+
+  grid.innerHTML = html;
+}
+
+window.openTouchKeyboard = function(promptLabel, callback) {
+  touchKeyboardCallback = callback;
+  const modal = document.getElementById("modal-touch-keyboard");
+  const label = document.getElementById("keyboard-prompt-label");
+  const input = document.getElementById("keyboard-input-display");
+  if (label) label.textContent = promptLabel;
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+  if (modal) modal.style.display = "flex";
+};
+
+window.closeTouchKeyboard = function(confirmed) {
+  const modal = document.getElementById("modal-touch-keyboard");
+  const input = document.getElementById("keyboard-input-display");
+  const val = input ? input.value : "";
+  if (modal) modal.style.display = "none";
+  if (confirmed && touchKeyboardCallback) {
+    touchKeyboardCallback(val);
+  }
+  touchKeyboardCallback = null;
+};
+
+window.appendKeyChar = function(char) {
+  const input = document.getElementById("keyboard-input-display");
+  if (input) input.value += char;
+};
+
+window.backspaceKey = function() {
+  const input = document.getElementById("keyboard-input-display");
+  if (input && input.value.length > 0) {
+    input.value = input.value.slice(0, -1);
+  }
+};
+
+window.clearKeyInput = function() {
+  const input = document.getElementById("keyboard-input-display");
+  if (input) input.value = "";
+};
+
+/* --------------------------------------------------------------------------
+   16. Dynamic UI Kiosk Interactions (Human-In-The-Loop Missions)
+   -------------------------------------------------------------------------- */
+function handleActiveInteraction(interaction) {
+  if (!interaction || !interaction.interaction_id) return;
+  activeInteractionId = interaction.interaction_id;
 
   const overlay = document.getElementById("interaction-overlay");
-  const interId = interaction.interaction_id || interaction.id || interaction.node_id;
-
-  if (activeInteractionId === interId) {
-    return; // Already rendering this interaction
-  }
-
-  activeInteractionId = interId;
-  overlay.style.display = "flex";
-
-  // Set Title & Message
-  document.getElementById("interaction-title").textContent = interaction.title || "Action Required";
-  document.getElementById("interaction-message").textContent = interaction.message || "";
-
-  // Image / Media Banner
-  const mediaEl = document.getElementById("interaction-media");
-  const imgEl = document.getElementById("interaction-img");
-  const mediaUrl = interaction.media_url || interaction.image_url;
-  if (mediaUrl && mediaEl && imgEl) {
-    imgEl.src = mediaUrl;
-    mediaEl.style.display = "block";
-  } else if (mediaEl) {
-    mediaEl.style.display = "none";
-  }
-
-  // Timer Setup
-  clearInterval(interactionTimerInterval);
-  const timeoutSec = Number(interaction.timeout_sec || interaction.timeout || 60);
-  interactionTotal = timeoutSec;
-  interactionRemaining = timeoutSec;
-
-  const timerChip = document.getElementById("interaction-timer-sec");
-  const progressFill = document.getElementById("timer-progress-fill");
-
-  const timerChipWrap = document.getElementById("interaction-timer-chip");
-
-  function applyTimerTheme(rem) {
-    if (!timerChipWrap || !progressFill) return;
-    if (rem > 15) {
-      timerChip.style.color = "var(--success)";
-      timerChipWrap.style.borderColor = "var(--success)";
-      progressFill.style.background = "linear-gradient(90deg, var(--success), var(--accent))";
-    } else if (rem > 5) {
-      timerChip.style.color = "var(--warning)";
-      timerChipWrap.style.borderColor = "var(--warning)";
-      progressFill.style.background = "linear-gradient(90deg, var(--warning), #FBBF24)";
-    } else {
-      timerChip.style.color = "var(--danger)";
-      timerChipWrap.style.borderColor = "var(--danger)";
-      progressFill.style.background = "linear-gradient(90deg, var(--danger), #F87171)";
-    }
-  }
-
-  if (timeoutSec > 0) {
-    timerChip.textContent = `${timeoutSec.toFixed(1)}s`;
-    progressFill.style.width = "100%";
-    applyTimerTheme(timeoutSec);
-
-    interactionTimerInterval = setInterval(() => {
-      interactionRemaining -= 0.2;
-      if (interactionRemaining <= 0) {
-        clearInterval(interactionTimerInterval);
-        dismissInteraction();
-      } else {
-        timerChip.textContent = `${interactionRemaining.toFixed(1)}s`;
-        const pct = (interactionRemaining / interactionTotal) * 100;
-        progressFill.style.width = `${pct}%`;
-        applyTimerTheme(interactionRemaining);
-      }
-    }, 200);
-  } else {
-    timerChip.textContent = "No Limit";
-    progressFill.style.width = "100%";
-    applyTimerTheme(999);
-  }
-
-  // Render Mode Content
+  const titleEl = document.getElementById("interaction-title");
+  const msgEl = document.getElementById("interaction-message");
   const formEl = document.getElementById("kiosk-form");
   const choicesEl = document.getElementById("kiosk-choices");
-  const destEl = document.getElementById("kiosk-destinations");
 
-  formEl.style.display = "none";
-  choicesEl.style.display = "none";
-  destEl.style.display = "none";
+  if (!overlay) return;
 
-  const type = (interaction.subtype || interaction.interaction_type || interaction.type || (Array.isArray(interaction.fields) && interaction.fields.length ? "form" : "choices")).toLowerCase();
+  if (titleEl) titleEl.textContent = interaction.title || "Action Required";
+  if (msgEl) msgEl.textContent = interaction.message || "";
 
-  if (type === "form" || type === "dynamic_form" || (Array.isArray(interaction.fields) && interaction.fields.length > 0 && type !== "choice" && type !== "choices")) {
+  if (interaction.subtype === "form") {
     renderInteractionForm(interaction);
-    formEl.style.display = "block";
-  } else if (type === "destination_picker" || type === "kiosk") {
-    renderInteractionDestinations(interaction);
-    destEl.style.display = "block";
+    if (formEl) formEl.style.display = "flex";
+    if (choicesEl) choicesEl.style.display = "none";
   } else {
-    // Default choices / buttons
     renderInteractionChoices(interaction);
-    choicesEl.style.display = "block";
+    if (formEl) formEl.style.display = "none";
+    if (choicesEl) choicesEl.style.display = "flex";
   }
+
+  overlay.style.display = "flex";
+  triggerFaceExpression("thinking");
+}
+
+function renderInteractionForm(interaction) {
+  const container = document.getElementById("form-fields-container");
+  if (!container) return;
+  const fields = interaction.fields || [];
+
+  container.innerHTML = fields.map(f => {
+    if (f.type === "select") {
+      return `
+        <div class="kiosk-field-group">
+          <label>${escapeHtml(f.label)}</label>
+          <select class="kiosk-input kiosk-select" name="${escapeHtml(f.key)}">
+            ${(f.options || []).map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join("")}
+          </select>
+        </div>
+      `;
+    } else if (f.type === "checkbox") {
+      return `
+        <div class="kiosk-field-group kiosk-checkbox-group">
+          <label class="kiosk-checkbox-label">
+            <input type="checkbox" name="${escapeHtml(f.key)}" ${f.default_value ? "checked" : ""}>
+            <span>${escapeHtml(f.label)}</span>
+          </label>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="kiosk-field-group">
+          <label>${escapeHtml(f.label)}</label>
+          <input type="text" class="kiosk-input" name="${escapeHtml(f.key)}" value="${escapeHtml(f.default_value || "")}">
+        </div>
+      `;
+    }
+  }).join("");
+
+  const form = document.getElementById("kiosk-form");
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const result = {};
+    fields.forEach(f => {
+      if (f.type === "checkbox") {
+        result[f.key] = formData.has(f.key);
+      } else {
+        result[f.key] = formData.get(f.key);
+      }
+    });
+    await submitInteractionResponse({ status: "submitted", form_data: result });
+  };
+
+  document.getElementById("btn-form-cancel").onclick = async () => {
+    await submitInteractionResponse({ status: "canceled" });
+  };
 }
 
 function renderInteractionChoices(interaction) {
-  const container = document.getElementById("choices-buttons-grid");
-  const choices = interaction.options || interaction.choices || interaction.buttons || ["Confirm", "Cancel"];
+  const grid = document.getElementById("choices-buttons-grid");
+  if (!grid) return;
+  const choices = interaction.choices || ["Confirm", "Dismiss"];
 
-  container.innerHTML = choices.map(choice => {
-    const label = typeof choice === "string" ? choice : (choice.label || choice.text || "Option");
-    const val = typeof choice === "string" ? choice : (choice.value || label);
-    return `<button class="kiosk-choice-btn" onclick="submitInteractionChoice('${val}')">${label}</button>`;
-  }).join("");
+  grid.innerHTML = choices.map(choice => `
+    <button class="kiosk-choice-btn" onclick="submitChoiceResponse('${escapeQuotes(choice)}')">
+      <span>${escapeHtml(choice)}</span>
+    </button>
+  `).join("");
 }
 
-window.submitInteractionChoice = async function(choiceValue) {
+window.submitChoiceResponse = async function(choiceText) {
+  await submitInteractionResponse({ status: "selected", choice: choiceText });
+};
+
+async function submitInteractionResponse(data) {
   try {
     await fetch(`${API_BASE}/api/v1/missions/ui_response`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         interaction_id: activeInteractionId,
-        action: "selected",
-        selected: choiceValue
+        response: data
       })
     });
-    showToast(`Submitted: ${choiceValue}`);
-    dismissInteraction();
   } catch (e) {
-    showToast(`Submission failed: ${e.message}`, true);
+    console.warn("Failed to post UI interaction response:", e);
+  }
+  const overlay = document.getElementById("interaction-overlay");
+  if (overlay) overlay.style.display = "none";
+  activeInteractionId = null;
+  triggerFaceExpression("happy");
+}
+
+/* --------------------------------------------------------------------------
+   17. General Modals & Toasts
+   -------------------------------------------------------------------------- */
+function initModals() {
+  // Modal background dismiss click
+  document.querySelectorAll(".modal-dialog").forEach(modal => {
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal && modal.id !== "modal-touch-keyboard") {
+        modal.style.display = "none";
+      }
+    });
+  });
+}
+
+function showToast(message, isError = false) {
+  const toast = document.getElementById("kiosk-toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.style.borderColor = isError ? "var(--danger)" : "var(--border-strong)";
+  toast.style.display = "block";
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.style.display = "none";
+  }, 3500);
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function escapeQuotes(str) {
+  if (!str) return "";
+  return String(str).replace(/'/g, "\\'");
+}
+
+/* --------------------------------------------------------------------------
+   18. Telemetry Polling Loop
+   -------------------------------------------------------------------------- */
+function startPolling() {
+  const poll = async () => {
+    try {
+      // 1. Robot state
+      const stateRes = await fetch(`${API_BASE}/api/v1/state`);
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        const stateText = document.getElementById("state-text");
+        if (stateText) stateText.textContent = (stateData.mode || stateData.state || "IDLE").toUpperCase();
+
+        const robotIp = document.getElementById("robot-ip");
+        if (robotIp) robotIp.textContent = stateData.ip || (window.location.hostname || "127.0.0.1");
+
+        // Check if relocalization popup is required or needs auto-dismissal
+        checkRelocalizationRequired(stateData);
+
+        // Navigation state
+        if (stateData.mode === "navigation" || stateData.state === "navigating") {
+          isNavigating = true;
+        } else {
+          isNavigating = false;
+          const navScreen = document.getElementById("screen-nav-progress");
+          if (navScreen && navScreen.style.display === "flex") {
+            navScreen.style.display = "none";
+          }
+        }
+      }
+
+      // 2. Battery & Power
+      const batRes = await fetch(`${API_BASE}/api/v1/state/battery`);
+      if (batRes.ok) {
+        const batData = await batRes.json();
+        updatePowerState(batData);
+      }
+
+      // 3. Missions Status
+      const misRes = await fetch(`${API_BASE}/api/v1/missions/status`);
+      if (misRes.ok) {
+        const misData = await misRes.json();
+        updateMissionExecutionScreen(misData);
+      }
+
+      // 4. Interactive UI Node
+      const uiRes = await fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`);
+      if (uiRes.ok) {
+        const uiData = await uiRes.json();
+        if (uiData && uiData.interaction_id && uiData.interaction_id !== activeInteractionId) {
+          handleActiveInteraction(uiData);
+        }
+      }
+
+      // 5. Wi-Fi & IP
+      if (!window._lastWifiCheck || Date.now() - window._lastWifiCheck > 5000) {
+        window._lastWifiCheck = Date.now();
+        fetchWifiStatus();
+      }
+
+    } catch (e) {
+      // Offline / connecting
+    }
+  };
+
+  poll();
+  setInterval(poll, 1500);
+
+  // Check for app software updates 5 seconds after boot
+  setTimeout(() => checkAppUpdates(true), 5000);
+}
+
+/* --------------------------------------------------------------------------
+   14. SOFTWARE UPDATE SYSTEM (GitHub Releases + SDK Updater)
+   -------------------------------------------------------------------------- */
+const APP_CURRENT_VERSION = "1.0.0";
+let latestReleaseData = null;
+let updatePollingTimer = null;
+
+async function checkAppUpdates(silent = true) {
+  try {
+    let updateInfo = null;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/system/app/update/check`, { signal: AbortSignal.timeout(4000) });
+      if (res.ok) {
+        updateInfo = await res.json();
+      }
+    } catch (e) {
+      // Fallback directly to GitHub Releases API
+    }
+
+    // Direct GitHub API fallback
+    if (!updateInfo) {
+      try {
+        const ghRes = await fetch("https://api.github.com/repos/botforge-robotics/navpromini_robot_ui/releases/latest", {
+          headers: { "Accept": "application/vnd.github.v3+json" },
+          signal: AbortSignal.timeout(5000)
+        });
+        if (ghRes.ok) {
+          const ghData = await ghRes.json();
+          const tag = (ghData.tag_name || "").replace(/^v/, "");
+          const isNewer = compareSemVer(tag, APP_CURRENT_VERSION) > 0;
+          let assetUrl = null;
+          let assetSize = 0;
+          if (ghData.assets && ghData.assets.length > 0) {
+            const asset = ghData.assets.find(a => a.name.includes("aarch64") || a.name.endsWith(".AppImage")) || ghData.assets[0];
+            if (asset) {
+              assetUrl = asset.browser_download_url;
+              assetSize = asset.size;
+            }
+          }
+          updateInfo = {
+            current_version: APP_CURRENT_VERSION,
+            latest_version: tag,
+            update_available: isNewer,
+            release_name: ghData.name || `v${tag}`,
+            release_notes: ghData.body || "Performance and stability updates.",
+            download_url: assetUrl,
+            asset_size: assetSize
+          };
+        }
+      } catch (err) {
+        console.log("GitHub release check offline or unavailable:", err);
+      }
+    }
+
+    if (!updateInfo) {
+      if (!silent) showToast("No update info available right now.");
+      return;
+    }
+
+    latestReleaseData = updateInfo;
+
+    if (updateInfo.update_available) {
+      showUpdateAvailableModal(updateInfo);
+    } else if (!silent) {
+      showToast(`NavPro Mini is up to date (v${APP_CURRENT_VERSION})`);
+    }
+
+  } catch (err) {
+    console.error("Failed to check app updates:", err);
+  }
+}
+
+function compareSemVer(v1, v2) {
+  const p1 = (v1 || "0").split(".").map(n => parseInt(n) || 0);
+  const p2 = (v2 || "0").split(".").map(n => parseInt(n) || 0);
+  for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+    const num1 = p1[i] || 0;
+    const num2 = p2[i] || 0;
+    if (num1 > num2) return 1;
+    if (num1 < num2) return -1;
+  }
+  return 0;
+}
+
+function showUpdateAvailableModal(info) {
+  const modal = document.getElementById("modal-app-update");
+  if (!modal) return;
+  document.getElementById("update-modal-cur-ver").textContent = `v${info.current_version || APP_CURRENT_VERSION}`;
+  document.getElementById("update-modal-new-ver").textContent = `v${info.latest_version || "1.0.1"}`;
+  
+  const notesEl = document.getElementById("update-modal-notes");
+  if (notesEl) {
+    notesEl.textContent = info.release_notes || "Performance enhancements, smoother animations, and navigation bug fixes.";
+  }
+  
+  document.getElementById("update-progress-wrap").style.display = "none";
+  document.getElementById("update-actions-row").style.display = "grid";
+  modal.style.display = "flex";
+}
+
+window.dismissUpdateModal = function() {
+  const modal = document.getElementById("modal-app-update");
+  if (modal) modal.style.display = "none";
+  if (updatePollingTimer) clearInterval(updatePollingTimer);
+};
+
+window.triggerAppUpdate = async function() {
+  const progressWrap = document.getElementById("update-progress-wrap");
+  const actionsRow = document.getElementById("update-actions-row");
+  const progressBar = document.getElementById("update-progress-bar");
+  const progressLabel = document.getElementById("update-progress-label");
+  
+  if (actionsRow) actionsRow.style.display = "none";
+  if (progressWrap) progressWrap.style.display = "flex";
+  
+  if (progressBar) progressBar.style.width = "10%";
+  if (progressLabel) progressLabel.textContent = "Initiating update download...";
+
+  try {
+    await fetch(`${API_BASE}/api/v1/system/app/update/apply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        download_url: latestReleaseData ? latestReleaseData.download_url : null,
+        target_version: latestReleaseData ? latestReleaseData.latest_version : "latest"
+      })
+    });
+
+    let elapsed = 0;
+    updatePollingTimer = setInterval(async () => {
+      elapsed += 1;
+      try {
+        const statRes = await fetch(`${API_BASE}/api/v1/system/app/update/status`);
+        if (statRes.ok) {
+          const status = await statRes.json();
+          const pct = Math.max(10, Math.min(100, status.progress || 10));
+          if (progressBar) progressBar.style.width = `${pct}%`;
+          if (progressLabel) progressLabel.textContent = `${status.message || "Downloading..."} (${pct}%)`;
+
+          if (status.state === "restarting" || status.state === "completed") {
+            clearInterval(updatePollingTimer);
+            if (progressBar) progressBar.style.width = "100%";
+            if (progressLabel) progressLabel.textContent = "Update complete! Restarting UI...";
+            setTimeout(() => {
+              window.location.reload();
+            }, 2500);
+          } else if (status.state === "failed") {
+            clearInterval(updatePollingTimer);
+            if (progressLabel) progressLabel.textContent = `Update failed: ${status.error || "Unknown error"}`;
+            if (actionsRow) actionsRow.style.display = "grid";
+          }
+        }
+      } catch (err) {
+        if (elapsed > 10) {
+          if (progressLabel) progressLabel.textContent = "Restarting UI...";
+          setTimeout(() => window.location.reload(), 2500);
+        }
+      }
+    }, 800);
+
+  } catch (err) {
+    if (progressLabel) progressLabel.textContent = "Connection error. Retrying...";
+    setTimeout(() => {
+      if (actionsRow) actionsRow.style.display = "grid";
+    }, 2000);
   }
 };
 
-function renderInteractionForm(interaction) {
-  const container = document.getElementById("form-fields-container");
-  const formEl = document.getElementById("kiosk-form");
-  const fields = interaction.fields || [];
-
-  container.innerHTML = fields.map(f => {
-    const key = f.key || f.name;
-    const label = f.label || key;
-    const ftype = (f.type || "text").toLowerCase();
-    const req = f.required ? "required" : "";
-
-    if (ftype === "checkbox" || ftype === "boolean") {
-      return `
-        <div class="kiosk-field-group kiosk-checkbox-group">
-          <label class="kiosk-checkbox-label">
-            <input type="checkbox" name="${key}" ${f.default_value ? "checked" : ""}>
-            <span>${label}</span>
-          </label>
-        </div>
-      `;
-    } else if (ftype === "select" && Array.isArray(f.options)) {
-      const opts = f.options.map(opt => {
-        const oval = typeof opt === "string" ? opt : opt.value;
-        const olbl = typeof opt === "string" ? opt : opt.label;
-        return `<option value="${oval}">${olbl}</option>`;
-      }).join("");
-      return `
-        <div class="kiosk-field-group">
-          <label>${label}</label>
-          <div class="kiosk-select-wrap">
-            <select name="${key}" class="kiosk-input kiosk-select" ${req}>${opts}</select>
-            <div class="kiosk-select-arrow">▼</div>
-          </div>
-        </div>
-      `;
-    } else {
-      return `
-        <div class="kiosk-field-group">
-          <label>${label}</label>
-          <input type="${ftype === "number" ? "number" : "text"}" name="${key}" class="kiosk-input" value="${f.default_value || ""}" ${req}>
-        </div>
-      `;
-    }
-  }).join("");
-
-  formEl.onsubmit = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(formEl);
-    const data = {};
-    for (const [k, v] of formData.entries()) {
-      data[k] = v;
-    }
-    // handle unchecked checkboxes
-    fields.forEach(f => {
-      if (f.type === "checkbox" || f.type === "boolean") {
-        data[f.key] = formEl.elements[f.key]?.checked || false;
-      }
-    });
-
-    try {
-      await fetch(`${API_BASE}/api/v1/missions/ui_response`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          interaction_id: activeInteractionId,
-          action: "submit",
-          form_data: data
-        })
-      });
-      showToast("Form submitted successfully");
-      dismissInteraction();
-    } catch (err) {
-      showToast("Error submitting form: " + err.message, true);
-    }
-  };
-
-  document.getElementById("btn-form-cancel").onclick = async () => {
-    try {
-      await fetch(`${API_BASE}/api/v1/missions/ui_response`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          interaction_id: activeInteractionId,
-          action: "cancel"
-        })
-      });
-    } catch (e) {
-      // ignore
-    }
-    dismissInteraction();
-  };
-}
-
-function renderInteractionDestinations(interaction) {
-  const container = document.getElementById("destination-picker-grid");
-  const destinations = interaction.destinations || interaction.waypoints || [];
-
-  container.innerHTML = destinations.map(dest => {
-    const name = typeof dest === "string" ? dest : (dest.name || dest.label);
-    return `
-      <button class="kiosk-dest-tile" onclick="submitInteractionChoice('${name}')">
-        <span class="dest-icon">📍</span>
-        <span class="dest-title">${name}</span>
-      </button>
-    `;
-  }).join("");
-}
-
-function dismissInteraction() {
-  const overlay = document.getElementById("interaction-overlay");
-  if (overlay) overlay.style.display = "none";
-  clearInterval(interactionTimerInterval);
-  activeInteractionId = null;
-}
-
-// Toast Notifications
-function showToast(msg, isError = false) {
-  let toast = document.getElementById("kiosk-toast");
-  if (!toast) {
-    toast = document.createElement("div");
-    toast.id = "kiosk-toast";
-    toast.className = "kiosk-toast";
-    document.body.appendChild(toast);
-  }
-  toast.textContent = msg;
-  toast.style.background = isError ? "#ef4444" : "#10b981";
-  toast.style.display = "block";
-  toast.style.opacity = "1";
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    setTimeout(() => toast.style.display = "none", 300);
-  }, 3000);
-}

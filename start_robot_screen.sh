@@ -17,6 +17,22 @@ else
     UI_DIR="${HOME}/Projects/navpromini_robot_ui"
 fi
 
+# Enforce display orientation to Portrait Left (800x1280) and set touchscreen matrix
+if command -v xrandr >/dev/null 2>&1; then
+    xrandr --output HDMI-2 --rotate left 2>/dev/null || true
+fi
+if command -v xinput >/dev/null 2>&1; then
+    xinput set-prop "Waveshare  Waveshare " "Coordinate Transformation Matrix" 0 -1 1 1 0 0 0 0 1 2>/dev/null || \
+    xinput set-prop 6 "Coordinate Transformation Matrix" 0 -1 1 1 0 0 0 0 1 2>/dev/null || true
+fi
+
+# Ensure Onboard virtual keyboard settings (undocked, starts minimized, auto-show off)
+if command -v gsettings >/dev/null 2>&1; then
+    sudo -u navpromini DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus gsettings set org.onboard.window docking-enabled false 2>/dev/null || true
+    sudo -u navpromini DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus gsettings set org.onboard start-minimized true 2>/dev/null || true
+    sudo -u navpromini DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus gsettings set org.onboard.auto-show enabled false 2>/dev/null || true
+fi
+
 PORT=8090
 URL="http://127.0.0.1:${PORT}/ui/"
 
@@ -28,8 +44,10 @@ if ! curl -s -m 1 "http://127.0.0.1:${PORT}/" > /dev/null 2>&1; then
     URL="http://127.0.0.1:${PORT}/"
 fi
 
-# Kill any previous instance of the kiosk browser to ensure clean single-window full screen
-pkill -f "epiphany.*navpro_ui_profile" 2>/dev/null || true
+# Clean up previous instances of the kiosk browser to ensure clean single-window
+pkill -9 -f epiphany 2>/dev/null || true
+rm -rf /tmp/navpro_ui_profile
+sleep 0.5
 
 # Launch browser in borderless kiosk / application mode
 if command -v epiphany-browser > /dev/null 2>&1 || command -v epiphany > /dev/null 2>&1; then
@@ -64,21 +82,27 @@ else
     xdg-open "${URL}" &
 fi
 
-# Ensure window is set to borderless full-screen via wmctrl / xdotool
+# Ensure window is set to borderless full-screen and always on top of all
 (
-    for i in {1..10}; do
+    for i in {1..20}; do
         sleep 0.5
+        WID=""
         if command -v xdotool >/dev/null 2>&1; then
-            WID=$(xdotool search --onlyvisible --class epiphany 2>/dev/null | tail -n 1 || true)
-            if [ -n "${WID}" ]; then
-                xdotool windowactivate "${WID}" key F11 2>/dev/null || true
-                break
+            WID=$(xdotool search --onlyvisible --name "NavPro" 2>/dev/null | tail -n 1 || true)
+            if [ -z "${WID}" ]; then
+                WID=$(xdotool search --onlyvisible --class epiphany 2>/dev/null | tail -n 1 || true)
             fi
-        elif command -v wmctrl >/dev/null 2>&1; then
-            if wmctrl -l | grep -qi "NavPro"; then
-                wmctrl -r "NavPro" -b add,fullscreen 2>/dev/null || true
-                break
+        fi
+
+        if [ -n "${WID}" ]; then
+            if command -v wmctrl >/dev/null 2>&1; then
+                wmctrl -i -r "${WID}" -b add,fullscreen,above 2>/dev/null || true
             fi
+            if command -v xdotool >/dev/null 2>&1; then
+                xdotool windowactivate "${WID}" 2>/dev/null || true
+                xdotool key --window "${WID}" F11 2>/dev/null || xdotool key F11 2>/dev/null || true
+            fi
+            break
         fi
     done
 ) &

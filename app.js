@@ -45,6 +45,11 @@ document.addEventListener("DOMContentLoaded", () => {
   initTouchKeyboard();
   initModals();
   startPolling();
+  // Immediately fetch initial battery state
+  fetch(`${API_BASE}/api/v1/state/battery`)
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { if (d) updatePowerState(d); })
+    .catch(() => {});
 });
 
 /* --------------------------------------------------------------------------
@@ -437,41 +442,77 @@ function initActionButtons() {
 }
 
 /* --------------------------------------------------------------------------
-   6. Auto-Charging & Docked Screen Watcher
+/* --------------------------------------------------------------------------
+   6. Navigation Progress & Auto-Charging Watcher
    -------------------------------------------------------------------------- */
+function updateNavigationState(navData) {
+  if (!navData) return;
+  try {
+    const isNav = !!(navData.is_navigating || navData.status === "navigating" || navData.status === "executing");
+    isNavigating = isNav;
+    const navScreen = document.getElementById("screen-nav-progress");
+    if (navScreen) {
+      if (isNav) {
+        navScreen.style.display = "flex";
+        const destEl = document.getElementById("nav-screen-destination");
+        if (destEl && navData.target_waypoint) destEl.textContent = navData.target_waypoint;
+        const distEl = document.getElementById("nav-screen-distance");
+        if (distEl && navData.distance_remaining !== undefined) {
+          distEl.textContent = `Approaching pose (${navData.distance_remaining.toFixed(1)}m remaining)...`;
+        }
+        const barEl = document.getElementById("nav-screen-bar");
+        if (barEl && navData.progress_percent !== undefined) {
+          barEl.style.width = `${Math.min(100, Math.max(0, navData.progress_percent))}%`;
+        }
+      } else if (navScreen.style.display === "flex") {
+        navScreen.style.display = "none";
+      }
+    }
+  } catch (err) {
+    console.warn("Navigation state update error:", err);
+  }
+}
+
 function updatePowerState(pState) {
   if (!pState) return;
-  const b = pState.data || pState;
-  const isCharging = !!(b.charging || b.is_charging || b.status === "charging" || b.status === "Charging" || b.power_supply_status === "Charging" || b.adapter_connected || (pState.detail && pState.detail.charger_connected));
-  const rawPct = b.percentage !== undefined ? b.percentage : (b.soc_percent !== undefined ? b.soc_percent : (b.battery_level || 0));
-  const pct = Math.max(0, Math.min(100, Math.round(rawPct)));
+  try {
+    const b = pState.data || pState.battery || pState;
+    const isCharging = !!(b.charging || b.is_charging || b.status === "charging" || b.status === "Charging" || b.power_supply_status === "Charging" || b.adapter_connected || (pState.detail && pState.detail.charger_connected));
+    const rawPct = b.percentage !== undefined ? b.percentage : (b.soc_percent !== undefined ? b.soc_percent : (b.battery_level !== undefined ? b.battery_level : null));
+    
+    if (rawPct !== null && rawPct !== undefined && !isNaN(rawPct)) {
+      const pct = Math.max(0, Math.min(100, Math.round(Number(rawPct))));
 
-  // Update header battery chip
-  const pctEl = document.getElementById("battery-pct");
-  const boltEl = document.getElementById("charging-bolt");
-  if (pctEl) pctEl.textContent = `${pct}%`;
-  if (boltEl) boltEl.style.display = isCharging ? "inline" : "none";
+      // Update header battery chip
+      const pctEl = document.getElementById("battery-pct");
+      const boltEl = document.getElementById("charging-bolt");
+      if (pctEl) pctEl.textContent = `${pct}%`;
+      if (boltEl) boltEl.style.display = isCharging ? "inline" : "none";
 
-  // Update full-screen charging overlay if visible
-  const chargingScreen = document.getElementById("screen-charging");
-  const chargingPct = document.getElementById("charging-screen-pct");
-  if (chargingPct) chargingPct.textContent = `${pct}%`;
+      // Update full-screen charging overlay if visible
+      const chargingScreen = document.getElementById("screen-charging");
+      const chargingPct = document.getElementById("charging-screen-pct");
+      if (chargingPct) chargingPct.textContent = `${pct}%`;
 
-  // Auto-display charging screen when docked and charging
-  if (isCharging && !wasCharging) {
-    wasCharging = true;
-    chargingScreenDismissed = false;
-    if (chargingScreen) chargingScreen.style.display = "flex";
-    triggerFaceExpression("sleep");
-  } else if (!isCharging && wasCharging) {
-    // Robot undocked / disconnected
-    wasCharging = false;
-    chargingScreenDismissed = false;
-    if (chargingScreen) chargingScreen.style.display = "none";
-    triggerFaceExpression("wakeup");
+      // Auto-display charging screen when docked and charging
+      if (isCharging && !wasCharging) {
+        wasCharging = true;
+        chargingScreenDismissed = false;
+        if (chargingScreen) chargingScreen.style.display = "flex";
+        triggerFaceExpression("sleep");
+      } else if (!isCharging && wasCharging) {
+        // Robot undocked / disconnected
+        wasCharging = false;
+        chargingScreenDismissed = false;
+        if (chargingScreen) chargingScreen.style.display = "none";
+        triggerFaceExpression("wakeup");
+      }
+
+      isRobotCharging = isCharging;
+    }
+  } catch (err) {
+    console.warn("Power state update error:", err);
   }
-
-  isRobotCharging = isCharging;
 }
 
 window.dismissChargingScreen = function() {
@@ -1369,6 +1410,11 @@ function startPolling() {
 
         const robotIp = document.getElementById("robot-ip");
         if (robotIp) robotIp.textContent = stateData.ip || (window.location.hostname || "127.0.0.1");
+
+        // Immediately update battery from state if present
+        if (stateData.battery) {
+          updatePowerState(stateData.battery);
+        }
 
         // Check if relocalization popup is required or needs auto-dismissal
         checkRelocalizationRequired(stateData);

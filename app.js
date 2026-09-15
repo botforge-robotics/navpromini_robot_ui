@@ -430,8 +430,13 @@ function initActionButtons() {
     }
   });
 
-  // Start Mapping from Maps Subpage
+  // Start Mapping from Maps Subpage (Shows Dock Instruction Modal)
   document.getElementById("btn-start-mapping")?.addEventListener("click", () => {
+    openDockInstructionModal();
+  });
+
+  document.getElementById("btn-confirm-start-mapping")?.addEventListener("click", () => {
+    closeDockInstructionModal();
     startSlamMapping();
   });
 
@@ -494,6 +499,18 @@ function updatePowerState(pState) {
       const chargingPct = document.getElementById("charging-screen-pct");
       if (chargingPct) chargingPct.textContent = `${pct}%`;
 
+      const isFull = pct >= 100 || b.status === "Full" || b.status === "full" || b.status === "completed";
+      const chargingStateText = document.getElementById("charging-state-text");
+      const chargingInfoDesc = document.getElementById("charging-info-desc");
+      if (chargingStateText) {
+        chargingStateText.textContent = isFull ? "CHARGING COMPLETED" : "FAST CHARGING";
+      }
+      if (chargingInfoDesc) {
+        chargingInfoDesc.textContent = isFull
+          ? "Battery is fully charged (100%). Robot is ready for operations."
+          : "The robot is currently locked in dock position and recharging its battery.";
+      }
+
       // Auto-display charging screen when docked and charging
       if (isCharging && !wasCharging) {
         wasCharging = true;
@@ -530,33 +547,31 @@ function checkRelocalizationRequired(stateData) {
   if (!modal) return;
 
   const isLoc = !!(stateData && (stateData.is_localized || (stateData.localization && (stateData.localization.status === "LOCALIZED" || stateData.localization.status === "OK"))));
+  const currentLoadedMap = (stateData && (stateData.map || stateData.current_map)) || activeMapName;
+  const isNavActive = !!(stateData && stateData.mode === "navigation" && currentLoadedMap && currentLoadedMap !== "default");
 
-  // Auto-dismiss immediately if operator sets initial pose from any source
-  if (isLoc) {
+  // Auto-dismiss or keep hidden if robot is localized OR if Nav2 navigation mode is not active
+  if (isLoc || !isNavActive) {
     if (modal.style.display === "flex") {
       modal.style.display = "none";
-      showToast("Robot successfully localized!");
-      triggerFaceExpression("happy");
+      if (isLoc && !isLocalized) {
+        showToast("Robot successfully localized!");
+        triggerFaceExpression("happy");
+      }
     }
-    isLocalized = true;
+    isLocalized = isLoc;
     return;
   }
 
   isLocalized = false;
 
-  // Do not prompt if currently mapping, or if dismissed recently
-  if (stateData && (stateData.mode === "mapping" || stateData.state === "mapping")) return;
+  // Only prompt when Nav2 navigation is active, a real map is loaded, robot is not yet localized, and not recently dismissed
   if (Date.now() < relocalizeDismissedUntil) return;
 
-  const currentLoadedMap = (stateData && (stateData.map || stateData.current_map)) || activeMapName;
-
-  // If a map is loaded and robot is not localized, prompt
-  if (currentLoadedMap && currentLoadedMap.trim() !== "") {
-    const mapNameEl = document.getElementById("relocalize-map-name");
-    if (mapNameEl) mapNameEl.textContent = currentLoadedMap;
-    if (modal.style.display !== "flex") {
-      modal.style.display = "flex";
-    }
+  const mapNameEl = document.getElementById("relocalize-map-name");
+  if (mapNameEl) mapNameEl.textContent = currentLoadedMap;
+  if (modal.style.display !== "flex") {
+    modal.style.display = "flex";
   }
 }
 
@@ -717,6 +732,16 @@ window.promptWifiConnect = function(rawSsid, displaySsid) {
   });
 };
 
+window.openDockInstructionModal = function() {
+  const modal = document.getElementById("modal-dock-instruction");
+  if (modal) modal.style.display = "flex";
+};
+
+window.closeDockInstructionModal = function() {
+  const modal = document.getElementById("modal-dock-instruction");
+  if (modal) modal.style.display = "none";
+};
+
 window.skipMappingSetup = function() {
   dismissSetupScreen();
   showToast("Setup completed! Welcome to NavPro Mini.");
@@ -729,52 +754,128 @@ window.startMappingFromSetup = function() {
 };
 
 /* --------------------------------------------------------------------------
-   9. SLAM Mapping Live Screen & Jog Controller
+   9. SLAM Mapping Live Screen & Live Occupancy Grid Renderer
    -------------------------------------------------------------------------- */
-function initMappingControls() {
-  const attachJog = (id, lin, ang) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
-    const startJog = (e) => {
-      e.preventDefault();
-      sendVelocity(lin, ang);
-      clearInterval(jogInterval);
-      jogInterval = setInterval(() => sendVelocity(lin, ang), 150);
-    };
-    const stopJog = (e) => {
-      e?.preventDefault();
-      clearInterval(jogInterval);
-      stopVelocity();
-    };
+let liveMapRendererInterval = null;
 
-    btn.addEventListener("mousedown", startJog);
-    btn.addEventListener("touchstart", startJog, { passive: false });
-    btn.addEventListener("mouseup", stopJog);
-    btn.addEventListener("mouseleave", stopJog);
-    btn.addEventListener("touchend", stopJog);
+function startLiveMapRenderer() {
+  clearInterval(liveMapRendererInterval);
+  const canvas = document.getElementById("mapping-live-canvas");
+  const loadingEl = document.getElementById("mapping-canvas-loading");
+  if (loadingEl) loadingEl.style.display = "flex";
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  const renderFrame = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/maps/current/image?rotate=0&t=${Date.now()}`);
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = 640;
+        canvas.height = 640;
+
+        // Dark slate radar background
+        ctx.fillStyle = "#0F172A";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Grid lines
+        ctx.strokeStyle = "rgba(51, 65, 85, 0.4)";
+        ctx.lineWidth = 1;
+        const step = 32;
+        for (let x = 0; x < canvas.width; x += step) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += step) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.stroke();
+        }
+
+        // Maintain aspect ratio and scale sharp
+        const scale = Math.min((canvas.width - 20) / img.width, (canvas.height - 20) / img.height);
+        const dw = img.width * scale;
+        const dh = img.height * scale;
+        const dx = (canvas.width - dw) / 2;
+        const dy = (canvas.height - dh) / 2;
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, dx, dy, dw, dh);
+
+        // Center crosshair / robot marker
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+        ctx.lineWidth = 1.5;
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        if (loadingEl) loadingEl.style.display = "none";
+        URL.revokeObjectURL(img.src);
+      };
+      img.src = URL.createObjectURL(blob);
+    } catch (_) {
+      // Map not yet published by SLAM, keep placeholder
+    }
   };
 
-  attachJog("drive-fwd", 0.16, 0.0);
-  attachJog("drive-back", -0.12, 0.0);
-  attachJog("drive-left", 0.0, 0.45);
-  attachJog("drive-right", 0.0, -0.45);
+  renderFrame();
+  liveMapRendererInterval = setInterval(renderFrame, 1000);
+}
 
-  document.getElementById("drive-stop")?.addEventListener("click", stopVelocity);
+function stopLiveMapRenderer() {
+  clearInterval(liveMapRendererInterval);
+  liveMapRendererInterval = null;
+  const loadingEl = document.getElementById("mapping-canvas-loading");
+  if (loadingEl) loadingEl.style.display = "flex";
+}
 
+function initMappingControls() {
+  // Cancel / Abort Mapping: Show stopping spinner, stop SLAM mode, wait until off, and return home
   document.getElementById("btn-abort-mapping")?.addEventListener("click", async () => {
+    const stoppingModal = document.getElementById("modal-stopping-mapping");
+    if (stoppingModal) stoppingModal.style.display = "flex";
+
     try {
+      // Determine target mode: restore previously active map if valid, else switch to idle
+      const target = (activeMapName && activeMapName !== "default")
+        ? { mode: "navigation", map: activeMapName }
+        : { mode: "idle" };
+
       await fetch(`${API_BASE}/api/v1/mode`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "navigation" })
+        body: JSON.stringify(target)
       });
+
+      // Poll mode until mode !== 'mapping' (up to 14 attempts = 7 seconds)
+      for (let i = 0; i < 14; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        try {
+          const sRes = await fetch(`${API_BASE}/api/v1/mode`);
+          if (sRes.ok) {
+            const mData = await sRes.json();
+            if (mData.mode !== "mapping") break;
+          }
+        } catch (_) {}
+      }
     } catch (e) {
-      console.warn(e);
+      console.warn("Error stopping mapping:", e);
+    } finally {
+      if (stoppingModal) stoppingModal.style.display = "none";
+      stopMappingLive();
+      showToast("Mapping session stopped.");
+      setSwipeIndex(1); // Return to Dashboard
     }
-    stopMappingLive();
-    showToast("Mapping session aborted.");
   });
 
+  // Finish & Save Map
   document.getElementById("btn-save-finish-map")?.addEventListener("click", () => {
     openTouchKeyboard("Enter New Map Name:", async (mapName) => {
       if (!mapName || !mapName.trim()) return;
@@ -797,26 +898,6 @@ function initMappingControls() {
   });
 }
 
-async function sendVelocity(linear, angular) {
-  try {
-    await fetch(`${API_BASE}/api/v1/motion/velocity`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ linear, angular })
-    });
-  } catch (e) {
-    console.warn("Velocity error:", e);
-  }
-}
-
-async function stopVelocity() {
-  try {
-    await fetch(`${API_BASE}/api/v1/motion/stop`, { method: "POST" });
-  } catch (e) {
-    console.warn("Stop error:", e);
-  }
-}
-
 window.startSlamMapping = async function() {
   try {
     showToast("Initializing SLAM mapping mode...");
@@ -828,6 +909,9 @@ window.startSlamMapping = async function() {
 
     const screen = document.getElementById("screen-mapping-live");
     if (screen) screen.style.display = "flex";
+
+    // Start live SLAM occupancy grid renderer
+    startLiveMapRenderer();
 
     mappingStartTime = Date.now();
     const timerEl = document.getElementById("mapping-timer");
@@ -849,6 +933,7 @@ window.startSlamMapping = async function() {
 function stopMappingLive() {
   const screen = document.getElementById("screen-mapping-live");
   if (screen) screen.style.display = "none";
+  stopLiveMapRenderer();
   clearInterval(mappingTimerInterval);
   mappingStartTime = null;
 }

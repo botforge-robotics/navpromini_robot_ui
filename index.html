@@ -337,9 +337,9 @@
                   <p class="subtitle">Select active navigation map or build a new map using SLAM.</p>
                 </div>
               </div>
-              <button class="btn btn-primary" id="btn-start-mapping">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon></svg>
-                <span>+ Create New Map</span>
+              <button class="btn btn-primary btn-sm" id="btn-start-mapping">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Create Map</span>
               </button>
             </div>
             <div class="maps-list" id="maps-list"></div>
@@ -411,12 +411,23 @@
           <div class="charging-inner-ring">
             <span class="charging-bolt-large">⚡</span>
             <span class="charging-large-pct" id="charging-screen-pct">--%</span>
-            <span class="charging-state-text">FAST CHARGING</span>
+            <span class="charging-state-text" id="charging-state-text">FAST CHARGING</span>
           </div>
+        </div>
+        <!-- Rising bubbles merging with charging circle -->
+        <div class="charging-bubbles-container" id="charging-bubbles">
+          <span class="charging-bubble b1"></span>
+          <span class="charging-bubble b2"></span>
+          <span class="charging-bubble b3"></span>
+          <span class="charging-bubble b4"></span>
+          <span class="charging-bubble b5"></span>
+          <span class="charging-bubble b6"></span>
+          <span class="charging-bubble b7"></span>
+          <span class="charging-bubble b8"></span>
         </div>
         <div class="charging-info-card">
           <h2>Docked at Charging Station</h2>
-          <p>The robot is currently locked in dock position and recharging its battery.</p>
+          <p id="charging-info-desc">The robot is currently locked in dock position and recharging its battery.</p>
           <div class="charging-actions">
             <button class="btn btn-secondary btn-lg" onclick="dismissChargingScreen()">View Dashboard</button>
             <button class="btn btn-primary btn-lg" id="btn-charging-undock">Undock Robot</button>
@@ -579,21 +590,56 @@
           <div class="mapping-timer" id="mapping-timer">00:00</div>
           <button class="btn btn-danger btn-sm" id="btn-abort-mapping">Cancel Mapping</button>
         </div>
-        <div class="mapping-drive-pad-center">
-          <p class="mapping-drive-hint">Drive the robot around room boundaries using the controls below:</p>
-          <div class="drive-pad-grid">
-            <button class="drive-btn drive-btn-fwd" id="drive-fwd">▲</button>
-            <div class="drive-mid-row">
-              <button class="drive-btn drive-btn-left" id="drive-left">◀</button>
-              <button class="drive-btn drive-btn-stop" id="drive-stop">■</button>
-              <button class="drive-btn drive-btn-right" id="drive-right">▶</button>
+        <div class="mapping-viewport-card">
+          <div class="mapping-canvas-container">
+            <canvas id="mapping-live-canvas" width="640" height="640"></canvas>
+            <div class="mapping-canvas-loading" id="mapping-canvas-loading">
+              <div class="spinner-large"></div>
+              <span>Generating real-time SLAM map...</span>
             </div>
-            <button class="drive-btn drive-btn-back" id="drive-back">▼</button>
+          </div>
+          <div class="mapping-footer-banner">
+            <span class="mapping-teleop-note">📡 Real-time occupancy grid • Drive robot via mobile/desktop teleop</span>
           </div>
         </div>
         <div class="mapping-save-footer">
           <button class="btn btn-primary btn-xl" id="btn-save-finish-map">Finish & Save Map</button>
         </div>
+      </div>
+    </div>
+
+    <!-- DOCK PLACEMENT INSTRUCTION MODAL (Shown when clicking Create Map) -->
+    <div class="modal-dialog" id="modal-dock-instruction" style="display: none;">
+      <div class="modal-card dock-instruction-modal-card">
+        <div class="dock-modal-header">
+          <span class="dock-modal-badge">⚡</span>
+          <div>
+            <h2>Place Robot at Dock</h2>
+            <p class="subtitle">Position robot properly before creating a map</p>
+          </div>
+        </div>
+        <div class="dock-instruction-frame modal-dock-frame">
+          <img src="assets/mobilDockInstruction.png" alt="Dock Placement" class="dock-instruction-img">
+        </div>
+        <div class="dock-setup-tips">
+          <div class="dock-tip-item"><span>1</span> Dock flat against wall</div>
+          <div class="dock-tip-item"><span>2</span> 0.5m clearance on sides</div>
+          <div class="dock-tip-item"><span>3</span> Robot facing outward</div>
+        </div>
+        <p class="dock-instruction-note">Wherever mapping begins will be recorded as the charging dock position in the new map.</p>
+        <div class="modal-actions-row">
+          <button class="btn btn-secondary btn-lg" onclick="closeDockInstructionModal()">Cancel</button>
+          <button class="btn btn-primary btn-lg" id="btn-confirm-start-mapping">Start Mapping</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STOPPING MAPPING OVERLAY MODAL -->
+    <div class="modal-dialog" id="modal-stopping-mapping" style="display: none;">
+      <div class="modal-card stopping-card">
+        <div class="spinner-large"></div>
+        <h2>Stopping SLAM Mapping</h2>
+        <p>Safely stopping SLAM nodes and returning to dashboard...</p>
       </div>
     </div>
 

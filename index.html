@@ -579,32 +579,94 @@
       </div>
     </div>
 
-    <!-- 6. SLAM MAPPING LIVE SCREEN (Directional Jog Pad & Finish Map) -->
-    <div class="kiosk-full-screen" id="screen-mapping-live" style="display: none;">
-      <div class="mapping-live-shell">
-        <div class="mapping-live-header">
-          <div class="mapping-badge">
-            <span class="pulse-red"></span>
-            <span>SLAM MAPPING ACTIVE</span>
-          </div>
-          <div class="mapping-timer" id="mapping-timer">00:00</div>
-          <button class="btn btn-danger btn-sm" id="btn-abort-mapping">Cancel Mapping</button>
+    <!-- 6. SLAM MAPPING LIVE SCREEN (Fullscreen Occupancy Grid & Interactive Viewport) -->
+    <div class="kiosk-full-screen mapping-fullscreen-view" id="screen-mapping-live" style="display: none;">
+      <!-- 100% Fullscreen Interactive Map Canvas -->
+      <canvas id="mapping-live-canvas"></canvas>
+      <div class="mapping-canvas-loading" id="mapping-canvas-loading">
+        <div class="spinner-large"></div>
+        <span>Generating real-time SLAM map...</span>
+      </div>
+
+      <!-- Floating Map Zoom & Recenter Controls -->
+      <div class="map-floating-controls">
+        <button type="button" class="map-ctrl-btn" id="btn-mapping-zoom-in" title="Zoom In">+</button>
+        <button type="button" class="map-ctrl-btn" id="btn-mapping-zoom-out" title="Zoom Out">−</button>
+        <button type="button" class="map-ctrl-btn" id="btn-mapping-recenter" title="Recenter on Robot">⌖</button>
+      </div>
+
+      <!-- Floating Top Header (Positioned on top of map) -->
+      <div class="mapping-floating-header">
+        <div class="mapping-badge">
+          <span class="pulse-red"></span>
+          <span>SLAM MAPPING ACTIVE</span>
         </div>
-        <div class="mapping-viewport-card">
-          <div class="mapping-canvas-container">
-            <canvas id="mapping-live-canvas" width="640" height="640"></canvas>
-            <div class="mapping-canvas-loading" id="mapping-canvas-loading">
-              <div class="spinner-large"></div>
-              <span>Generating real-time SLAM map...</span>
-            </div>
-          </div>
-          <div class="mapping-footer-banner">
-            <span class="mapping-teleop-note">📡 Real-time occupancy grid • Drive robot via mobile/desktop teleop</span>
+        <div class="mapping-timer" id="mapping-timer">00:00</div>
+        <button class="btn btn-danger btn-sm" id="btn-abort-mapping">Cancel Mapping</button>
+      </div>
+
+      <!-- Floating Bottom Footer (Positioned on top of map) -->
+      <div class="mapping-floating-footer">
+        <div class="mapping-status-pill">
+          <span>📡 Real-time occupancy grid • Pan/pinch to explore • Drive robot via teleop</span>
+        </div>
+        <button class="btn btn-primary btn-xl mapping-finish-btn" id="btn-save-finish-map">Finish & Save Map</button>
+      </div>
+    </div>
+
+    <!-- 7. INTERACTIVE MAP PREVIEW & DOCK / WAYPOINT EDITOR SCREEN -->
+    <div class="kiosk-full-screen map-viewer-fullscreen" id="screen-map-viewer" style="display: none;">
+      <!-- Fullscreen Interactive Map Canvas -->
+      <canvas id="map-viewer-canvas"></canvas>
+      <div class="map-viewer-loading" id="map-viewer-loading">
+        <div class="spinner-large"></div>
+        <span>Loading map...</span>
+      </div>
+
+      <!-- Floating Map Zoom & Recenter Controls -->
+      <div class="map-floating-controls">
+        <button type="button" class="map-ctrl-btn" id="btn-viewer-zoom-in" title="Zoom In">+</button>
+        <button type="button" class="map-ctrl-btn" id="btn-viewer-zoom-out" title="Zoom Out">−</button>
+        <button type="button" class="map-ctrl-btn" id="btn-viewer-recenter" title="Recenter Map">⌖</button>
+      </div>
+
+      <!-- Floating Top Navigation & Toolbar -->
+      <div class="map-viewer-header">
+        <div class="map-viewer-header-left">
+          <button class="btn btn-secondary btn-sm btn-viewer-back" onclick="closeMapViewer()">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            <span>Back</span>
+          </button>
+          <div class="map-viewer-title-box">
+            <h2 id="map-viewer-name">Map Name</h2>
+            <span class="badge badge-ok" id="map-viewer-active-badge" style="display: none;">ACTIVE</span>
           </div>
         </div>
-        <div class="mapping-save-footer">
-          <button class="btn btn-primary btn-xl" id="btn-save-finish-map">Finish & Save Map</button>
+        <div class="map-viewer-mode-actions">
+          <button class="btn btn-secondary btn-sm" id="btn-viewer-add-location" onclick="promptViewerAddLocation()">
+            <span>📍 Save Location</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-viewer-edit-dock" onclick="toggleViewerEditDock()">
+            <span>⚡ Edit Dock Pose</span>
+          </button>
         </div>
+      </div>
+
+      <!-- Floating Editor Bar when in Edit Dock or Save Location mode -->
+      <div class="map-viewer-editor-bar" id="map-viewer-editor-bar" style="display: none;">
+        <div class="editor-bar-prompt" id="editor-bar-prompt">Tap map to place Charging Dock</div>
+        <div class="editor-bar-actions">
+          <button class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="btn-save-viewer-edit" onclick="saveViewerEditMode()">Save Changes</button>
+        </div>
+      </div>
+
+      <!-- Floating Bottom Legend -->
+      <div class="map-viewer-legend">
+        <div class="legend-item"><span class="legend-dot dock-dot">⚡</span> Dock</div>
+        <div class="legend-item"><span class="legend-dot standoff-dot">🎯</span> Standoff (0.7m)</div>
+        <div class="legend-item"><span class="legend-dot wp-dot">📍</span> Station</div>
+        <div class="legend-item" id="legend-robot-item" style="display: none;"><span class="legend-dot robot-dot">🤖</span> Robot</div>
       </div>
     </div>
 
@@ -618,15 +680,9 @@
             <p class="subtitle">Position robot properly before creating a map</p>
           </div>
         </div>
-        <div class="dock-instruction-frame modal-dock-frame">
+        <div class="modal-dock-frame">
           <img src="assets/mobilDockInstruction.png" alt="Dock Placement" class="dock-instruction-img">
         </div>
-        <div class="dock-setup-tips">
-          <div class="dock-tip-item"><span>1</span> Dock flat against wall</div>
-          <div class="dock-tip-item"><span>2</span> 0.5m clearance on sides</div>
-          <div class="dock-tip-item"><span>3</span> Robot facing outward</div>
-        </div>
-        <p class="dock-instruction-note">Wherever mapping begins will be recorded as the charging dock position in the new map.</p>
         <div class="modal-actions-row">
           <button class="btn btn-secondary btn-lg" onclick="closeDockInstructionModal()">Cancel</button>
           <button class="btn btn-primary btn-lg" id="btn-confirm-start-mapping">Start Mapping</button>

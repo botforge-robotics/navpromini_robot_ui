@@ -550,6 +550,14 @@ function checkRelocalizationRequired(stateData) {
   const currentLoadedMap = (stateData && (stateData.map || stateData.current_map)) || activeMapName;
   const isNavActive = !!(stateData && stateData.mode === "navigation" && currentLoadedMap && currentLoadedMap !== "default");
 
+  // Do not prompt relocalization modal over the charging screen while docked
+  if (isRobotCharging || wasCharging) {
+    if (modal.style.display === "flex") {
+      modal.style.display = "none";
+    }
+    return;
+  }
+
   // Auto-dismiss or keep hidden if robot is localized OR if Nav2 navigation mode is not active
   if (isLoc || !isNavActive) {
     if (modal.style.display === "flex") {
@@ -757,6 +765,101 @@ window.startMappingFromSetup = function() {
    9. SLAM Mapping Live Screen & Live Occupancy Grid Renderer
    -------------------------------------------------------------------------- */
 let liveMapRendererInterval = null;
+let liveMapPan = { x: 0, y: 0, scale: 1.0, userControlled: false };
+let liveMapMetadata = null; // { width, height, resolution, origin: { x, y } }
+let liveRobotPose = null;   // { x, y, yaw }
+let liveDockPose = { x: 0, y: 0, theta: 0 };
+let liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
+let liveTrajectory = [];
+let liveHasMovedAway = false;
+let activeTouchPointers = new Map();
+let initialPinchDistance = null;
+let initialPinchScale = 1.0;
+
+function initMappingViewportInteractivity() {
+  const canvas = document.getElementById("mapping-live-canvas");
+  if (!canvas || canvas._interactivityAttached) return;
+  canvas._interactivityAttached = true;
+
+  let isDragging = false;
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    activeTouchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activeTouchPointers.size === 1) {
+      isDragging = true;
+      lastPointerX = e.clientX;
+      lastPointerY = e.clientY;
+    } else if (activeTouchPointers.size === 2) {
+      isDragging = false;
+      const pts = Array.from(activeTouchPointers.values());
+      initialPinchDistance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      initialPinchScale = liveMapPan.scale;
+    }
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!activeTouchPointers.has(e.pointerId)) return;
+    activeTouchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activeTouchPointers.size === 2 && initialPinchDistance) {
+      const pts = Array.from(activeTouchPointers.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const factor = dist / initialPinchDistance;
+      liveMapPan.scale = Math.max(0.2, Math.min(6.0, initialPinchScale * factor));
+      liveMapPan.userControlled = true;
+    } else if (isDragging && activeTouchPointers.size === 1) {
+      const dx = e.clientX - lastPointerX;
+      const dy = e.clientY - lastPointerY;
+      lastPointerX = e.clientX;
+      lastPointerY = e.clientY;
+      liveMapPan.x += dx;
+      liveMapPan.y += dy;
+      liveMapPan.userControlled = true;
+    }
+  });
+
+  const endDrag = (e) => {
+    activeTouchPointers.delete(e.pointerId);
+    if (activeTouchPointers.size === 1) {
+      const remaining = Array.from(activeTouchPointers.values())[0];
+      lastPointerX = remaining.x;
+      lastPointerY = remaining.y;
+      isDragging = true;
+    } else if (activeTouchPointers.size === 0) {
+      isDragging = false;
+      initialPinchDistance = null;
+    }
+  };
+
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+
+  // Mouse wheel zoom
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+    liveMapPan.scale = Math.max(0.2, Math.min(6.0, liveMapPan.scale * zoomFactor));
+    liveMapPan.userControlled = true;
+  }, { passive: false });
+
+  // Floating button controls
+  document.getElementById("btn-mapping-zoom-in")?.addEventListener("click", () => {
+    liveMapPan.scale = Math.min(liveMapPan.scale * 1.25, 6.0);
+    liveMapPan.userControlled = true;
+  });
+  document.getElementById("btn-mapping-zoom-out")?.addEventListener("click", () => {
+    liveMapPan.scale = Math.max(liveMapPan.scale / 1.25, 0.2);
+    liveMapPan.userControlled = true;
+  });
+  document.getElementById("btn-mapping-recenter")?.addEventListener("click", () => {
+    liveMapPan.userControlled = false;
+  });
+}
 
 function startLiveMapRenderer() {
   clearInterval(liveMapRendererInterval);
@@ -764,69 +867,247 @@ function startLiveMapRenderer() {
   const loadingEl = document.getElementById("mapping-canvas-loading");
   if (loadingEl) loadingEl.style.display = "flex";
   if (!canvas) return;
-  const ctx = canvas.getContext("2d");
+
+  initMappingViewportInteractivity();
+
+  let firstFrameLoaded = false;
 
   const renderFrame = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/maps/current/image?rotate=0&t=${Date.now()}`);
-      if (!res.ok) return;
-      const blob = await res.blob();
+      // 1. Fetch map image
+      const imgRes = await fetch(`${API_BASE}/api/v1/maps/current/image?rotate=0&t=${Date.now()}`);
+      if (!imgRes.ok) return;
+      const blob = await imgRes.blob();
       const img = new Image();
-      img.onload = () => {
-        canvas.width = 640;
-        canvas.height = 640;
 
-        // Dark slate radar background
-        ctx.fillStyle = "#0F172A";
+      // 2. Concurrently fetch map metadata and robot state
+      try {
+        const [infoRes, stateRes] = await Promise.all([
+          fetch(`${API_BASE}/api/v1/maps/current/info`),
+          fetch(`${API_BASE}/api/v1/state`)
+        ]);
+        if (infoRes.ok) {
+          const info = await infoRes.json();
+          if (info.loaded) liveMapMetadata = info;
+        }
+        if (stateRes.ok) {
+          const s = await stateRes.json();
+          if (s.localization && s.localization.x !== undefined) {
+            liveRobotPose = {
+              x: s.localization.x,
+              y: s.localization.y,
+              yaw: s.localization.yaw || 0
+            };
+
+            // Track departure movement from dock for automatic standoff & orientation calculation
+            const distFromDock = Math.hypot(liveRobotPose.x - liveDockPose.x, liveRobotPose.y - liveDockPose.y);
+            if (!liveHasMovedAway && distFromDock >= 0.20) {
+              const depAngle = Math.atan2(liveRobotPose.y - liveDockPose.y, liveRobotPose.x - liveDockPose.x);
+              liveDockPose.theta = depAngle;
+              liveStandoffPose = {
+                x: liveDockPose.x + 0.70 * Math.cos(depAngle),
+                y: liveDockPose.y + 0.70 * Math.sin(depAngle),
+                theta: depAngle // Robot back faces dock, front faces towards room
+              };
+              liveHasMovedAway = true;
+            }
+
+            // Record trajectory point
+            const lastPt = liveTrajectory[liveTrajectory.length - 1];
+            if (!lastPt || Math.hypot(liveRobotPose.x - lastPt.x, liveRobotPose.y - lastPt.y) >= 0.08) {
+              liveTrajectory.push({ x: liveRobotPose.x, y: liveRobotPose.y });
+            }
+          }
+        }
+      } catch (_) {}
+
+      img.onload = () => {
+        // Enforce full canvas resolution
+        canvas.width = window.innerWidth || 800;
+        canvas.height = window.innerHeight || 1280;
+        const ctx = canvas.getContext("2d");
+
+        // Background: deep slate radar
+        ctx.fillStyle = "#0B0F19";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Grid lines
-        ctx.strokeStyle = "rgba(51, 65, 85, 0.4)";
+        // Subgrid background lines
+        ctx.strokeStyle = "rgba(30, 41, 59, 0.4)";
         ctx.lineWidth = 1;
-        const step = 32;
-        for (let x = 0; x < canvas.width; x += step) {
+        const gridStep = 40;
+        for (let x = 0; x < canvas.width; x += gridStep) {
           ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, canvas.height);
           ctx.stroke();
         }
-        for (let y = 0; y < canvas.height; y += step) {
+        for (let y = 0; y < canvas.height; y += gridStep) {
           ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(canvas.width, y);
           ctx.stroke();
         }
 
-        // Maintain aspect ratio and scale sharp
-        const scale = Math.min((canvas.width - 20) / img.width, (canvas.height - 20) / img.height);
-        const dw = img.width * scale;
-        const dh = img.height * scale;
-        const dx = (canvas.width - dw) / 2;
-        const dy = (canvas.height - dh) / 2;
+        // Auto-center viewport on initial frame or upon recenter request
+        if (!liveMapPan.userControlled || !firstFrameLoaded) {
+          const fitScale = Math.min((canvas.width * 0.85) / img.width, (canvas.height * 0.75) / img.height);
+          liveMapPan.scale = Math.max(0.6, fitScale);
+          liveMapPan.x = (canvas.width - img.width * liveMapPan.scale) / 2;
+          liveMapPan.y = (canvas.height - img.height * liveMapPan.scale) / 2;
+          firstFrameLoaded = true;
+        }
 
+        // World to canvas coordinate transform helper
+        const worldToCanvas = (wx, wy) => {
+          if (!liveMapMetadata) {
+            return {
+              x: liveMapPan.x + (img.width / 2) * liveMapPan.scale,
+              y: liveMapPan.y + (img.height / 2) * liveMapPan.scale
+            };
+          }
+          const u = (wx - liveMapMetadata.origin.x) / liveMapMetadata.resolution;
+          const v = liveMapMetadata.height - ((wy - liveMapMetadata.origin.y) / liveMapMetadata.resolution);
+          return {
+            x: liveMapPan.x + u * liveMapPan.scale,
+            y: liveMapPan.y + v * liveMapPan.scale
+          };
+        };
+
+        // Draw occupancy grid map
+        ctx.save();
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, dx, dy, dw, dh);
+        ctx.drawImage(img, liveMapPan.x, liveMapPan.y, img.width * liveMapPan.scale, img.height * liveMapPan.scale);
+        ctx.restore();
 
-        // Center crosshair / robot marker
-        ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
-        ctx.lineWidth = 1.5;
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
-        ctx.stroke();
+        // Draw Trajectory Trail
+        if (liveTrajectory.length > 1) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
+          ctx.lineWidth = 3;
+          ctx.setLineDash([6, 6]);
+          ctx.beginPath();
+          const p0 = worldToCanvas(liveTrajectory[0].x, liveTrajectory[0].y);
+          ctx.moveTo(p0.x, p0.y);
+          for (let i = 1; i < liveTrajectory.length; i++) {
+            const pi = worldToCanvas(liveTrajectory[i].x, liveTrajectory[i].y);
+            ctx.lineTo(pi.x, pi.y);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Draw Dock Standoff Marker (🎯)
+        if (liveStandoffPose) {
+          const sp = worldToCanvas(liveStandoffPose.x, liveStandoffPose.y);
+          ctx.save();
+          ctx.translate(sp.x, sp.y);
+          ctx.fillStyle = "rgba(6, 182, 212, 0.85)";
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.strokeStyle = "#FFFFFF";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.font = "bold 11px system-ui, sans-serif";
+          ctx.fillStyle = "#A5F3FC";
+          ctx.textAlign = "center";
+          ctx.fillText("STANDOFF (0.7m)", 0, 22);
+          ctx.restore();
+        }
+
+        // Draw Charging Dock Marker (⚡)
+        if (liveDockPose) {
+          const dp = worldToCanvas(liveDockPose.x, liveDockPose.y);
+          ctx.save();
+          ctx.translate(dp.x, dp.y);
+          // Orientation arrow pointing towards standoff
+          ctx.rotate(-liveDockPose.theta);
+          ctx.fillStyle = "#10B981";
+          ctx.beginPath();
+          ctx.arc(0, 0, 14, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.strokeStyle = "#FFFFFF";
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+          // Arrow indicator
+          ctx.fillStyle = "#FFFFFF";
+          ctx.beginPath();
+          ctx.moveTo(18, 0);
+          ctx.lineTo(8, -6);
+          ctx.lineTo(8, 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          // Dock label
+          ctx.save();
+          ctx.font = "bold 12px system-ui, sans-serif";
+          ctx.fillStyle = "#6EE7B7";
+          ctx.textAlign = "center";
+          ctx.fillText("DOCK (ORIGIN)", dp.x, dp.y - 20);
+          ctx.restore();
+        }
+
+        // Draw Live Robot Marker (🤖)
+        if (liveRobotPose) {
+          const rp = worldToCanvas(liveRobotPose.x, liveRobotPose.y);
+          ctx.save();
+          ctx.translate(rp.x, rp.y);
+
+          // Glowing pulse ring around robot
+          const pulse = (Date.now() % 1500) / 1500;
+          ctx.strokeStyle = `rgba(249, 115, 22, ${1.0 - pulse})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 18 + pulse * 14, 0, 2 * Math.PI);
+          ctx.stroke();
+
+          // Heading orientation
+          ctx.rotate(-liveRobotPose.yaw);
+
+          // Robot chassis
+          ctx.fillStyle = "#F97316";
+          ctx.beginPath();
+          ctx.arc(0, 0, 16, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.strokeStyle = "#FFFFFF";
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // Dark core
+          ctx.fillStyle = "#1E293B";
+          ctx.beginPath();
+          ctx.arc(0, 0, 8, 0, 2 * Math.PI);
+          ctx.fill();
+
+          // Direction arrow pointing forward
+          ctx.fillStyle = "#FFFFFF";
+          ctx.beginPath();
+          ctx.moveTo(22, 0);
+          ctx.lineTo(12, -7);
+          ctx.lineTo(12, 7);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          // Label
+          ctx.save();
+          ctx.font = "bold 13px system-ui, sans-serif";
+          ctx.fillStyle = "#FDBA74";
+          ctx.textAlign = "center";
+          ctx.fillText("ROBOT", rp.x, rp.y + 30);
+          ctx.restore();
+        }
 
         if (loadingEl) loadingEl.style.display = "none";
         URL.revokeObjectURL(img.src);
       };
       img.src = URL.createObjectURL(blob);
-    } catch (_) {
-      // Map not yet published by SLAM, keep placeholder
-    }
+    } catch (_) {}
   };
 
   renderFrame();
-  liveMapRendererInterval = setInterval(renderFrame, 1000);
+  liveMapRendererInterval = setInterval(renderFrame, 800);
 }
 
 function stopLiveMapRenderer() {
@@ -843,7 +1124,6 @@ function initMappingControls() {
     if (stoppingModal) stoppingModal.style.display = "flex";
 
     try {
-      // Determine target mode: restore previously active map if valid, else switch to idle
       const target = (activeMapName && activeMapName !== "default")
         ? { mode: "navigation", map: activeMapName }
         : { mode: "idle" };
@@ -854,7 +1134,6 @@ function initMappingControls() {
         body: JSON.stringify(target)
       });
 
-      // Poll mode until mode !== 'mapping' (up to 14 attempts = 7 seconds)
       for (let i = 0; i < 14; i++) {
         await new Promise(r => setTimeout(r, 500));
         try {
@@ -879,20 +1158,97 @@ function initMappingControls() {
   document.getElementById("btn-save-finish-map")?.addEventListener("click", () => {
     openTouchKeyboard("Enter New Map Name:", async (mapName) => {
       if (!mapName || !mapName.trim()) return;
+      const targetName = mapName.trim();
+      const stoppingModal = document.getElementById("modal-stopping-mapping");
+      if (stoppingModal) {
+        const titleEl = stoppingModal.querySelector("h2");
+        const descEl = stoppingModal.querySelector("p");
+        if (titleEl) titleEl.textContent = "Saving Map & Dock";
+        if (descEl) descEl.textContent = `Persisting dock pose & saving "${targetName}"...`;
+        stoppingModal.style.display = "flex";
+      }
+
       try {
-        showToast(`Saving map "${mapName}"...`);
-        const res = await fetch(`${API_BASE}/api/v1/mapping/finish`, {
+        // 1. Save Dock Pose to /api/v1/dock/pose
+        try {
+          await fetch(`${API_BASE}/api/v1/dock/pose`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              x: liveDockPose.x,
+              y: liveDockPose.y,
+              theta: liveDockPose.theta
+            })
+          });
+        } catch (err) {
+          console.warn("Failed to set dock pose:", err);
+        }
+
+        // 2. Save 'Dock Standoff' Waypoint (0.7m staging point, back facing dock)
+        try {
+          await fetch(`${API_BASE}/api/v1/waypoints`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: "Dock Standoff",
+              type: "dock",
+              x: liveStandoffPose.x,
+              y: liveStandoffPose.y,
+              theta: liveStandoffPose.theta,
+              map: targetName
+            })
+          });
+        } catch (err) {
+          console.warn("Failed to save Dock Standoff waypoint:", err);
+        }
+
+        // 3. Save 'Charging Dock' Waypoint
+        try {
+          await fetch(`${API_BASE}/api/v1/waypoints`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: "Charging Dock",
+              type: "dock",
+              x: liveDockPose.x,
+              y: liveDockPose.y,
+              theta: liveDockPose.theta,
+              map: targetName
+            })
+          });
+        } catch (err) {
+          console.warn("Failed to save Charging Dock waypoint:", err);
+        }
+
+        // 4. Atomic FINISH_MAPPING call
+        await fetch(`${API_BASE}/api/v1/mapping/finish`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: mapName.trim() })
+          body: JSON.stringify({ name: targetName, overwrite: true })
         });
-        const data = await res.json();
+
+        // Wait for mode to finish mapping
+        for (let i = 0; i < 18; i++) {
+          await new Promise(r => setTimeout(r, 600));
+          try {
+            const mRes = await fetch(`${API_BASE}/api/v1/mode`);
+            if (mRes.ok) {
+              const mData = await mRes.json();
+              if (mData.mode !== "mapping") break;
+            }
+          } catch (_) {}
+        }
+
         stopMappingLive();
-        showToast(`Map "${mapName}" saved & activated! Setup completed.`);
+        showToast(`Map "${targetName}" and Dock poses saved!`);
+        activeMapName = targetName;
         loadMaps();
-        setSwipeIndex(1); // Dashboard
+        loadWaypoints();
+        setSwipeIndex(1); // Return to Dashboard
       } catch (e) {
         showToast(`Error saving map: ${e.message}`, true);
+      } finally {
+        if (stoppingModal) stoppingModal.style.display = "none";
       }
     });
   });
@@ -901,6 +1257,31 @@ function initMappingControls() {
 window.startSlamMapping = async function() {
   try {
     showToast("Initializing SLAM mapping mode...");
+
+    // Record initial dock pose (at start of mapping robot is placed at dock facing room)
+    try {
+      const stRes = await fetch(`${API_BASE}/api/v1/state`);
+      if (stRes.ok) {
+        const st = await stRes.json();
+        const ix = (st.localization && st.localization.x) || 0;
+        const iy = (st.localization && st.localization.y) || 0;
+        const iyaw = (st.localization && st.localization.yaw) || 0;
+        liveDockPose = { x: ix, y: iy, theta: iyaw };
+        liveStandoffPose = {
+          x: ix + 0.70 * Math.cos(iyaw),
+          y: iy + 0.70 * Math.sin(iyaw),
+          theta: iyaw
+        };
+        liveTrajectory = [{ x: ix, y: iy }];
+        liveHasMovedAway = false;
+      }
+    } catch (_) {
+      liveDockPose = { x: 0, y: 0, theta: 0 };
+      liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
+      liveTrajectory = [{ x: 0, y: 0 }];
+      liveHasMovedAway = false;
+    }
+
     await fetch(`${API_BASE}/api/v1/mode`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -910,7 +1291,7 @@ window.startSlamMapping = async function() {
     const screen = document.getElementById("screen-mapping-live");
     if (screen) screen.style.display = "flex";
 
-    // Start live SLAM occupancy grid renderer
+    liveMapPan = { x: 0, y: 0, scale: 1.0, userControlled: false };
     startLiveMapRenderer();
 
     mappingStartTime = Date.now();
@@ -939,7 +1320,549 @@ function stopMappingLive() {
 }
 
 /* --------------------------------------------------------------------------
-   10. Maps Subpage & Scoping
+   10. Interactive Map Viewer & Dock / Location Editor
+   -------------------------------------------------------------------------- */
+let viewerMapName = "";
+let viewerMapImg = null;
+let viewerMetadata = null;
+let viewerWaypoints = [];
+let viewerDockPose = null;
+let viewerStandoffPose = null;
+let viewerPan = { x: 0, y: 0, scale: 1.0, userControlled: false };
+let viewerEditorMode = null; // null, 'edit_dock', 'save_location'
+let viewerDockStep = 0;      // 0 = place dock, 1 = place standoff
+let viewerNewDock = null;
+let viewerNewStandoff = null;
+let viewerNewLocationPt = null;
+let viewerPointers = new Map();
+let viewerInitialPinch = null;
+let viewerInitialScale = 1.0;
+
+function initMapViewerInteractivity() {
+  const canvas = document.getElementById("map-viewer-canvas");
+  if (!canvas || canvas._viewerInteractivity) return;
+  canvas._viewerInteractivity = true;
+
+  let isDragging = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    viewerPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (viewerPointers.size === 1) {
+      isDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    } else if (viewerPointers.size === 2) {
+      isDragging = false;
+      const pts = Array.from(viewerPointers.values());
+      viewerInitialPinch = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      viewerInitialScale = viewerPan.scale;
+    }
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!viewerPointers.has(e.pointerId)) return;
+    viewerPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (viewerPointers.size === 2 && viewerInitialPinch) {
+      const pts = Array.from(viewerPointers.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      viewerPan.scale = Math.max(0.2, Math.min(6.0, viewerInitialScale * (dist / viewerInitialPinch)));
+      viewerPan.userControlled = true;
+      renderViewerCanvas();
+    } else if (isDragging && viewerPointers.size === 1) {
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      viewerPan.x += dx;
+      viewerPan.y += dy;
+      viewerPan.userControlled = true;
+      renderViewerCanvas();
+    }
+  });
+
+  const endDrag = (e) => {
+    // If it was a quick tap without significant dragging, handle editor tap
+    const startPt = viewerPointers.get(e.pointerId);
+    if (startPt && Math.hypot(e.clientX - startPt.x, e.clientY - startPt.y) < 8) {
+      handleViewerCanvasTap(e.clientX, e.clientY);
+    }
+
+    viewerPointers.delete(e.pointerId);
+    if (viewerPointers.size === 1) {
+      const r = Array.from(viewerPointers.values())[0];
+      lastX = r.x;
+      lastY = r.y;
+      isDragging = true;
+    } else if (viewerPointers.size === 0) {
+      isDragging = false;
+      viewerInitialPinch = null;
+    }
+  };
+
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 0.85;
+    viewerPan.scale = Math.max(0.2, Math.min(6.0, viewerPan.scale * factor));
+    viewerPan.userControlled = true;
+    renderViewerCanvas();
+  }, { passive: false });
+
+  document.getElementById("btn-viewer-zoom-in")?.addEventListener("click", () => {
+    viewerPan.scale = Math.min(viewerPan.scale * 1.25, 6.0);
+    viewerPan.userControlled = true;
+    renderViewerCanvas();
+  });
+  document.getElementById("btn-viewer-zoom-out")?.addEventListener("click", () => {
+    viewerPan.scale = Math.max(viewerPan.scale / 1.25, 0.2);
+    viewerPan.userControlled = true;
+    renderViewerCanvas();
+  });
+  document.getElementById("btn-viewer-recenter")?.addEventListener("click", () => {
+    viewerPan.userControlled = false;
+    centerViewerMap();
+    renderViewerCanvas();
+  });
+}
+
+function handleViewerCanvasTap(clientX, clientY) {
+  if (!viewerEditorMode || !viewerMetadata || !viewerMapImg) return;
+  const canvas = document.getElementById("map-viewer-canvas");
+  if (!canvas) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const sx = clientX - rect.left;
+  const sy = clientY - rect.top;
+
+  // Inverse transform: screen pixel -> world coordinates
+  const u = (sx - viewerPan.x) / viewerPan.scale;
+  const v = (sy - viewerPan.y) / viewerPan.scale;
+  const wx = viewerMetadata.origin.x + u * viewerMetadata.resolution;
+  const wy = viewerMetadata.origin.y + (viewerMetadata.height - v) * viewerMetadata.resolution;
+
+  if (viewerEditorMode === "edit_dock") {
+    if (viewerDockStep === 0) {
+      viewerNewDock = { x: wx, y: wy, theta: 0 };
+      // Auto-place standoff 70cm ahead by default
+      viewerNewStandoff = { x: wx + 0.70, y: wy, theta: 0 };
+      viewerDockStep = 1;
+      const promptEl = document.getElementById("editor-bar-prompt");
+      if (promptEl) promptEl.textContent = "Dock placed! Tap standoff position (or keep 70cm default)";
+    } else {
+      viewerNewStandoff = { x: wx, y: wy };
+      const dx = viewerNewStandoff.x - viewerNewDock.x;
+      const dy = viewerNewStandoff.y - viewerNewDock.y;
+      const angle = Math.atan2(dy, dx);
+      viewerNewDock.theta = angle;
+      viewerNewStandoff.theta = angle; // Robot back faces dock
+      const promptEl = document.getElementById("editor-bar-prompt");
+      if (promptEl) promptEl.textContent = `Dock & Standoff configured! Distance: ${(Math.hypot(dx, dy)).toFixed(2)}m`;
+    }
+    renderViewerCanvas();
+  } else if (viewerEditorMode === "save_location") {
+    viewerNewLocationPt = { x: wx, y: wy, theta: 0 };
+    renderViewerCanvas();
+    promptSaveWaypointAtPoint(wx, wy);
+  }
+}
+
+function centerViewerMap() {
+  const canvas = document.getElementById("map-viewer-canvas");
+  if (!canvas || !viewerMapImg) return;
+  canvas.width = window.innerWidth || 800;
+  canvas.height = window.innerHeight || 1280;
+  const fitScale = Math.min((canvas.width * 0.85) / viewerMapImg.width, (canvas.height * 0.75) / viewerMapImg.height);
+  viewerPan.scale = Math.max(0.5, fitScale);
+  viewerPan.x = (canvas.width - viewerMapImg.width * viewerPan.scale) / 2;
+  viewerPan.y = (canvas.height - viewerMapImg.height * viewerPan.scale) / 2;
+}
+
+function renderViewerCanvas() {
+  const canvas = document.getElementById("map-viewer-canvas");
+  if (!canvas || !viewerMapImg) return;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#0B0F19";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Background radar grid
+  ctx.strokeStyle = "rgba(30, 41, 59, 0.4)";
+  ctx.lineWidth = 1;
+  const gridStep = 40;
+  for (let x = 0; x < canvas.width; x += gridStep) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += gridStep) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  // Draw occupancy grid map
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(viewerMapImg, viewerPan.x, viewerPan.y, viewerMapImg.width * viewerPan.scale, viewerMapImg.height * viewerPan.scale);
+  ctx.restore();
+
+  const toCanvas = (wx, wy) => {
+    if (!viewerMetadata) {
+      return { x: viewerPan.x + (viewerMapImg.width / 2) * viewerPan.scale, y: viewerPan.y + (viewerMapImg.height / 2) * viewerPan.scale };
+    }
+    const u = (wx - viewerMetadata.origin.x) / viewerMetadata.resolution;
+    const v = viewerMetadata.height - ((wy - viewerMetadata.origin.y) / viewerMetadata.resolution);
+    return { x: viewerPan.x + u * viewerPan.scale, y: viewerPan.y + v * viewerPan.scale };
+  };
+
+  // Draw Saved Waypoints (Stations)
+  viewerWaypoints.forEach(wp => {
+    if (wp.name === "Dock Standoff" || wp.name === "Charging Dock") return;
+    const pt = toCanvas(wp.x, wp.y);
+    ctx.save();
+    ctx.translate(pt.x, pt.y);
+    ctx.fillStyle = "#3B82F6";
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.font = "bold 12px system-ui, sans-serif";
+    ctx.fillStyle = "#BFDBFE";
+    ctx.textAlign = "center";
+    ctx.fillText(wp.name, 0, 22);
+    ctx.restore();
+  });
+
+  // Draw Dock & Standoff Poses
+  const dock = viewerNewDock || viewerDockPose;
+  const standoff = viewerNewStandoff || viewerStandoffPose;
+
+  if (dock && standoff) {
+    const dp = toCanvas(dock.x, dock.y);
+    const sp = toCanvas(standoff.x, standoff.y);
+
+    // Connecting dashed line
+    ctx.save();
+    ctx.strokeStyle = "rgba(16, 185, 129, 0.7)";
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(dp.x, dp.y);
+    ctx.lineTo(sp.x, sp.y);
+    ctx.stroke();
+    ctx.restore();
+
+    // Standoff Marker (🎯)
+    ctx.save();
+    ctx.translate(sp.x, sp.y);
+    ctx.fillStyle = "#06B6D4";
+    ctx.beginPath();
+    ctx.arc(0, 0, 12, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.font = "bold 12px system-ui, sans-serif";
+    ctx.fillStyle = "#A5F3FC";
+    ctx.textAlign = "center";
+    ctx.fillText("Standoff (0.7m)", 0, 24);
+    ctx.restore();
+
+    // Dock Marker (⚡)
+    ctx.save();
+    ctx.translate(dp.x, dp.y);
+    ctx.rotate(-dock.theta);
+    ctx.fillStyle = "#10B981";
+    ctx.beginPath();
+    ctx.arc(0, 0, 14, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // Heading arrow toward standoff
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.lineTo(8, -6);
+    ctx.lineTo(8, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.font = "bold 12px system-ui, sans-serif";
+    ctx.fillStyle = "#6EE7B7";
+    ctx.textAlign = "center";
+    ctx.fillText("⚡ Charging Dock", dp.x, dp.y - 20);
+    ctx.restore();
+  }
+
+  // Draw Live Robot Marker if this map is active
+  if (viewerMapName === activeMapName && liveRobotPose) {
+    const rp = toCanvas(liveRobotPose.x, liveRobotPose.y);
+    ctx.save();
+    ctx.translate(rp.x, rp.y);
+    ctx.rotate(-liveRobotPose.yaw);
+    ctx.fillStyle = "#F97316";
+    ctx.beginPath();
+    ctx.arc(0, 0, 14, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.moveTo(20, 0);
+    ctx.lineTo(10, -6);
+    ctx.lineTo(10, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+window.openMapViewer = async function(mapName) {
+  viewerMapName = mapName;
+  viewerEditorMode = null;
+  viewerNewDock = null;
+  viewerNewStandoff = null;
+  viewerNewLocationPt = null;
+
+  const screen = document.getElementById("screen-map-viewer");
+  const nameEl = document.getElementById("map-viewer-name");
+  const badgeEl = document.getElementById("map-viewer-active-badge");
+  const loadingEl = document.getElementById("map-viewer-loading");
+  const editorBar = document.getElementById("map-viewer-editor-bar");
+  const legendRobot = document.getElementById("legend-robot-item");
+
+  if (screen) screen.style.display = "flex";
+  if (nameEl) nameEl.textContent = mapName;
+  if (badgeEl) badgeEl.style.display = (mapName === activeMapName) ? "inline-flex" : "none";
+  if (legendRobot) legendRobot.style.display = (mapName === activeMapName) ? "flex" : "none";
+  if (editorBar) editorBar.style.display = "none";
+  if (loadingEl) loadingEl.style.display = "flex";
+
+  initMapViewerInteractivity();
+
+  try {
+    // 1. Fetch map image
+    const imgRes = await fetch(`${API_BASE}/api/v1/maps/current/image?rotate=0&t=${Date.now()}`);
+    if (imgRes.ok) {
+      const blob = await imgRes.blob();
+      viewerMapImg = new Image();
+      viewerMapImg.onload = () => {
+        if (!viewerPan.userControlled) centerViewerMap();
+        renderViewerCanvas();
+        if (loadingEl) loadingEl.style.display = "none";
+      };
+      viewerMapImg.src = URL.createObjectURL(blob);
+    }
+
+    // 2. Fetch metadata, waypoints, and dock pose
+    const [infoRes, wpRes, dockRes] = await Promise.all([
+      fetch(`${API_BASE}/api/v1/maps/current/info`),
+      fetch(`${API_BASE}/api/v1/waypoints?map=${encodeURIComponent(mapName)}`),
+      fetch(`${API_BASE}/api/v1/dock/pose`)
+    ]);
+
+    if (infoRes.ok) {
+      const info = await infoRes.json();
+      if (info.loaded) viewerMetadata = info;
+    }
+
+    if (wpRes.ok) {
+      const wData = await wpRes.json();
+      viewerWaypoints = wData.waypoints || [];
+      const stWp = viewerWaypoints.find(w => w.name === "Dock Standoff");
+      if (stWp) viewerStandoffPose = { x: stWp.x, y: stWp.y, theta: stWp.theta || 0 };
+    }
+
+    if (dockRes.ok) {
+      const dData = await dockRes.json();
+      if (dData.data) {
+        viewerDockPose = { x: dData.data.x, y: dData.data.y, theta: dData.data.theta || 0 };
+        if (!viewerStandoffPose) {
+          viewerStandoffPose = {
+            x: viewerDockPose.x + 0.70 * Math.cos(viewerDockPose.theta),
+            y: viewerDockPose.y + 0.70 * Math.sin(viewerDockPose.theta),
+            theta: viewerDockPose.theta
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Failed loading map viewer data:", err);
+  } finally {
+    if (loadingEl) loadingEl.style.display = "none";
+    renderViewerCanvas();
+  }
+};
+
+window.closeMapViewer = function() {
+  const screen = document.getElementById("screen-map-viewer");
+  if (screen) screen.style.display = "none";
+  viewerEditorMode = null;
+  viewerNewDock = null;
+  viewerNewStandoff = null;
+};
+
+window.toggleViewerEditDock = function() {
+  viewerEditorMode = "edit_dock";
+  viewerDockStep = 0;
+  viewerNewDock = null;
+  viewerNewStandoff = null;
+  const editorBar = document.getElementById("map-viewer-editor-bar");
+  const promptEl = document.getElementById("editor-bar-prompt");
+  if (editorBar) editorBar.style.display = "flex";
+  if (promptEl) promptEl.textContent = "Tap map to set Charging Dock position (⚡)";
+  renderViewerCanvas();
+};
+
+window.promptViewerAddLocation = function() {
+  // Option: Save current robot location OR tap on map
+  if (viewerMapName === activeMapName && liveRobotPose) {
+    openTouchKeyboard("Station Name:", async (name) => {
+      if (!name || !name.trim()) return;
+      try {
+        await fetch(`${API_BASE}/api/v1/waypoints`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim(),
+            type: "waypoint",
+            x: liveRobotPose.x,
+            y: liveRobotPose.y,
+            theta: liveRobotPose.yaw,
+            map: viewerMapName
+          })
+        });
+        showToast(`Saved station "${name.trim()}"!`);
+        openMapViewer(viewerMapName);
+        loadWaypoints();
+      } catch (e) {
+        showToast("Error saving station: " + e.message, true);
+      }
+    });
+  } else {
+    viewerEditorMode = "save_location";
+    const editorBar = document.getElementById("map-viewer-editor-bar");
+    const promptEl = document.getElementById("editor-bar-prompt");
+    if (editorBar) editorBar.style.display = "flex";
+    if (promptEl) promptEl.textContent = "Tap map where you want to place the Station (📍)";
+    renderViewerCanvas();
+  }
+};
+
+function promptSaveWaypointAtPoint(wx, wy) {
+  openTouchKeyboard("Station Name:", async (name) => {
+    cancelViewerEditMode();
+    if (!name || !name.trim()) return;
+    try {
+      await fetch(`${API_BASE}/api/v1/waypoints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          type: "waypoint",
+          x: wx,
+          y: wy,
+          theta: 0,
+          map: viewerMapName
+        })
+      });
+      showToast(`Station "${name.trim()}" created!`);
+      openMapViewer(viewerMapName);
+      loadWaypoints();
+    } catch (e) {
+      showToast("Error saving station: " + e.message, true);
+    }
+  });
+}
+
+window.cancelViewerEditMode = function() {
+  viewerEditorMode = null;
+  viewerNewDock = null;
+  viewerNewStandoff = null;
+  viewerNewLocationPt = null;
+  const editorBar = document.getElementById("map-viewer-editor-bar");
+  if (editorBar) editorBar.style.display = "none";
+  renderViewerCanvas();
+};
+
+window.saveViewerEditMode = async function() {
+  if (viewerEditorMode === "edit_dock" && viewerNewDock) {
+    try {
+      showToast("Saving Dock & Standoff poses...");
+      const standoff = viewerNewStandoff || {
+        x: viewerNewDock.x + 0.70 * Math.cos(viewerNewDock.theta),
+        y: viewerNewDock.y + 0.70 * Math.sin(viewerNewDock.theta),
+        theta: viewerNewDock.theta
+      };
+
+      // 1. Set dock pose
+      await fetch(`${API_BASE}/api/v1/dock/pose`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          x: viewerNewDock.x,
+          y: viewerNewDock.y,
+          theta: viewerNewDock.theta
+        })
+      });
+
+      // 2. Save Dock Standoff waypoint
+      await fetch(`${API_BASE}/api/v1/waypoints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Dock Standoff",
+          type: "dock",
+          x: standoff.x,
+          y: standoff.y,
+          theta: standoff.theta,
+          map: viewerMapName
+        })
+      });
+
+      // 3. Save Charging Dock waypoint
+      await fetch(`${API_BASE}/api/v1/waypoints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Charging Dock",
+          type: "dock",
+          x: viewerNewDock.x,
+          y: viewerNewDock.y,
+          theta: viewerNewDock.theta,
+          map: viewerMapName
+        })
+      });
+
+      showToast("Dock & Standoff poses updated successfully!");
+      cancelViewerEditMode();
+      openMapViewer(viewerMapName);
+    } catch (e) {
+      showToast("Failed to save dock pose: " + e.message, true);
+    }
+  } else {
+    cancelViewerEditMode();
+  }
+};
+
+/* --------------------------------------------------------------------------
+   11. Maps Subpage & Scoping
    -------------------------------------------------------------------------- */
 async function loadMaps() {
   const list = document.getElementById("maps-list");
@@ -964,7 +1887,7 @@ async function loadMaps() {
     if (locSub) locSub.textContent = `Showing stations on "${activeMapName || 'all'}"`;
 
     if (maps.length === 0) {
-      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No saved maps available. Click "+ Create New Map" to start SLAM.</p>`;
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No saved maps available. Click "+ Create Map" to start SLAM.</p>`;
       return;
     }
 
@@ -975,14 +1898,15 @@ async function loadMaps() {
       const dateText = typeof m === 'object' && m.created_at ? new Date(m.created_at).toLocaleDateString() : "Ready";
       return `
         <div class="map-item-card ${isCur ? 'is-active-map' : ''}">
-          <div class="map-item-info">
+          <div class="map-item-info" onclick="openMapViewer('${escapeQuotes(mapName)}')">
             <h3>${escapeHtml(mapName)}</h3>
-            <p>${resText} • ${dateText}</p>
+            <p>${resText} • ${dateText} • 🔍 Tap to preview & edit</p>
           </div>
-          <div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-secondary btn-sm" onclick="openMapViewer('${escapeQuotes(mapName)}')">Preview & Edit</button>
             ${isCur 
-              ? `<span class="badge badge-ok">CURRENT ACTIVE MAP</span>`
-              : `<button class="btn btn-secondary btn-sm" onclick="activateMap('${escapeQuotes(mapName)}')">Switch to this Map</button>`
+              ? `<span class="badge badge-ok">ACTIVE</span>`
+              : `<button class="btn btn-primary btn-sm" onclick="activateMap('${escapeQuotes(mapName)}')">Switch Map</button>`
             }
           </div>
         </div>

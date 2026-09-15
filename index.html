@@ -656,19 +656,25 @@
       </div>
     </div>
 
-    <!-- 8. ON-SCREEN KEYBOARD MODAL (Clean built-in touch input) -->
-    <div class="modal-dialog" id="modal-touch-keyboard" style="display: none;">
-      <div class="touch-keyboard-card">
-        <div class="keyboard-display-row">
-          <span class="keyboard-prompt-label" id="keyboard-prompt-label">Enter value:</span>
-          <input type="text" id="keyboard-input-display" class="keyboard-input-display" autofocus>
+    <!-- 8. GNOME-STYLE NATIVE ON-SCREEN TOUCH KEYBOARD -->
+    <div class="gnome-osk-panel" id="gnome-osk" aria-hidden="true">
+      <div class="gnome-osk-header">
+        <div class="gnome-osk-prompt-col">
+          <span class="gnome-osk-prompt" id="osk-prompt-label">Enter Value</span>
+          <div class="gnome-osk-input-wrap">
+            <input type="text" id="osk-input-display" class="gnome-osk-input" readonly>
+            <button type="button" class="gnome-osk-clear-btn" id="osk-btn-clear" title="Clear Text">✕</button>
+          </div>
         </div>
-        <div class="touch-keyboard-grid" id="touch-keyboard-grid"></div>
-        <div class="keyboard-actions-row">
-          <button class="btn btn-secondary btn-lg" onclick="closeTouchKeyboard(false)">Cancel</button>
-          <button class="btn btn-primary btn-lg" onclick="closeTouchKeyboard(true)">Confirm</button>
+        <div class="gnome-osk-actions">
+          <button type="button" class="gnome-osk-btn-cancel" onclick="closeTouchKeyboard(false)">Cancel</button>
+          <button type="button" class="gnome-osk-btn-done" onclick="closeTouchKeyboard(true)">Done ✓</button>
+          <button type="button" class="gnome-osk-btn-hide" onclick="closeTouchKeyboard(false)" title="Hide Keyboard">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
         </div>
       </div>
+      <div class="gnome-osk-grid" id="gnome-osk-grid"></div>
     </div>
 
     <!-- 9. FULL-SCREEN INTERACTIVE DYNAMIC UI KIOSK MODAL -->

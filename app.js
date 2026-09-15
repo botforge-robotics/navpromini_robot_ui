@@ -1247,76 +1247,246 @@ async function loadPowerHealth() {
 }
 
 /* --------------------------------------------------------------------------
-   15. Fast Built-In On-Screen Touch Keyboard
+   15. Native GNOME-Style On-Screen Touch Keyboard (OSK)
    -------------------------------------------------------------------------- */
-function initTouchKeyboard() {
-  const grid = document.getElementById("touch-keyboard-grid");
-  if (!grid) return;
+let currentOskLayer = "lower"; // 'lower', 'upper', 'symbols'
+let oskActiveInput = null;
+let oskBackspaceTimer = null;
+let oskBackspaceInterval = null;
 
-  const rows = [
-    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+const OSK_LAYOUTS = {
+  lower: [
     ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-    ["a", "s", "d", "f", "g", "h", "j", "k", "l", "_"],
-    ["z", "x", "c", "v", "b", "n", "m", "-", "."]
-  ];
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+    [
+      { key: "shift", label: "⇧", cls: "osk-key-mod osk-key-shift" },
+      "z", "x", "c", "v", "b", "n", "m",
+      { key: "backspace", label: "⌫", cls: "osk-key-mod osk-key-backspace" }
+    ],
+    [
+      { key: "symbols", label: "?123", cls: "osk-key-mod osk-key-sym" },
+      "_",
+      { key: "space", label: "space", cls: "osk-key-space" },
+      "-", ".",
+      { key: "done", label: "Done ↵", cls: "osk-key-enter" }
+    ]
+  ],
+  upper: [
+    ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+    ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+    [
+      { key: "shift", label: "⬆", cls: "osk-key-mod osk-key-shift shift-active" },
+      "Z", "X", "C", "V", "B", "N", "M",
+      { key: "backspace", label: "⌫", cls: "osk-key-mod osk-key-backspace" }
+    ],
+    [
+      { key: "symbols", label: "?123", cls: "osk-key-mod osk-key-sym" },
+      "_",
+      { key: "space", label: "space", cls: "osk-key-space" },
+      "-", ".",
+      { key: "done", label: "Done ↵", cls: "osk-key-enter" }
+    ]
+  ],
+  symbols: [
+    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+    ["@", "#", "$", "%", "&", "*", "/", "(", ")", "="],
+    [
+      { key: "letters", label: "ABC", cls: "osk-key-mod osk-key-sym" },
+      "!", "\"", "'", ":", ";", "?", "+", "\\",
+      { key: "backspace", label: "⌫", cls: "osk-key-mod osk-key-backspace" }
+    ],
+    [
+      { key: "letters", label: "ABC", cls: "osk-key-mod osk-key-sym" },
+      "_",
+      { key: "space", label: "space", cls: "osk-key-space" },
+      ",", ".",
+      { key: "done", label: "Done ↵", cls: "osk-key-enter" }
+    ]
+  ]
+};
 
-  let html = rows.map(row => `
-    <div class="keyboard-row">
-      ${row.map(k => `<button type="button" class="keyboard-key" onclick="appendKeyChar('${k}')">${k}</button>`).join("")}
+function renderGnomeOsk() {
+  const container = document.getElementById("gnome-osk-grid");
+  if (!container) return;
+
+  const rows = OSK_LAYOUTS[currentOskLayer] || OSK_LAYOUTS.lower;
+  container.innerHTML = rows.map(row => `
+    <div class="osk-row">
+      ${row.map(item => {
+        if (typeof item === "string") {
+          return `<button type="button" class="osk-key" data-char="${escapeHtml(item)}">${escapeHtml(item)}</button>`;
+        } else {
+          return `<button type="button" class="osk-key ${item.cls || ""}" data-action="${item.key}">${item.label}</button>`;
+        }
+      }).join("")}
     </div>
   `).join("");
 
-  html += `
-    <div class="keyboard-row">
-      <button type="button" class="keyboard-key keyboard-key-wide" onclick="backspaceKey()">⌫ Del</button>
-      <button type="button" class="keyboard-key keyboard-key-space" onclick="appendKeyChar(' ')">Space</button>
-      <button type="button" class="keyboard-key keyboard-key-wide" onclick="clearKeyInput()">Clear</button>
-    </div>
-  `;
+  // Attach zero-latency pointer events
+  container.querySelectorAll(".osk-key").forEach(btn => {
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      btn.classList.add("active");
 
-  grid.innerHTML = html;
+      const char = btn.getAttribute("data-char");
+      const action = btn.getAttribute("data-action");
+
+      if (char !== null) {
+        handleOskKeyInput(char);
+      } else if (action) {
+        handleOskAction(action);
+      }
+    });
+
+    const release = () => {
+      btn.classList.remove("active");
+      clearTimeout(oskBackspaceTimer);
+      clearInterval(oskBackspaceInterval);
+    };
+
+    btn.addEventListener("pointerup", release);
+    btn.addEventListener("pointerleave", release);
+    btn.addEventListener("pointercancel", release);
+  });
 }
 
-window.openTouchKeyboard = function(promptLabel, callback) {
-  touchKeyboardCallback = callback;
-  const modal = document.getElementById("modal-touch-keyboard");
-  const label = document.getElementById("keyboard-prompt-label");
-  const input = document.getElementById("keyboard-input-display");
-  if (label) label.textContent = promptLabel;
-  if (input) {
-    input.value = "";
-    input.focus();
+function handleOskKeyInput(char) {
+  const display = document.getElementById("osk-input-display");
+  if (display) {
+    display.value += char;
   }
-  if (modal) modal.style.display = "flex";
+  if (oskActiveInput) {
+    oskActiveInput.value = display ? display.value : (oskActiveInput.value + char);
+    oskActiveInput.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  // If in upper layer, return to lower after single character input (natural OSK behavior)
+  if (currentOskLayer === "upper") {
+    currentOskLayer = "lower";
+    renderGnomeOsk();
+  }
+}
+
+function handleOskAction(action) {
+  if (action === "shift") {
+    currentOskLayer = currentOskLayer === "upper" ? "lower" : "upper";
+    renderGnomeOsk();
+  } else if (action === "symbols") {
+    currentOskLayer = "symbols";
+    renderGnomeOsk();
+  } else if (action === "letters") {
+    currentOskLayer = "lower";
+    renderGnomeOsk();
+  } else if (action === "space") {
+    handleOskKeyInput(" ");
+  } else if (action === "done") {
+    closeTouchKeyboard(true);
+  } else if (action === "backspace") {
+    performOskBackspace();
+    clearTimeout(oskBackspaceTimer);
+    clearInterval(oskBackspaceInterval);
+    oskBackspaceTimer = setTimeout(() => {
+      oskBackspaceInterval = setInterval(performOskBackspace, 65);
+    }, 350);
+  }
+}
+
+function performOskBackspace() {
+  const display = document.getElementById("osk-input-display");
+  if (display && display.value.length > 0) {
+    display.value = display.value.slice(0, -1);
+  }
+  if (oskActiveInput) {
+    oskActiveInput.value = display ? display.value : (oskActiveInput.value.slice(0, -1));
+    oskActiveInput.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+}
+
+function initTouchKeyboard() {
+  renderGnomeOsk();
+
+  // Clear button on preview display
+  document.getElementById("osk-btn-clear")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const display = document.getElementById("osk-input-display");
+    if (display) display.value = "";
+    if (oskActiveInput) {
+      oskActiveInput.value = "";
+      oskActiveInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
+
+  // Enable seamless automatic OSK pop-up for any editable input in the entire UI
+  initUniversalInputKeyboard();
+}
+
+window.openTouchKeyboard = function(promptLabel, callback, defaultValue = "", isPassword = false) {
+  touchKeyboardCallback = callback;
+  oskActiveInput = null;
+
+  const panel = document.getElementById("gnome-osk");
+  const labelEl = document.getElementById("osk-prompt-label");
+  const inputEl = document.getElementById("osk-input-display");
+
+  if (labelEl) labelEl.textContent = promptLabel || "Enter Text";
+  if (inputEl) {
+    inputEl.type = isPassword ? "password" : "text";
+    inputEl.value = defaultValue || "";
+  }
+
+  currentOskLayer = "lower";
+  renderGnomeOsk();
+
+  if (panel) {
+    panel.classList.add("osk-visible");
+    panel.setAttribute("aria-hidden", "false");
+  }
 };
 
 window.closeTouchKeyboard = function(confirmed) {
-  const modal = document.getElementById("modal-touch-keyboard");
-  const input = document.getElementById("keyboard-input-display");
-  const val = input ? input.value : "";
-  if (modal) modal.style.display = "none";
+  const panel = document.getElementById("gnome-osk");
+  const inputEl = document.getElementById("osk-input-display");
+  const val = inputEl ? inputEl.value : "";
+
+  if (panel) {
+    panel.classList.remove("osk-visible");
+    panel.setAttribute("aria-hidden", "true");
+  }
+
+  clearTimeout(oskBackspaceTimer);
+  clearInterval(oskBackspaceInterval);
+
   if (confirmed && touchKeyboardCallback) {
     touchKeyboardCallback(val);
   }
   touchKeyboardCallback = null;
+  oskActiveInput = null;
 };
 
-window.appendKeyChar = function(char) {
-  const input = document.getElementById("keyboard-input-display");
-  if (input) input.value += char;
-};
+function initUniversalInputKeyboard() {
+  document.addEventListener("pointerdown", (e) => {
+    const target = e.target;
+    if (target && target.tagName === "INPUT" && target.id !== "osk-input-display" && !target.readOnly) {
+      const type = (target.type || "text").toLowerCase();
+      if (type === "text" || type === "password" || type === "number" || type === "search") {
+        e.preventDefault();
+        oskActiveInput = target;
+        const promptLabel = target.placeholder || target.getAttribute("name") || "Enter Text";
+        const isPw = type === "password";
 
-window.backspaceKey = function() {
-  const input = document.getElementById("keyboard-input-display");
-  if (input && input.value.length > 0) {
-    input.value = input.value.slice(0, -1);
-  }
-};
-
-window.clearKeyInput = function() {
-  const input = document.getElementById("keyboard-input-display");
-  if (input) input.value = "";
-};
+        openTouchKeyboard(promptLabel, (val) => {
+          if (val !== null && val !== undefined) {
+            target.value = val;
+            target.dispatchEvent(new Event("input", { bubbles: true }));
+            target.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }, target.value, isPw);
+      }
+    }
+  });
+}
 
 /* --------------------------------------------------------------------------
    16. Dynamic UI Kiosk Interactions (Human-In-The-Loop Missions)

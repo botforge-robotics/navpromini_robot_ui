@@ -26,12 +26,8 @@ if command -v xinput >/dev/null 2>&1; then
     xinput set-prop 6 "Coordinate Transformation Matrix" 0 -1 1 1 0 0 0 0 1 2>/dev/null || true
 fi
 
-# Ensure Onboard virtual keyboard settings (undocked, starts minimized, auto-show off)
-if command -v gsettings >/dev/null 2>&1; then
-    sudo -u navpromini DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus gsettings set org.onboard.window docking-enabled false 2>/dev/null || true
-    sudo -u navpromini DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus gsettings set org.onboard start-minimized true 2>/dev/null || true
-    sudo -u navpromini DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus gsettings set org.onboard.auto-show enabled false 2>/dev/null || true
-fi
+# Terminate any external virtual keyboards to avoid X11 window focus hangs
+pkill -9 -f onboard 2>/dev/null || true
 
 PORT=8090
 URL="http://127.0.0.1:${PORT}/ui/"

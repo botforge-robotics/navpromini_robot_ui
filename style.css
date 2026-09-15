@@ -2084,102 +2084,259 @@ body, html {
   gap: 12px;
 }
 
-/* 8. ON-SCREEN TOUCH KEYBOARD */
-.touch-keyboard-card {
-  max-width: 760px;
-  width: 95%;
-  background: #FFFFFF;
-  border: 2px solid var(--border-strong);
-  border-radius: var(--radius-xl);
-  padding: 24px;
+/* 8. GNOME-STYLE ON-SCREEN TOUCH KEYBOARD (OSK) */
+.gnome-osk-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 100vw;
+  background: rgba(24, 28, 36, 0.98);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.6);
+  z-index: 100000;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  box-shadow: var(--shadow-modal);
+  padding: 14px 18px 24px 18px;
+  box-sizing: border-box;
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
 }
 
-.keyboard-display-row {
+.gnome-osk-panel.osk-visible {
+  transform: translateY(0);
+}
+
+.gnome-osk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 12px;
+}
+
+.gnome-osk-prompt-col {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
-.keyboard-prompt-label {
+.gnome-osk-prompt {
   font-size: 13px;
   font-weight: 800;
-  color: var(--text-secondary);
+  letter-spacing: 0.8px;
+  color: #94A3B8;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.keyboard-input-display {
+.gnome-osk-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
   width: 100%;
-  height: 52px;
-  padding: 0 18px;
-  background: var(--surface-sunken);
-  border: 2px solid var(--primary);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
+}
+
+.gnome-osk-input {
+  width: 100%;
+  height: 48px;
+  background: rgba(15, 17, 23, 0.95);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  color: #FFFFFF;
+  font-family: var(--font-mono, monospace);
   font-size: 20px;
-  font-family: var(--font-mono);
   font-weight: 700;
+  padding: 0 44px 0 16px;
+  box-sizing: border-box;
   outline: none;
 }
 
-.touch-keyboard-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.gnome-osk-input:focus {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
 }
 
-.keyboard-row {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-}
-
-.keyboard-key {
-  flex: 1;
-  height: 52px;
-  min-width: 44px;
-  max-width: 64px;
-  background: var(--surface-sunken);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: 18px;
-  font-weight: 700;
-  font-family: var(--font-main);
+.gnome-osk-clear-btn {
+  position: absolute;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  border: none;
+  color: #CBD5E1;
+  font-size: 14px;
+  font-weight: 900;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.1s;
 }
 
-.keyboard-key:active {
-  transform: scale(0.92);
-  background: var(--primary);
+.gnome-osk-clear-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.gnome-osk-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.gnome-osk-btn-cancel {
+  height: 48px;
+  padding: 0 18px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  color: #E2E8F0;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.gnome-osk-btn-cancel:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.gnome-osk-btn-done {
+  height: 48px;
+  padding: 0 24px;
+  background: #10B981;
+  border: none;
+  border-radius: 12px;
   color: #FFFFFF;
-  border-color: var(--primary-light);
-}
-
-.keyboard-key-wide {
-  flex: 2;
-  max-width: 100px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(16, 185, 129, 0.45);
 }
 
-.keyboard-key-space {
-  flex: 5;
-  max-width: 320px;
+.gnome-osk-btn-done:active {
+  background: #059669;
+  transform: scale(0.97);
+}
+
+.gnome-osk-btn-hide {
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  color: #94A3B8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.gnome-osk-btn-hide:active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+
+.gnome-osk-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.osk-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
+}
+
+.osk-key {
+  flex: 1;
+  height: 56px;
+  min-width: 0;
+  background: #333844;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: #F8FAFC;
+  font-family: var(--font-main, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  font-size: 21px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  transition: background 0.05s, transform 0.05s;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.osk-key:active, .osk-key.active {
+  background: #4B5263;
+  transform: scale(0.94);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Modifiers & Special Keys */
+.osk-key-mod {
+  background: #252933;
+  color: #94A3B8;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.osk-key-shift {
+  flex: 1.4;
+  font-size: 20px;
+}
+
+.osk-key-shift.shift-active {
+  background: #3B82F6;
+  color: #FFFFFF;
+  border-color: #60A5FA;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.5);
+}
+
+.osk-key-backspace {
+  flex: 1.4;
+  color: #F87171;
+  font-size: 20px;
+}
+
+.osk-key-sym {
+  flex: 1.5;
+  font-size: 15px;
+}
+
+.osk-key-space {
+  flex: 4.5;
+  background: #2B303C;
+  color: #64748B;
   font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
-.keyboard-actions-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 8px;
+.osk-key-enter {
+  flex: 1.8;
+  background: #3B82F6;
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 /* SOFTWARE UPDATE MODAL */

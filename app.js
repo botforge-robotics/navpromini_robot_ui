@@ -394,6 +394,7 @@ function initActionButtons() {
   // Cancel Navigation
   document.getElementById("btn-cancel-navigation")?.addEventListener("click", async () => {
     try {
+      onScreenNavInitiated = false;
       await fetch(`${API_BASE}/api/v1/navigation/goal`, { method: "DELETE" });
       document.getElementById("screen-nav-progress").style.display = "none";
       showToast("Navigation canceled.");
@@ -442,14 +443,20 @@ function initActionButtons() {
 
   // Save Location Button in Locations Subpage
   document.getElementById("btn-add-location")?.addEventListener("click", () => {
-    promptSaveCurrentLocation();
+    if (!activeMapName) {
+      showToast("No active map loaded. Load a map first to save locations.", true);
+      return;
+    }
+    closeSubpage();
+    openMapViewer(activeMapName, { mode: "save_location" });
   });
 }
 
 /* --------------------------------------------------------------------------
-/* --------------------------------------------------------------------------
    6. Navigation Progress & Auto-Charging Watcher
    -------------------------------------------------------------------------- */
+let onScreenNavInitiated = false;
+
 function updateNavigationState(navData) {
   if (!navData) return;
   try {
@@ -457,7 +464,7 @@ function updateNavigationState(navData) {
     isNavigating = isNav;
     const navScreen = document.getElementById("screen-nav-progress");
     if (navScreen) {
-      if (isNav) {
+      if (isNav && onScreenNavInitiated) {
         navScreen.style.display = "flex";
         const destEl = document.getElementById("nav-screen-destination");
         if (destEl && navData.target_waypoint) destEl.textContent = navData.target_waypoint;
@@ -469,8 +476,11 @@ function updateNavigationState(navData) {
         if (barEl && navData.progress_percent !== undefined) {
           barEl.style.width = `${Math.min(100, Math.max(0, navData.progress_percent))}%`;
         }
-      } else if (navScreen.style.display === "flex") {
-        navScreen.style.display = "none";
+      } else {
+        if (!isNav) onScreenNavInitiated = false;
+        if (navScreen.style.display === "flex") {
+          navScreen.style.display = "none";
+        }
       }
     }
   } catch (err) {
@@ -1330,10 +1340,14 @@ let viewerDockPose = null;
 let viewerStandoffPose = null;
 let viewerPan = { x: 0, y: 0, scale: 1.0, userControlled: false };
 let viewerEditorMode = null; // null, 'edit_dock', 'save_location'
-let viewerDockStep = 0;      // 0 = place dock, 1 = place standoff
+let viewerDraftPose = null;  // { x, y, theta } for saving locations
+let viewerIsAdjustingAngle = false;
+let viewerDraggingHeading = false;
+let viewerLongPressTimer = null;
+let viewerDockEditTarget = 'dock'; // 'dock' or 'standoff'
+let viewerDockUndoStack = [];
 let viewerNewDock = null;
 let viewerNewStandoff = null;
-let viewerNewLocationPt = null;
 let viewerPointers = new Map();
 let viewerInitialPinch = null;
 let viewerInitialScale = 1.0;
@@ -1346,17 +1360,61 @@ function initMapViewerInteractivity() {
   let isDragging = false;
   let lastX = 0;
   let lastY = 0;
+  let pointerStartPos = { x: 0, y: 0 };
+
+  const toWorld = (sx, sy) => {
+    if (!viewerMetadata) return { x: 0, y: 0 };
+    const u = (sx - viewerPan.x) / viewerPan.scale;
+    const v = (sy - viewerPan.y) / viewerPan.scale;
+    const wx = viewerMetadata.origin.x + u * viewerMetadata.resolution;
+    const wy = viewerMetadata.origin.y + (viewerMetadata.height - v) * viewerMetadata.resolution;
+    return { x: wx, y: wy };
+  };
+
+  const getCanvasPos = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    return { sx: e.clientX - rect.left, sy: e.clientY - rect.top };
+  };
 
   canvas.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     canvas.setPointerCapture(e.pointerId);
     viewerPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    pointerStartPos = { x: e.clientX, y: e.clientY };
+
+    const { sx, sy } = getCanvasPos(e);
+
+    // 1. Check if user tapped on the heading handle of a placed draft location marker
+    if (viewerEditorMode === "save_location" && viewerDraftPose) {
+      const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+      const hx = dp.x + 45 * Math.cos(-viewerDraftPose.theta);
+      const hy = dp.y + 45 * Math.sin(-viewerDraftPose.theta);
+      if (Math.hypot(sx - hx, sy - hy) < 32) {
+        viewerDraggingHeading = true;
+        return;
+      }
+    }
+
+    // 2. In save_location mode: start long-press timer to place marker and rotate angle
+    if (viewerEditorMode === "save_location" && viewerPointers.size === 1) {
+      if (viewerLongPressTimer) clearTimeout(viewerLongPressTimer);
+      viewerLongPressTimer = setTimeout(() => {
+        const w = toWorld(sx, sy);
+        viewerDraftPose = { x: w.x, y: w.y, theta: 0 };
+        viewerIsAdjustingAngle = true;
+        if (navigator.vibrate) navigator.vibrate(50);
+        updateViewerEditorBarUI();
+        renderViewerCanvas();
+        showToast("Marker placed! Drag around to rotate angle.");
+      }, 350);
+    }
 
     if (viewerPointers.size === 1) {
       isDragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
     } else if (viewerPointers.size === 2) {
+      if (viewerLongPressTimer) clearTimeout(viewerLongPressTimer);
       isDragging = false;
       const pts = Array.from(viewerPointers.values());
       viewerInitialPinch = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
@@ -1368,6 +1426,27 @@ function initMapViewerInteractivity() {
     if (!viewerPointers.has(e.pointerId)) return;
     viewerPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
+    const { sx, sy } = getCanvasPos(e);
+
+    // Cancel long press if moved significantly
+    if (viewerLongPressTimer && Math.hypot(e.clientX - pointerStartPos.x, e.clientY - pointerStartPos.y) > 10) {
+      clearTimeout(viewerLongPressTimer);
+      viewerLongPressTimer = null;
+    }
+
+    // Handle interactive heading adjustment for draft location
+    if (viewerEditorMode === "save_location" && (viewerDraggingHeading || viewerIsAdjustingAngle) && viewerDraftPose) {
+      const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+      const dx = sx - dp.x;
+      const dy = sy - dp.y;
+      if (Math.hypot(dx, dy) > 12) {
+        viewerDraftPose.theta = -Math.atan2(dy, dx);
+        renderViewerCanvas();
+      }
+      return;
+    }
+
+    // Pinch-to-zoom
     if (viewerPointers.size === 2 && viewerInitialPinch) {
       const pts = Array.from(viewerPointers.values());
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
@@ -1387,8 +1466,23 @@ function initMapViewerInteractivity() {
   });
 
   const endDrag = (e) => {
+    if (viewerLongPressTimer) {
+      clearTimeout(viewerLongPressTimer);
+      viewerLongPressTimer = null;
+    }
+
+    if (viewerDraggingHeading || viewerIsAdjustingAngle) {
+      viewerDraggingHeading = false;
+      viewerIsAdjustingAngle = false;
+      updateViewerEditorBarUI();
+      renderViewerCanvas();
+      viewerPointers.delete(e.pointerId);
+      isDragging = false;
+      return;
+    }
+
     // If it was a quick tap without significant dragging, handle editor tap
-    const startPt = viewerPointers.get(e.pointerId);
+    const startPt = pointerStartPos;
     if (startPt && Math.hypot(e.clientX - startPt.x, e.clientY - startPt.y) < 8) {
       handleViewerCanvasTap(e.clientX, e.clientY);
     }
@@ -1433,6 +1527,18 @@ function initMapViewerInteractivity() {
   });
 }
 
+function toCanvasCoords(wx, wy) {
+  const canvas = document.getElementById("map-viewer-canvas");
+  if (!viewerMetadata || !canvas) {
+    const w = viewerMapImg ? viewerMapImg.width : 800;
+    const h = viewerMapImg ? viewerMapImg.height : 1280;
+    return { x: viewerPan.x + (w / 2) * viewerPan.scale, y: viewerPan.y + (h / 2) * viewerPan.scale };
+  }
+  const u = (wx - viewerMetadata.origin.x) / viewerMetadata.resolution;
+  const v = viewerMetadata.height - ((wy - viewerMetadata.origin.y) / viewerMetadata.resolution);
+  return { x: viewerPan.x + u * viewerPan.scale, y: viewerPan.y + v * viewerPan.scale };
+}
+
 function handleViewerCanvasTap(clientX, clientY) {
   if (!viewerEditorMode || !viewerMetadata || !viewerMapImg) return;
   const canvas = document.getElementById("map-viewer-canvas");
@@ -1449,28 +1555,46 @@ function handleViewerCanvasTap(clientX, clientY) {
   const wy = viewerMetadata.origin.y + (viewerMetadata.height - v) * viewerMetadata.resolution;
 
   if (viewerEditorMode === "edit_dock") {
-    if (viewerDockStep === 0) {
-      viewerNewDock = { x: wx, y: wy, theta: 0 };
-      // Auto-place standoff 70cm ahead by default
-      viewerNewStandoff = { x: wx + 0.70, y: wy, theta: 0 };
-      viewerDockStep = 1;
-      const promptEl = document.getElementById("editor-bar-prompt");
-      if (promptEl) promptEl.textContent = "Dock placed! Tap standoff position (or keep 70cm default)";
+    // Push previous state into undo stack
+    viewerDockUndoStack.push({
+      dock: viewerNewDock ? { ...viewerNewDock } : null,
+      standoff: viewerNewStandoff ? { ...viewerNewStandoff } : null,
+      target: viewerDockEditTarget
+    });
+
+    if (viewerDockEditTarget === "dock") {
+      const curTheta = viewerNewDock ? viewerNewDock.theta : 0;
+      viewerNewDock = { x: wx, y: wy, theta: curTheta };
+      if (!viewerNewStandoff) {
+        viewerNewStandoff = { x: wx + 0.70, y: wy, theta: 0 };
+      } else {
+        // Recompute orientation between new dock and existing standoff
+        const dx = viewerNewStandoff.x - viewerNewDock.x;
+        const dy = viewerNewStandoff.y - viewerNewDock.y;
+        const angle = Math.atan2(dy, dx);
+        viewerNewDock.theta = angle;
+        viewerNewStandoff.theta = angle;
+      }
+      viewerDockEditTarget = "standoff"; // Guide user to standoff next
     } else {
+      if (!viewerNewDock) {
+        viewerNewDock = { x: wx - 0.70, y: wy, theta: 0 };
+      }
       viewerNewStandoff = { x: wx, y: wy };
       const dx = viewerNewStandoff.x - viewerNewDock.x;
       const dy = viewerNewStandoff.y - viewerNewDock.y;
       const angle = Math.atan2(dy, dx);
       viewerNewDock.theta = angle;
-      viewerNewStandoff.theta = angle; // Robot back faces dock
-      const promptEl = document.getElementById("editor-bar-prompt");
-      if (promptEl) promptEl.textContent = `Dock & Standoff configured! Distance: ${(Math.hypot(dx, dy)).toFixed(2)}m`;
+      viewerNewStandoff.theta = angle; // Robot faces away from dock (back towards dock)
     }
+    updateViewerEditorBarUI();
     renderViewerCanvas();
   } else if (viewerEditorMode === "save_location") {
-    viewerNewLocationPt = { x: wx, y: wy, theta: 0 };
+    // Tapping repositions the draft marker
+    const prevTheta = viewerDraftPose ? viewerDraftPose.theta : 0;
+    viewerDraftPose = { x: wx, y: wy, theta: prevTheta };
+    updateViewerEditorBarUI();
     renderViewerCanvas();
-    promptSaveWaypointAtPoint(wx, wy);
   }
 }
 
@@ -1516,19 +1640,10 @@ function renderViewerCanvas() {
   ctx.drawImage(viewerMapImg, viewerPan.x, viewerPan.y, viewerMapImg.width * viewerPan.scale, viewerMapImg.height * viewerPan.scale);
   ctx.restore();
 
-  const toCanvas = (wx, wy) => {
-    if (!viewerMetadata) {
-      return { x: viewerPan.x + (viewerMapImg.width / 2) * viewerPan.scale, y: viewerPan.y + (viewerMapImg.height / 2) * viewerPan.scale };
-    }
-    const u = (wx - viewerMetadata.origin.x) / viewerMetadata.resolution;
-    const v = viewerMetadata.height - ((wy - viewerMetadata.origin.y) / viewerMetadata.resolution);
-    return { x: viewerPan.x + u * viewerPan.scale, y: viewerPan.y + v * viewerPan.scale };
-  };
-
   // Draw Saved Waypoints (Stations)
   viewerWaypoints.forEach(wp => {
     if (wp.name === "Dock Standoff" || wp.name === "Charging Dock") return;
-    const pt = toCanvas(wp.x, wp.y);
+    const pt = toCanvasCoords(wp.x, wp.y);
     ctx.save();
     ctx.translate(pt.x, pt.y);
     ctx.fillStyle = "#3B82F6";
@@ -1550,8 +1665,8 @@ function renderViewerCanvas() {
   const standoff = viewerNewStandoff || viewerStandoffPose;
 
   if (dock && standoff) {
-    const dp = toCanvas(dock.x, dock.y);
-    const sp = toCanvas(standoff.x, standoff.y);
+    const dp = toCanvasCoords(dock.x, dock.y);
+    const sp = toCanvasCoords(standoff.x, standoff.y);
 
     // Connecting dashed line
     ctx.save();
@@ -1562,6 +1677,17 @@ function renderViewerCanvas() {
     ctx.moveTo(dp.x, dp.y);
     ctx.lineTo(sp.x, sp.y);
     ctx.stroke();
+    ctx.restore();
+
+    // Distance Label on line
+    const midX = (dp.x + sp.x) / 2;
+    const midY = (dp.y + sp.y) / 2;
+    const distMeters = Math.hypot(standoff.x - dock.x, standoff.y - dock.y);
+    ctx.save();
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.fillStyle = "#6EE7B7";
+    ctx.textAlign = "center";
+    ctx.fillText(`${distMeters.toFixed(2)}m`, midX, midY - 8);
     ctx.restore();
 
     // Standoff Marker (🎯)
@@ -1577,7 +1703,7 @@ function renderViewerCanvas() {
     ctx.font = "bold 12px system-ui, sans-serif";
     ctx.fillStyle = "#A5F3FC";
     ctx.textAlign = "center";
-    ctx.fillText("Standoff (0.7m)", 0, 24);
+    ctx.fillText("Standoff", 0, 24);
     ctx.restore();
 
     // Dock Marker (⚡)
@@ -1611,7 +1737,7 @@ function renderViewerCanvas() {
 
   // Draw Live Robot Marker if this map is active
   if (viewerMapName === activeMapName && liveRobotPose) {
-    const rp = toCanvas(liveRobotPose.x, liveRobotPose.y);
+    const rp = toCanvasCoords(liveRobotPose.x, liveRobotPose.y);
     ctx.save();
     ctx.translate(rp.x, rp.y);
     ctx.rotate(-liveRobotPose.yaw);
@@ -1631,14 +1757,76 @@ function renderViewerCanvas() {
     ctx.fill();
     ctx.restore();
   }
+
+  // Draw Draft Pose Marker when in save_location mode
+  if (viewerEditorMode === "save_location" && viewerDraftPose) {
+    const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+    ctx.save();
+    ctx.translate(dp.x, dp.y);
+
+    // Glowing outer ring
+    ctx.fillStyle = "rgba(59, 130, 246, 0.25)";
+    ctx.beginPath();
+    ctx.arc(0, 0, 26, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Center pin
+    ctx.fillStyle = "#2563EB";
+    ctx.beginPath();
+    ctx.arc(0, 0, 13, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Direction cone
+    ctx.rotate(-viewerDraftPose.theta);
+    ctx.fillStyle = "rgba(37, 99, 235, 0.35)";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 45, -Math.PI / 6, Math.PI / 6);
+    ctx.closePath();
+    ctx.fill();
+
+    // Arrow pointer
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.moveTo(22, 0);
+    ctx.lineTo(12, -7);
+    ctx.lineTo(12, 7);
+    ctx.closePath();
+    ctx.fill();
+
+    // Draggable heading handle at 45px radius
+    ctx.fillStyle = "#2563EB";
+    ctx.beginPath();
+    ctx.arc(45, 0, 9, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Coordinate readout chip
+    ctx.save();
+    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textAlign = "center";
+    const deg = Math.round(viewerDraftPose.theta * 180 / Math.PI);
+    ctx.fillText(`📍 X: ${viewerDraftPose.x.toFixed(2)}m, Y: ${viewerDraftPose.y.toFixed(2)}m, θ: ${deg}°`, dp.x, dp.y - 32);
+    ctx.restore();
+  }
 }
 
-window.openMapViewer = async function(mapName) {
+window.openMapViewer = async function(mapName, options = {}) {
   viewerMapName = mapName;
   viewerEditorMode = null;
   viewerNewDock = null;
   viewerNewStandoff = null;
-  viewerNewLocationPt = null;
+  viewerDraftPose = null;
+  viewerDockUndoStack = [];
+  viewerDockEditTarget = 'dock';
 
   const screen = document.getElementById("screen-map-viewer");
   const nameEl = document.getElementById("map-viewer-name");
@@ -1707,6 +1895,10 @@ window.openMapViewer = async function(mapName) {
   } finally {
     if (loadingEl) loadingEl.style.display = "none";
     renderViewerCanvas();
+
+    if (options.mode === "save_location") {
+      toggleViewerSaveLocation();
+    }
   }
 };
 
@@ -1716,86 +1908,135 @@ window.closeMapViewer = function() {
   viewerEditorMode = null;
   viewerNewDock = null;
   viewerNewStandoff = null;
+  viewerDraftPose = null;
+  viewerDockUndoStack = [];
 };
+
+function updateViewerEditorBarUI() {
+  const editorBar = document.getElementById("map-viewer-editor-bar");
+  const promptEl = document.getElementById("editor-bar-prompt");
+  const actionsEl = document.getElementById("map-viewer-editor-bar")?.querySelector(".editor-bar-actions");
+  if (!editorBar || !promptEl || !actionsEl) return;
+
+  if (!viewerEditorMode) {
+    editorBar.style.display = "none";
+    return;
+  }
+
+  editorBar.style.display = "flex";
+
+  if (viewerEditorMode === "save_location") {
+    if (!viewerDraftPose) {
+      promptEl.textContent = "Long-press on map to place marker & drag to set heading";
+    } else {
+      const deg = Math.round(viewerDraftPose.theta * 180 / Math.PI);
+      promptEl.textContent = `Pose set (θ: ${deg}°)! Drag handle to rotate, then tap Save`;
+    }
+    actionsEl.innerHTML = `
+      <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerSaveLocation()">✓ Save Waypoint</button>
+    `;
+  } else if (viewerEditorMode === "edit_dock") {
+    if (viewerDockEditTarget === "dock") {
+      promptEl.textContent = "⚡ Tap map to place Charging Dock position";
+    } else {
+      const dist = (viewerNewDock && viewerNewStandoff)
+        ? ` (${Math.hypot(viewerNewStandoff.x - viewerNewDock.x, viewerNewStandoff.y - viewerNewDock.y).toFixed(2)}m)`
+        : "";
+      promptEl.textContent = `🎯 Tap map to place Standoff staging pose${dist}`;
+    }
+
+    const canUndo = viewerDockUndoStack.length > 0;
+    actionsEl.innerHTML = `
+      <div class="editor-segmented-group">
+        <button type="button" class="editor-segmented-btn ${viewerDockEditTarget === 'dock' ? 'active' : ''}" onclick="setDockEditTarget('dock')">⚡ Dock</button>
+        <button type="button" class="editor-segmented-btn ${viewerDockEditTarget === 'standoff' ? 'active' : ''}" onclick="setDockEditTarget('standoff')">🎯 Standoff</button>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" ${!canUndo ? 'disabled' : ''} onclick="undoViewerDock()" title="Undo last change">↩ Undo</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="saveViewerEditMode()">Save Changes</button>
+    `;
+  }
+}
 
 window.toggleViewerEditDock = function() {
   viewerEditorMode = "edit_dock";
-  viewerDockStep = 0;
-  viewerNewDock = null;
-  viewerNewStandoff = null;
-  const editorBar = document.getElementById("map-viewer-editor-bar");
-  const promptEl = document.getElementById("editor-bar-prompt");
-  if (editorBar) editorBar.style.display = "flex";
-  if (promptEl) promptEl.textContent = "Tap map to set Charging Dock position (⚡)";
+  viewerDockEditTarget = "dock";
+  viewerDockUndoStack = [];
+  viewerNewDock = viewerDockPose ? { ...viewerDockPose } : null;
+  viewerNewStandoff = viewerStandoffPose ? { ...viewerStandoffPose } : null;
+  updateViewerEditorBarUI();
+  renderViewerCanvas();
+};
+
+window.setDockEditTarget = function(target) {
+  viewerDockEditTarget = target;
+  updateViewerEditorBarUI();
+  renderViewerCanvas();
+};
+
+window.undoViewerDock = function() {
+  if (viewerDockUndoStack.length === 0) return;
+  const prev = viewerDockUndoStack.pop();
+  viewerNewDock = prev.dock;
+  viewerNewStandoff = prev.standoff;
+  viewerDockEditTarget = prev.target || "dock";
+  updateViewerEditorBarUI();
+  renderViewerCanvas();
+  showToast("Undid last dock change");
+};
+
+window.toggleViewerSaveLocation = function() {
+  viewerEditorMode = "save_location";
+  viewerDraftPose = null;
+  viewerIsAdjustingAngle = false;
+  viewerDraggingHeading = false;
+  updateViewerEditorBarUI();
   renderViewerCanvas();
 };
 
 window.promptViewerAddLocation = function() {
-  // Option: Save current robot location OR tap on map
-  if (viewerMapName === activeMapName && liveRobotPose) {
-    openTouchKeyboard("Station Name:", async (name) => {
-      if (!name || !name.trim()) return;
-      try {
-        await fetch(`${API_BASE}/api/v1/waypoints`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: name.trim(),
-            type: "waypoint",
-            x: liveRobotPose.x,
-            y: liveRobotPose.y,
-            theta: liveRobotPose.yaw,
-            map: viewerMapName
-          })
-        });
-        showToast(`Saved station "${name.trim()}"!`);
-        openMapViewer(viewerMapName);
-        loadWaypoints();
-      } catch (e) {
-        showToast("Error saving station: " + e.message, true);
-      }
-    });
-  } else {
-    viewerEditorMode = "save_location";
-    const editorBar = document.getElementById("map-viewer-editor-bar");
-    const promptEl = document.getElementById("editor-bar-prompt");
-    if (editorBar) editorBar.style.display = "flex";
-    if (promptEl) promptEl.textContent = "Tap map where you want to place the Station (📍)";
-    renderViewerCanvas();
-  }
+  toggleViewerSaveLocation();
 };
 
-function promptSaveWaypointAtPoint(wx, wy) {
+window.confirmViewerSaveLocation = function() {
+  if (!viewerDraftPose) {
+    showToast("Long-press on map to place a location marker first", true);
+    return;
+  }
   openTouchKeyboard("Station Name:", async (name) => {
-    cancelViewerEditMode();
     if (!name || !name.trim()) return;
+    const wpName = name.trim();
     try {
+      showToast(`Saving station "${wpName}"...`);
       await fetch(`${API_BASE}/api/v1/waypoints`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim(),
+          name: wpName,
           type: "waypoint",
-          x: wx,
-          y: wy,
-          theta: 0,
+          x: viewerDraftPose.x,
+          y: viewerDraftPose.y,
+          theta: viewerDraftPose.theta,
           map: viewerMapName
         })
       });
-      showToast(`Station "${name.trim()}" created!`);
+      showToast(`Station "${wpName}" saved!`);
+      cancelViewerEditMode();
       openMapViewer(viewerMapName);
       loadWaypoints();
     } catch (e) {
-      showToast("Error saving station: " + e.message, true);
+      showToast(`Failed to save station: ${e.message}`, true);
     }
   });
-}
+};
 
 window.cancelViewerEditMode = function() {
   viewerEditorMode = null;
   viewerNewDock = null;
   viewerNewStandoff = null;
-  viewerNewLocationPt = null;
+  viewerDraftPose = null;
+  viewerDockUndoStack = [];
   const editorBar = document.getElementById("map-viewer-editor-bar");
   if (editorBar) editorBar.style.display = "none";
   renderViewerCanvas();
@@ -1862,6 +2103,129 @@ window.saveViewerEditMode = async function() {
 };
 
 /* --------------------------------------------------------------------------
+   Danger & Action Confirmation Modal Helper
+   -------------------------------------------------------------------------- */
+let dangerConfirmCallback = null;
+
+window.showDangerConfirmation = function({ title, message, confirmText = "Delete", isDanger = true, icon = "⚠️", onConfirm }) {
+  const modal = document.getElementById("modal-danger-confirm");
+  const tEl = document.getElementById("confirm-danger-title");
+  const mEl = document.getElementById("confirm-danger-message");
+  const bEl = document.getElementById("confirm-danger-badge");
+  const cBtn = document.getElementById("btn-danger-confirm");
+  if (!modal) return;
+
+  if (tEl) tEl.textContent = title;
+  if (mEl) mEl.textContent = message;
+  if (bEl) bEl.textContent = icon;
+  if (cBtn) {
+    cBtn.textContent = confirmText;
+    cBtn.className = isDanger ? "btn btn-danger btn-lg" : "btn btn-primary btn-lg";
+  }
+  dangerConfirmCallback = onConfirm;
+  modal.style.display = "flex";
+};
+
+window.closeDangerConfirmation = function() {
+  const modal = document.getElementById("modal-danger-confirm");
+  if (modal) modal.style.display = "none";
+  dangerConfirmCallback = null;
+};
+
+document.getElementById("btn-danger-confirm")?.addEventListener("click", () => {
+  const cb = dangerConfirmCallback;
+  closeDangerConfirmation();
+  if (typeof cb === "function") cb();
+});
+
+/* --------------------------------------------------------------------------
+   Touch-Friendly Slide-to-Delete Helper
+   -------------------------------------------------------------------------- */
+function makeSwipeable(containerEl) {
+  if (!containerEl) return;
+  const wrappers = containerEl.querySelectorAll(".swipeable-wrapper");
+
+  wrappers.forEach(wrapper => {
+    const content = wrapper.querySelector(".swipeable-content");
+    if (!content || content._swipeInited) return;
+    content._swipeInited = true;
+
+    let startX = 0;
+    let startY = 0;
+    let currentDx = 0;
+    let isSwiping = false;
+    let isScrolling = false;
+
+    const resetOtherSwipes = () => {
+      document.querySelectorAll(".swipeable-content.swiped-open").forEach(el => {
+        if (el !== content) {
+          el.style.transform = "translateX(0)";
+          el.classList.remove("swiped-open");
+        }
+      });
+    };
+
+    content.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("a")) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      currentDx = 0;
+      isSwiping = false;
+      isScrolling = false;
+      content.style.transition = "none";
+    });
+
+    content.addEventListener("pointermove", (e) => {
+      if (isScrolling) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (!isSwiping && !isScrolling) {
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) {
+          isScrolling = true;
+          return;
+        }
+        if (Math.abs(dx) > 8) {
+          isSwiping = true;
+          resetOtherSwipes();
+        }
+      }
+
+      if (isSwiping) {
+        const baseOffset = content.classList.contains("swiped-open") ? -90 : 0;
+        currentDx = Math.min(20, Math.max(-120, baseOffset + dx));
+        content.style.transform = `translateX(${currentDx}px)`;
+      }
+    });
+
+    const finishSwipe = () => {
+      if (!isSwiping) return;
+      isSwiping = false;
+      content.style.transition = "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)";
+      if (currentDx < -45) {
+        content.style.transform = "translateX(-90px)";
+        content.classList.add("swiped-open");
+      } else {
+        content.style.transform = "translateX(0)";
+        content.classList.remove("swiped-open");
+      }
+    };
+
+    content.addEventListener("pointerup", finishSwipe);
+    content.addEventListener("pointercancel", finishSwipe);
+  });
+}
+
+document.addEventListener("pointerdown", (e) => {
+  if (!e.target.closest(".swipeable-wrapper")) {
+    document.querySelectorAll(".swipeable-content.swiped-open").forEach(el => {
+      el.style.transform = "translateX(0)";
+      el.classList.remove("swiped-open");
+    });
+  }
+});
+
+/* --------------------------------------------------------------------------
    11. Maps Subpage & Scoping
    -------------------------------------------------------------------------- */
 async function loadMaps() {
@@ -1894,24 +2258,33 @@ async function loadMaps() {
     list.innerHTML = maps.map(m => {
       const mapName = typeof m === 'string' ? m : (m.name || m.id);
       const isCur = mapName === activeMapName;
-      const resText = typeof m === 'object' && m.resolution ? `${m.resolution}m/px` : "2D Grid Map";
-      const dateText = typeof m === 'object' && m.created_at ? new Date(m.created_at).toLocaleDateString() : "Ready";
       return `
-        <div class="map-item-card ${isCur ? 'is-active-map' : ''}">
-          <div class="map-item-info" onclick="openMapViewer('${escapeQuotes(mapName)}')">
-            <h3>${escapeHtml(mapName)}</h3>
-            <p>${resText} • ${dateText} • 🔍 Tap to preview & edit</p>
+        <div class="swipeable-wrapper">
+          <div class="swipe-delete-action">
+            <button type="button" class="btn-swipe-delete" onclick="deleteMapPrompt('${escapeQuotes(mapName)}')">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <span>Delete</span>
+            </button>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="btn btn-secondary btn-sm" onclick="openMapViewer('${escapeQuotes(mapName)}')">Preview & Edit</button>
-            ${isCur 
-              ? `<span class="badge badge-ok">ACTIVE</span>`
-              : `<button class="btn btn-primary btn-sm" onclick="activateMap('${escapeQuotes(mapName)}')">Switch Map</button>`
-            }
+          <div class="swipeable-content map-item-card ${isCur ? 'is-active-map' : ''}">
+            <div class="map-item-info" ${isCur ? `onclick="openMapViewer('${escapeQuotes(mapName)}')"` : ''}>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <h3>${escapeHtml(mapName)}</h3>
+                ${isCur ? `<span class="badge badge-ok">ACTIVE</span>` : ''}
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              ${isCur 
+                ? `<button class="btn btn-secondary btn-sm" onclick="openMapViewer('${escapeQuotes(mapName)}')">Preview & Edit</button>`
+                : `<button class="btn btn-primary btn-sm" onclick="activateMap('${escapeQuotes(mapName)}')">Load Map</button>`
+              }
+            </div>
           </div>
         </div>
       `;
     }).join("");
+
+    makeSwipeable(list);
   } catch (e) {
     list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load maps: ${escapeHtml(e.message)}</p>`;
   }
@@ -1933,13 +2306,59 @@ window.activateMap = async function(mapName) {
   }
 };
 
+window.deleteMapPrompt = function(mapName) {
+  if (mapName === activeMapName) {
+    showToast("Cannot delete the active map. Switch to another map first.", true);
+    return;
+  }
+  showDangerConfirmation({
+    title: "Delete Map",
+    message: `Are you sure you want to delete map "${mapName}"? All stations and dock settings on this map will be permanently removed.`,
+    confirmText: "Delete Map",
+    isDanger: true,
+    icon: "🗺️",
+    onConfirm: () => deleteMap(mapName)
+  });
+};
+
+window.deleteMap = async function(mapName) {
+  try {
+    showToast(`Deleting map "${mapName}"...`);
+    const res = await fetch(`${API_BASE}/api/v1/maps/${encodeURIComponent(mapName)}`, {
+      method: "DELETE"
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to delete map");
+    }
+    showToast(`Map "${mapName}" deleted.`);
+    loadMaps();
+  } catch (e) {
+    showToast(`Delete failed: ${e.message}`, true);
+  }
+};
+
 /* --------------------------------------------------------------------------
-   11. Locations Subpage (Current Map Scoped)
+   12. Locations Subpage (Current Map Scoped)
    -------------------------------------------------------------------------- */
 async function loadWaypoints() {
   const list = document.getElementById("locations-full-list");
   if (!list) return;
   list.innerHTML = `<div class="loading-spinner">Loading locations for "${activeMapName}"...</div>`;
+
+  // Enable / disable Save Position button based on active map
+  const addBtn = document.getElementById("btn-add-location");
+  if (addBtn) {
+    if (!activeMapName) {
+      addBtn.disabled = true;
+      addBtn.classList.add("disabled");
+      addBtn.title = "No active map loaded";
+    } else {
+      addBtn.disabled = false;
+      addBtn.classList.remove("disabled");
+      addBtn.title = `Save position on ${activeMapName}`;
+    }
+  }
 
   try {
     const res = await fetch(`${API_BASE}/api/v1/waypoints`);
@@ -1961,17 +2380,26 @@ async function loadWaypoints() {
     }
 
     list.innerHTML = waypoints.map(wp => `
-      <div class="location-item">
-        <div class="location-item-info">
-          <h3>${escapeHtml(wp.name)}</h3>
-          <p>X: ${(wp.x || 0).toFixed(2)}m • Y: ${(wp.y || 0).toFixed(2)}m</p>
+      <div class="swipeable-wrapper">
+        <div class="swipe-delete-action">
+          <button type="button" class="btn-swipe-delete" onclick="deleteWaypointPrompt('${escapeQuotes(wp.name)}')">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <span>Delete</span>
+          </button>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-primary btn-sm" onclick="navigateToLocation('${escapeQuotes(wp.name)}')">Dispatch Here</button>
-          <button class="btn btn-secondary btn-sm" onclick="deleteWaypoint('${escapeQuotes(wp.name)}')">✕</button>
+        <div class="swipeable-content location-item">
+          <div class="location-item-info" onclick="navigateToLocation('${escapeQuotes(wp.name)}')">
+            <h3>${escapeHtml(wp.name)}</h3>
+            <p>X: ${(wp.x || 0).toFixed(2)}m • Y: ${(wp.y || 0).toFixed(2)}m • θ: ${((wp.theta || 0) * 180 / Math.PI).toFixed(0)}°</p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary btn-sm" onclick="navigateToLocation('${escapeQuotes(wp.name)}')">Dispatch Here</button>
+          </div>
         </div>
       </div>
     `).join("");
+
+    makeSwipeable(list);
   } catch (e) {
     list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load locations: ${escapeHtml(e.message)}</p>`;
   }
@@ -1980,57 +2408,55 @@ async function loadWaypoints() {
 window.navigateToLocation = async function(wpName) {
   try {
     showToast(`Navigating to "${wpName}"...`);
+    onScreenNavInitiated = true;
+
+    // Show navigation progress screen immediately
+    const navScreen = document.getElementById("screen-nav-progress");
+    const destEl = document.getElementById("nav-screen-destination");
+    if (destEl) destEl.textContent = wpName;
+    if (navScreen) navScreen.style.display = "flex";
+
     await fetch(`${API_BASE}/api/v1/navigation/goto`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ waypoint: wpName })
     });
 
-    // Show navigation progress screen
-    const navScreen = document.getElementById("screen-nav-progress");
-    const destEl = document.getElementById("nav-screen-destination");
-    if (destEl) destEl.textContent = wpName;
-    if (navScreen) navScreen.style.display = "flex";
-
     triggerFaceExpression("thinking");
   } catch (e) {
+    onScreenNavInitiated = false;
+    const navScreen = document.getElementById("screen-nav-progress");
+    if (navScreen) navScreen.style.display = "none";
     showToast(`Navigation failed: ${e.message}`, true);
   }
 };
 
+window.deleteWaypointPrompt = function(wpName) {
+  showDangerConfirmation({
+    title: "Delete Station",
+    message: `Are you sure you want to delete station "${wpName}"?`,
+    confirmText: "Delete Station",
+    isDanger: true,
+    icon: "📍",
+    onConfirm: () => deleteWaypoint(wpName)
+  });
+};
+
 window.deleteWaypoint = async function(wpName) {
-  if (confirm(`Delete waypoint "${wpName}"?`)) {
-    try {
-      await fetch(`${API_BASE}/api/v1/waypoints/${encodeURIComponent(wpName)}`, { method: "DELETE" });
-      showToast(`Deleted "${wpName}".`);
-      loadWaypoints();
-    } catch (e) {
-      showToast(`Delete failed: ${e.message}`, true);
-    }
+  try {
+    await fetch(`${API_BASE}/api/v1/waypoints/${encodeURIComponent(wpName)}`, { method: "DELETE" });
+    showToast(`Deleted "${wpName}".`);
+    loadWaypoints();
+  } catch (e) {
+    showToast(`Delete failed: ${e.message}`, true);
   }
 };
 
-function promptSaveCurrentLocation() {
-  openTouchKeyboard("Enter Station Name:", async (wpName) => {
-    if (!wpName || !wpName.trim()) return;
-    try {
-      showToast(`Saving position "${wpName}"...`);
-      await fetch(`${API_BASE}/api/v1/waypoints`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: wpName.trim(), map: activeMapName })
-      });
-      showToast(`Saved location "${wpName}"!`);
-      loadWaypoints();
-    } catch (e) {
-      showToast(`Failed to save location: ${e.message}`, true);
-    }
-  });
-}
-
 /* --------------------------------------------------------------------------
-   12. Missions Subpage & Execution Screen
+   13. Missions Subpage & Execution Screen
    -------------------------------------------------------------------------- */
+let loadedMissionsCache = [];
+
 async function loadMissions() {
   const list = document.getElementById("missions-list");
   if (!list) return;
@@ -2040,6 +2466,7 @@ async function loadMissions() {
     const res = await fetch(`${API_BASE}/api/v1/missions`);
     const data = await res.json();
     const missions = data.missions || [];
+    loadedMissionsCache = missions;
 
     const hubCount = document.getElementById("hub-missions-count");
     if (hubCount) hubCount.textContent = `${missions.length} Routines`;
@@ -2049,31 +2476,86 @@ async function loadMissions() {
       return;
     }
 
-    list.innerHTML = missions.map(m => `
-      <div class="mission-item-card">
-        <div class="mission-item-info">
-          <h3>${escapeHtml(m.name)}</h3>
-          <p>${escapeHtml(m.description || "Visual node workflow routine")}</p>
+    list.innerHTML = missions.map(m => {
+      const mId = m.id || m.name;
+      const mName = m.name || m.id;
+      return `
+        <div class="swipeable-wrapper">
+          <div class="swipe-delete-action">
+            <button type="button" class="btn-swipe-delete" onclick="deleteMissionPrompt('${escapeQuotes(mId)}', '${escapeQuotes(mName)}')">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <span>Delete</span>
+            </button>
+          </div>
+          <div class="swipeable-content mission-item-card">
+            <div class="mission-item-info" onclick="promptStartMission('${escapeQuotes(mId)}', '${escapeQuotes(mName)}')">
+              <h3>${escapeHtml(mName)}</h3>
+              <p>${escapeHtml(m.description || "Visual node workflow routine")}</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-primary btn-sm" onclick="promptStartMission('${escapeQuotes(mId)}', '${escapeQuotes(mName)}')">Launch Routine</button>
+            </div>
+          </div>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-primary btn-sm" onclick="startMission('${escapeQuotes(m.id || m.name)}')">Launch Routine</button>
-        </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
+
+    makeSwipeable(list);
   } catch (e) {
     list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load missions: ${escapeHtml(e.message)}</p>`;
   }
 }
 
-window.startMission = async function(missionId) {
+window.promptStartMission = function(missionId, missionName) {
+  showDangerConfirmation({
+    title: "Activate Mission",
+    message: `Start autonomous execution for routine "${missionName}"? Ensure the surrounding workspace is clear.`,
+    confirmText: "Start Mission",
+    isDanger: false,
+    icon: "🚀",
+    onConfirm: () => startMission(missionId, missionName)
+  });
+};
+
+window.startMission = async function(missionId, missionName) {
   try {
-    showToast(`Starting mission...`);
+    showToast(`Starting mission "${missionName || missionId}"...`);
+    const missionScreen = document.getElementById("screen-mission-progress");
+    const titleEl = document.getElementById("mission-screen-title");
+    const nodeEl = document.getElementById("mission-screen-node");
+    if (titleEl) titleEl.textContent = missionName || missionId;
+    if (nodeEl) nodeEl.textContent = "Initializing routine...";
+    if (missionScreen) missionScreen.style.display = "flex";
+
     await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(missionId)}/start`, { method: "POST" });
     activeMissionId = missionId;
     closeSubpage();
     triggerFaceExpression("happy");
   } catch (e) {
+    const missionScreen = document.getElementById("screen-mission-progress");
+    if (missionScreen) missionScreen.style.display = "none";
     showToast(`Failed to start mission: ${e.message}`, true);
+  }
+};
+
+window.deleteMissionPrompt = function(missionId, missionName) {
+  showDangerConfirmation({
+    title: "Delete Mission",
+    message: `Are you sure you want to permanently delete routine "${missionName}"? This action cannot be undone.`,
+    confirmText: "Delete Mission",
+    isDanger: true,
+    icon: "🗑️",
+    onConfirm: () => deleteMission(missionId, missionName)
+  });
+};
+
+window.deleteMission = async function(missionId, missionName) {
+  try {
+    await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(missionId)}`, { method: "DELETE" });
+    showToast(`Routine "${missionName}" deleted.`);
+    loadMissions();
+  } catch (e) {
+    showToast(`Delete failed: ${e.message}`, true);
   }
 };
 
@@ -2093,7 +2575,6 @@ function updateMissionExecutionScreen(mStatus) {
   const activeNode = mStatus.active_node || mStatus.current_node || "In Progress";
   const progressPct = mStatus.progress_pct || 0;
 
-  // Show mission progress screen if not already visible
   if (missionScreen && missionScreen.style.display !== "flex") {
     missionScreen.style.display = "flex";
   }
@@ -2108,8 +2589,11 @@ function updateMissionExecutionScreen(mStatus) {
 }
 
 /* --------------------------------------------------------------------------
-   13. Schedules Subpage
+   14. Schedules Subpage & Editor Modal
    -------------------------------------------------------------------------- */
+let editingScheduleId = null;
+let scheduleSelectedDays = new Set([0, 1, 2, 3, 4]);
+
 async function loadSchedules() {
   const list = document.getElementById("schedules-list");
   if (!list) return;
@@ -2124,25 +2608,236 @@ async function loadSchedules() {
     if (hubCount) hubCount.textContent = `${schedules.length} Active`;
 
     if (schedules.length === 0) {
-      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No automated schedules configured for this robot.</p>`;
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No automated schedules configured. Tap "+ Add Schedule" to set automated dispatch.</p>`;
       return;
     }
 
-    list.innerHTML = schedules.map(s => `
-      <div class="schedule-item-card">
-        <div class="schedule-item-info">
-          <h3>${escapeHtml(s.name || s.mission_id || "Patrol Routine")}</h3>
-          <p>Cron: <code>${escapeHtml(s.cron || s.expression || "Daily")}</code> • Next: ${s.next_run || "Scheduled"}</p>
+    list.innerHTML = schedules.map(s => {
+      const timeStr = `${String(s.hour ?? 9).padStart(2, '0')}:${String(s.minute ?? 0).padStart(2, '0')}`;
+      const repeatLabel = s.repeat === 'weekly' ? 'Weekly' : (s.repeat ? s.repeat.toUpperCase() : 'DAILY');
+      const isEnabled = s.enabled !== false;
+      const sName = s.name || s.mission_id || "Patrol Routine";
+      const sJson = escapeQuotes(JSON.stringify(s));
+
+      return `
+        <div class="swipeable-wrapper">
+          <div class="swipe-delete-action">
+            <button type="button" class="btn-swipe-delete" onclick="deleteSchedulePrompt('${escapeQuotes(s.id)}', '${escapeQuotes(sName)}')">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <span>Delete</span>
+            </button>
+          </div>
+          <div class="swipeable-content schedule-item-card">
+            <div class="schedule-item-info" onclick='openScheduleEditor(JSON.parse("${sJson}"))'>
+              <h3>${escapeHtml(sName)}</h3>
+              <p>⏰ ${timeStr} • ${repeatLabel} • Mission: <code>${escapeHtml(s.mission_id || '--')}</code></p>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span class="badge ${isEnabled ? 'badge-ok' : 'badge-warning'}">${isEnabled ? "ACTIVE" : "PAUSED"}</span>
+              <button class="btn btn-secondary btn-sm" onclick='openScheduleEditor(JSON.parse("${sJson}"))'>Edit</button>
+            </div>
+          </div>
         </div>
-        <div>
-          <span class="badge badge-ok">${s.enabled !== false ? "ENABLED" : "PAUSED"}</span>
-        </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
+
+    makeSwipeable(list);
   } catch (e) {
     list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load schedules: ${escapeHtml(e.message)}</p>`;
   }
 }
+
+window.openScheduleEditor = async function(existing = null) {
+  editingScheduleId = existing ? existing.id : null;
+  const modal = document.getElementById("modal-schedule-editor");
+  const titleEl = document.getElementById("schedule-editor-title");
+  const nameInput = document.getElementById("sched-name");
+  const missionSel = document.getElementById("sched-mission");
+  const timeInput = document.getElementById("sched-time");
+  const repeatSel = document.getElementById("sched-repeat");
+  const enabledCb = document.getElementById("sched-enabled");
+  const dateInput = document.getElementById("sched-date");
+  if (!modal) return;
+
+  if (titleEl) titleEl.textContent = existing ? "Edit Schedule" : "New Schedule";
+
+  // Ensure missions are loaded
+  try {
+    if (!loadedMissionsCache || loadedMissionsCache.length === 0) {
+      const res = await fetch(`${API_BASE}/api/v1/missions`);
+      const data = await res.json();
+      loadedMissionsCache = data.missions || [];
+    }
+  } catch (e) {
+    console.warn("Failed loading missions for schedule:", e);
+  }
+
+  if (missionSel) {
+    missionSel.innerHTML = `
+      <option value="">Select a mission...</option>
+      ${loadedMissionsCache.map(m => `
+        <option value="${escapeQuotes(m.id || m.name)}" ${existing && (existing.mission_id === (m.id || m.name)) ? 'selected' : ''}>
+          ${escapeHtml(m.name || m.id)}
+        </option>
+      `).join("")}
+    `;
+  }
+
+  if (existing) {
+    if (nameInput) nameInput.value = existing.name || "";
+    const h = String(existing.hour !== undefined ? existing.hour : 9).padStart(2, '0');
+    const m = String(existing.minute !== undefined ? existing.minute : 0).padStart(2, '0');
+    if (timeInput) timeInput.value = `${h}:${m}`;
+    if (repeatSel) repeatSel.value = existing.repeat || "daily";
+    if (enabledCb) enabledCb.checked = existing.enabled !== false;
+    if (dateInput && existing.date) dateInput.value = existing.date;
+
+    scheduleSelectedDays = new Set(Array.isArray(existing.weekdays) ? existing.weekdays : [0, 1, 2, 3, 4]);
+  } else {
+    if (nameInput) nameInput.value = "";
+    if (timeInput) timeInput.value = "09:00";
+    if (repeatSel) repeatSel.value = "daily";
+    if (enabledCb) enabledCb.checked = true;
+    if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+    scheduleSelectedDays = new Set([0, 1, 2, 3, 4]);
+  }
+
+  initWeekdayChips();
+  handleScheduleRepeatChange();
+  updateWeekdayChipsUI();
+  modal.style.display = "flex";
+};
+
+window.closeScheduleEditor = function() {
+  const modal = document.getElementById("modal-schedule-editor");
+  if (modal) modal.style.display = "none";
+  editingScheduleId = null;
+};
+
+window.handleScheduleRepeatChange = function() {
+  const repeatSel = document.getElementById("sched-repeat");
+  const weekdaysGroup = document.getElementById("sched-weekdays-group");
+  const dateGroup = document.getElementById("sched-date-group");
+  if (!repeatSel) return;
+  const val = repeatSel.value;
+  if (weekdaysGroup) weekdaysGroup.style.display = (val === "weekly") ? "block" : "none";
+  if (dateGroup) dateGroup.style.display = (val === "once") ? "block" : "none";
+};
+
+function updateWeekdayChipsUI() {
+  const container = document.getElementById("sched-weekday-chips");
+  if (!container) return;
+  container.querySelectorAll(".weekday-chip").forEach(chip => {
+    const day = parseInt(chip.getAttribute("data-day"), 10);
+    if (scheduleSelectedDays.has(day)) {
+      chip.classList.add("active");
+    } else {
+      chip.classList.remove("active");
+    }
+  });
+}
+
+function initWeekdayChips() {
+  const container = document.getElementById("sched-weekday-chips");
+  if (!container || container._inited) return;
+  container._inited = true;
+  container.addEventListener("click", (e) => {
+    const chip = e.target.closest(".weekday-chip");
+    if (!chip) return;
+    const day = parseInt(chip.getAttribute("data-day"), 10);
+    if (scheduleSelectedDays.has(day)) {
+      if (scheduleSelectedDays.size > 1) {
+        scheduleSelectedDays.delete(day);
+      } else {
+        showToast("At least one active day is required", true);
+      }
+    } else {
+      scheduleSelectedDays.add(day);
+    }
+    updateWeekdayChipsUI();
+  });
+}
+
+window.saveScheduleForm = async function(e) {
+  if (e) e.preventDefault();
+  const nameInput = document.getElementById("sched-name");
+  const missionSel = document.getElementById("sched-mission");
+  const timeInput = document.getElementById("sched-time");
+  const repeatSel = document.getElementById("sched-repeat");
+  const enabledCb = document.getElementById("sched-enabled");
+  const dateInput = document.getElementById("sched-date");
+
+  const name = nameInput ? nameInput.value.trim() : "";
+  const missionId = missionSel ? missionSel.value : "";
+  const timeVal = timeInput ? timeInput.value : "09:00";
+  const repeat = repeatSel ? repeatSel.value : "daily";
+  const enabled = enabledCb ? enabledCb.checked : true;
+  const date = dateInput ? dateInput.value : null;
+
+  if (!name) {
+    showToast("Please enter a schedule name.", true);
+    return;
+  }
+  if (!missionId) {
+    showToast("Please select a routine/mission.", true);
+    return;
+  }
+
+  const [hStr, mStr] = timeVal.split(":");
+  const hour = parseInt(hStr, 10) || 0;
+  const minute = parseInt(mStr, 10) || 0;
+
+  const payload = {
+    id: editingScheduleId || `sched_${Date.now()}`,
+    name,
+    mission_id: missionId,
+    hour,
+    minute,
+    repeat,
+    enabled,
+    weekdays: repeat === 'weekly' ? Array.from(scheduleSelectedDays).sort() : [],
+    date: repeat === 'once' ? date : null
+  };
+
+  try {
+    showToast("Saving schedule...");
+    const res = await fetch(`${API_BASE}/api/v1/schedules`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to save schedule");
+    }
+    showToast("Schedule saved successfully!");
+    closeScheduleEditor();
+    loadSchedules();
+  } catch (err) {
+    showToast(`Error: ${err.message}`, true);
+  }
+};
+
+window.deleteSchedulePrompt = function(schedId, schedName) {
+  showDangerConfirmation({
+    title: "Delete Schedule",
+    message: `Are you sure you want to delete automated schedule "${schedName}"?`,
+    confirmText: "Delete Schedule",
+    isDanger: true,
+    icon: "⏰",
+    onConfirm: () => deleteSchedule(schedId, schedName)
+  });
+};
+
+window.deleteSchedule = async function(schedId, schedName) {
+  try {
+    await fetch(`${API_BASE}/api/v1/schedules/${encodeURIComponent(schedId)}`, { method: "DELETE" });
+    showToast(`Schedule "${schedName}" deleted.`);
+    loadSchedules();
+  } catch (e) {
+    showToast(`Delete failed: ${e.message}`, true);
+  }
+};
 
 /* --------------------------------------------------------------------------
    14. Power & Health Subpage

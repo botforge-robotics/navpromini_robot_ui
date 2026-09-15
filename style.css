@@ -3039,3 +3039,189 @@ select.kiosk-select option,
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.2); opacity: 0.7; }
 }
+
+/* --------------------------------------------------------------------------
+   Touch-Friendly Slide-to-Delete (Swipeable Cards)
+   -------------------------------------------------------------------------- */
+.swipeable-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+  background-color: #EF4444;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.swipe-delete-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 90px;
+  background: #EF4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.btn-swipe-delete {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: #FFFFFF;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.btn-swipe-delete:active {
+  background: #DC2626;
+}
+
+.swipeable-content {
+  position: relative;
+  z-index: 2;
+  background: #FFFFFF;
+  margin-bottom: 0 !important;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.swipeable-content.swiped-open {
+  transform: translateX(-90px);
+}
+
+/* --------------------------------------------------------------------------
+   Disabled Buttons
+   -------------------------------------------------------------------------- */
+.btn:disabled, .btn[disabled], .btn.disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  box-shadow: none !important;
+  filter: grayscale(0.5);
+}
+
+/* --------------------------------------------------------------------------
+   Danger & Action Confirmation Modal
+   -------------------------------------------------------------------------- */
+.danger-confirm-modal-card {
+  max-width: 480px;
+  text-align: center;
+  padding: 32px 28px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border-strong);
+  box-shadow: var(--shadow-modal);
+}
+
+.confirm-icon-badge {
+  font-size: 44px;
+  line-height: 1;
+  margin-bottom: 16px;
+  display: inline-block;
+  animation: pulseGlow 1.8s infinite;
+}
+
+.danger-confirm-modal-card h2 {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.danger-confirm-modal-card p {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 26px;
+}
+
+/* --------------------------------------------------------------------------
+   Schedule Editor Modal & Weekday Chips
+   -------------------------------------------------------------------------- */
+.schedule-editor-modal-card {
+  max-width: 540px;
+  width: 94%;
+  padding: 28px 24px;
+  border-radius: var(--radius-lg);
+}
+
+.weekday-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.weekday-chip {
+  flex: 1;
+  min-width: 44px;
+  height: 42px;
+  border: 1.5px solid var(--border);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weekday-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+.schedule-item-card {
+  cursor: pointer;
+}
+
+.schedule-item-card:hover {
+  border-color: var(--primary);
+}
+
+/* --------------------------------------------------------------------------
+   Map Editor Controls (Dock & Standoff & Heading Handle)
+   -------------------------------------------------------------------------- */
+.editor-segmented-group {
+  display: flex;
+  background: var(--surface-sunken);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  gap: 4px;
+}
+
+.editor-segmented-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.editor-segmented-btn.active {
+  background: #FFFFFF;
+  color: var(--primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+

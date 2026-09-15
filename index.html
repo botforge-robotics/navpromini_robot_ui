@@ -317,7 +317,13 @@
                   <p class="subtitle" id="schedules-map-subtitle">Configured patrol and dispatch timers</p>
                 </div>
               </div>
-              <button class="btn btn-outline btn-sm" onclick="loadSchedules()">Refresh</button>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary btn-sm" id="btn-add-schedule" onclick="openScheduleEditor()">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <span>Add Schedule</span>
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="loadSchedules()">Refresh</button>
+              </div>
             </div>
             <div class="schedules-list" id="schedules-list"></div>
           </div>
@@ -823,7 +829,96 @@
       </div>
     </div>
 
-    <!-- 11. Save Location Dialog Modal -->
+    <!-- 11. DANGER & ACTION CONFIRMATION MODAL -->
+    <div class="modal-dialog" id="modal-danger-confirm" style="display: none; z-index: 99999;">
+      <div class="modal-card danger-confirm-modal-card">
+        <div class="confirm-icon-badge" id="confirm-danger-badge">⚠️</div>
+        <h2 id="confirm-danger-title">Confirm Action</h2>
+        <p id="confirm-danger-message">Are you sure you want to perform this action?</p>
+        <div class="modal-actions-row">
+          <button type="button" class="btn btn-secondary btn-lg" id="btn-danger-cancel" onclick="closeDangerConfirmation()">Cancel</button>
+          <button type="button" class="btn btn-danger btn-lg" id="btn-danger-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 12. SCHEDULE ADD / EDIT MODAL -->
+    <div class="modal-dialog" id="modal-schedule-editor" style="display: none; z-index: 99998;">
+      <div class="modal-card schedule-editor-modal-card">
+        <div class="modal-header-simple">
+          <div>
+            <h2 id="schedule-editor-title">New Schedule</h2>
+            <p class="subtitle">Set automated robot routine dispatch</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closeScheduleEditor()">✕</button>
+        </div>
+        <form id="form-schedule-editor" onsubmit="saveScheduleForm(event)">
+          <div class="input-group">
+            <label for="sched-name">Schedule Name</label>
+            <input type="text" id="sched-name" placeholder="e.g. Morning Patrol" required>
+          </div>
+
+          <div class="input-group">
+            <label for="sched-mission">Routine / Mission</label>
+            <select id="sched-mission" required>
+              <option value="">Select a mission...</option>
+            </select>
+          </div>
+
+          <div class="input-group-row" style="display: flex; gap: 12px;">
+            <div class="input-group" style="flex: 1;">
+              <label for="sched-time">Trigger Time (24h)</label>
+              <input type="time" id="sched-time" value="09:00" required>
+            </div>
+            <div class="input-group" style="flex: 1;">
+              <label for="sched-repeat">Repeat Cycle</label>
+              <select id="sched-repeat" onchange="handleScheduleRepeatChange()">
+                <option value="daily">Daily</option>
+                <option value="weekdays">Weekdays (Mon - Fri)</option>
+                <option value="weekends">Weekends (Sat - Sun)</option>
+                <option value="weekly">Specific Days</option>
+                <option value="once">One-Time</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Specific Weekdays Selector (visible if repeat == weekly) -->
+          <div class="input-group" id="sched-weekdays-group" style="display: none;">
+            <label>Select Active Days</label>
+            <div class="weekday-chips" id="sched-weekday-chips">
+              <button type="button" class="weekday-chip" data-day="0">Mon</button>
+              <button type="button" class="weekday-chip" data-day="1">Tue</button>
+              <button type="button" class="weekday-chip" data-day="2">Wed</button>
+              <button type="button" class="weekday-chip" data-day="3">Thu</button>
+              <button type="button" class="weekday-chip" data-day="4">Fri</button>
+              <button type="button" class="weekday-chip" data-day="5">Sat</button>
+              <button type="button" class="weekday-chip" data-day="6">Sun</button>
+            </div>
+          </div>
+
+          <!-- One-time Date Picker (visible if repeat == once) -->
+          <div class="input-group" id="sched-date-group" style="display: none;">
+            <label for="sched-date">Execution Date</label>
+            <input type="date" id="sched-date">
+          </div>
+
+          <!-- Active / Enabled Switch -->
+          <div class="input-group-checkbox" style="margin: 12px 0;">
+            <label class="switch-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="sched-enabled" checked style="width: 20px; height: 20px;">
+              <span style="font-weight: 600; font-size: 15px; color: var(--text-primary);">Schedule Active & Enabled</span>
+            </label>
+          </div>
+
+          <div class="modal-actions-row">
+            <button type="button" class="btn btn-secondary btn-lg" onclick="closeScheduleEditor()">Cancel</button>
+            <button type="submit" class="btn btn-primary btn-lg" id="btn-save-schedule">Save Schedule</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 13. Save Location Dialog Modal -->
     <div class="modal-dialog" id="save-location-modal" style="display: none;">
       <div class="modal-card">
         <h3>Save Current Location</h3>
@@ -839,10 +934,10 @@
       </div>
     </div>
 
-    <!-- 11. Toast Notification -->
+    <!-- 14. Toast Notification -->
     <div class="kiosk-toast" id="kiosk-toast" style="display: none;"></div>
   </div>
 
-  <script src="app.js?v=205"></script>
+  <script src="app.js?v=206"></script>
 </body>
 </html>

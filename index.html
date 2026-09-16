@@ -264,20 +264,22 @@
         <section id="tab-locations" class="tab-page">
           <div class="subpage-container">
             <div class="subpage-header">
-              <div class="subpage-header-left">
-                <button class="btn btn-secondary btn-back-home" onclick="closeSubpage()">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              <div class="subpage-nav-bar">
+                <button class="btn btn-secondary btn-back-home btn-subpage-back" onclick="closeSubpage()">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   <span>Dashboard</span>
                 </button>
-                <div class="subpage-titles">
-                  <h2>Saved Locations</h2>
-                  <p class="subtitle" id="locations-map-subtitle">Showing stations on active map</p>
+                <div class="subpage-top-actions">
+                  <button class="btn btn-primary btn-sm" id="btn-add-location">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Save Position</span>
+                  </button>
                 </div>
               </div>
-              <button class="btn btn-primary" id="btn-add-location">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span>Save Position</span>
-              </button>
+              <div class="subpage-headline subpage-titles">
+                <h2>Saved Locations</h2>
+                <p class="subtitle" id="locations-map-subtitle">Showing stations on active map</p>
+              </div>
             </div>
             <div class="locations-full-list" id="locations-full-list"></div>
           </div>
@@ -287,17 +289,22 @@
         <section id="tab-missions" class="tab-page">
           <div class="subpage-container">
             <div class="subpage-header">
-              <div class="subpage-header-left">
-                <button class="btn btn-secondary btn-back-home" onclick="closeSubpage()">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              <div class="subpage-nav-bar">
+                <button class="btn btn-secondary btn-back-home btn-subpage-back" onclick="closeSubpage()">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   <span>Dashboard</span>
                 </button>
-                <div class="subpage-titles">
-                  <h2>Mission Library</h2>
-                  <p class="subtitle">Launch visual graph missions or waypoint patrol routines.</p>
+                <div class="subpage-top-actions">
+                  <button class="btn btn-outline btn-sm" onclick="loadMissions()">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>Refresh</span>
+                  </button>
                 </div>
               </div>
-              <button class="btn btn-outline btn-sm" onclick="loadMissions()">Refresh</button>
+              <div class="subpage-headline subpage-titles">
+                <h2>Mission Library</h2>
+                <p class="subtitle">Launch visual graph missions or waypoint patrol routines.</p>
+              </div>
             </div>
             <div class="missions-list" id="missions-list"></div>
           </div>
@@ -307,22 +314,25 @@
         <section id="tab-schedules" class="tab-page">
           <div class="subpage-container">
             <div class="subpage-header">
-              <div class="subpage-header-left">
-                <button class="btn btn-secondary btn-back-home" onclick="closeSubpage()">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              <div class="subpage-nav-bar">
+                <button class="btn btn-secondary btn-back-home btn-subpage-back" onclick="closeSubpage()">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   <span>Dashboard</span>
                 </button>
-                <div class="subpage-titles">
-                  <h2>Automated Schedules</h2>
-                  <p class="subtitle" id="schedules-map-subtitle">Configured patrol and dispatch timers</p>
+                <div class="subpage-top-actions">
+                  <button class="btn btn-primary btn-sm" id="btn-add-schedule" onclick="openScheduleEditor()">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Add Schedule</span>
+                  </button>
+                  <button class="btn btn-outline btn-sm" onclick="loadSchedules()">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>Refresh</span>
+                  </button>
                 </div>
               </div>
-              <div style="display: flex; gap: 8px;">
-                <button class="btn btn-primary btn-sm" id="btn-add-schedule" onclick="openScheduleEditor()">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  <span>Add Schedule</span>
-                </button>
-                <button class="btn btn-outline btn-sm" onclick="loadSchedules()">Refresh</button>
+              <div class="subpage-headline subpage-titles">
+                <h2>Automated Schedules</h2>
+                <p class="subtitle" id="schedules-map-subtitle">Configured patrol and dispatch timers</p>
               </div>
             </div>
             <div class="schedules-list" id="schedules-list"></div>
@@ -333,20 +343,22 @@
         <section id="tab-maps" class="tab-page">
           <div class="subpage-container">
             <div class="subpage-header">
-              <div class="subpage-header-left">
-                <button class="btn btn-secondary btn-back-home" onclick="closeSubpage()">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              <div class="subpage-nav-bar">
+                <button class="btn btn-secondary btn-back-home btn-subpage-back" onclick="closeSubpage()">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   <span>Dashboard</span>
                 </button>
-                <div class="subpage-titles">
-                  <h2>Map Management</h2>
-                  <p class="subtitle">Select active navigation map or build a new map using SLAM.</p>
+                <div class="subpage-top-actions">
+                  <button class="btn btn-primary btn-sm" id="btn-start-mapping">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Create Map</span>
+                  </button>
                 </div>
               </div>
-              <button class="btn btn-primary btn-sm" id="btn-start-mapping">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span>Create Map</span>
-              </button>
+              <div class="subpage-headline subpage-titles">
+                <h2>Map Management</h2>
+                <p class="subtitle">Select active navigation map or build a new map using SLAM.</p>
+              </div>
             </div>
             <div class="maps-list" id="maps-list"></div>
           </div>
@@ -356,17 +368,22 @@
         <section id="tab-power" class="tab-page">
           <div class="subpage-container">
             <div class="subpage-header">
-              <div class="subpage-header-left">
-                <button class="btn btn-secondary btn-back-home" onclick="closeSubpage()">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              <div class="subpage-nav-bar">
+                <button class="btn btn-secondary btn-back-home btn-subpage-back" onclick="closeSubpage()">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                   <span>Dashboard</span>
                 </button>
-                <div class="subpage-titles">
-                  <h2>Power & System Health</h2>
-                  <p class="subtitle">Battery management, charger status, and hardware devices.</p>
+                <div class="subpage-top-actions">
+                  <button class="btn btn-secondary btn-sm" id="btn-manual-dock-trigger">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                    <span>Initiate Docking</span>
+                  </button>
                 </div>
               </div>
-              <button class="btn btn-secondary btn-sm" id="btn-manual-dock-trigger">Initiate Docking</button>
+              <div class="subpage-headline subpage-titles">
+                <h2>Power & System Health</h2>
+                <p class="subtitle">Battery management, charger status, and hardware devices.</p>
+              </div>
             </div>
             <div class="power-cards-grid">
               <div class="card power-gauge-card">
@@ -938,6 +955,6 @@
     <div class="kiosk-toast" id="kiosk-toast" style="display: none;"></div>
   </div>
 
-  <script src="app.js?v=206"></script>
+  <script src="app.js?v=207"></script>
 </body>
 </html>

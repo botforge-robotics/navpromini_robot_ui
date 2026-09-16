@@ -805,50 +805,88 @@ body, html {
 
 .subpage-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 14px;
   width: 100%;
   max-width: 720px;
   margin-bottom: 24px;
   flex-shrink: 0;
 }
 
-.subpage-header-left {
+.subpage-nav-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
 }
 
-.btn-back-home {
-  padding: 10px 18px;
-  font-size: 15px;
-  font-weight: 800;
-  border-radius: var(--radius-md);
+.subpage-top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.subpage-top-actions .btn {
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 9999px;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.btn-back-home, .btn-subpage-back {
+  padding: 8px 18px;
+  height: 40px;
+  box-sizing: border-box;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 9999px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   background-color: #FFFFFF;
   border: 1.5px solid var(--border);
-  color: var(--text-primary);
+  color: var(--text-secondary);
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
 
-.btn-back-home:active {
-  transform: scale(0.95);
+.btn-back-home:hover, .btn-subpage-back:hover {
+  background-color: #F8FAFC;
+  color: var(--text-primary);
+  border-color: #CBD5E1;
+}
+
+.btn-back-home:active, .btn-subpage-back:active {
+  transform: scale(0.96);
   border-color: var(--primary);
+  color: var(--primary);
 }
 
-.subpage-titles h2 {
-  font-size: 24px;
+.subpage-headline, .subpage-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.subpage-headline h2, .subpage-titles h2 {
+  font-size: 26px;
   font-weight: 800;
   color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
 }
 
-.subpage-titles .subtitle {
-  font-size: 13px;
+.subpage-headline .subtitle, .subpage-titles .subtitle {
+  font-size: 14px;
   color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
 }
 
 .locations-full-list, .missions-list, .schedules-list, .maps-list {

@@ -774,17 +774,22 @@ window.startMappingFromSetup = function() {
 /* --------------------------------------------------------------------------
    9. SLAM Mapping Live Screen & Live Occupancy Grid Renderer
    -------------------------------------------------------------------------- */
-let liveMapRendererInterval = null;
-let liveMapPan = { x: 0, y: 0, scale: 1.0, userControlled: false };
+let liveMapFetchInterval = null;
+let liveMapFastPoller = null;
+let liveMapAnimId = null;
+let liveMapCamera = { worldX: 0.0, worldY: 0.0, scale: 1.0, userControlled: false };
 let liveMapMetadata = null; // { width, height, resolution, origin: { x, y } }
-let liveRobotPose = null;   // { x, y, yaw }
+let targetRobotPose = { x: 0, y: 0, yaw: 0 };
+let smoothRobotPose = { x: 0, y: 0, yaw: 0 };
 let liveDockPose = { x: 0, y: 0, theta: 0 };
 let liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
 let liveTrajectory = [];
+let liveLaserScan = null; // { angle_min, angle_max, angle_increment, ranges, range_min, range_max }
 let liveHasMovedAway = false;
 let activeTouchPointers = new Map();
 let initialPinchDistance = null;
 let initialPinchScale = 1.0;
+let latestMapImage = null;
 
 function initMappingViewportInteractivity() {
   const canvas = document.getElementById("mapping-live-canvas");
@@ -808,7 +813,7 @@ function initMappingViewportInteractivity() {
       isDragging = false;
       const pts = Array.from(activeTouchPointers.values());
       initialPinchDistance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      initialPinchScale = liveMapPan.scale;
+      initialPinchScale = liveMapCamera.scale;
     }
   });
 
@@ -820,16 +825,21 @@ function initMappingViewportInteractivity() {
       const pts = Array.from(activeTouchPointers.values());
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       const factor = dist / initialPinchDistance;
-      liveMapPan.scale = Math.max(0.2, Math.min(6.0, initialPinchScale * factor));
-      liveMapPan.userControlled = true;
+      liveMapCamera.scale = Math.max(0.2, Math.min(6.0, initialPinchScale * factor));
+      liveMapCamera.userControlled = true;
     } else if (isDragging && activeTouchPointers.size === 1) {
       const dx = e.clientX - lastPointerX;
       const dy = e.clientY - lastPointerY;
       lastPointerX = e.clientX;
       lastPointerY = e.clientY;
-      liveMapPan.x += dx;
-      liveMapPan.y += dy;
-      liveMapPan.userControlled = true;
+
+      const res = (liveMapMetadata && liveMapMetadata.resolution) ? liveMapMetadata.resolution : 0.05;
+      const pxPerMeter = (liveMapCamera.scale / res);
+      if (pxPerMeter > 0) {
+        liveMapCamera.worldX -= dx / pxPerMeter;
+        liveMapCamera.worldY += dy / pxPerMeter;
+        liveMapCamera.userControlled = true;
+      }
     }
   });
 
@@ -853,26 +863,28 @@ function initMappingViewportInteractivity() {
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-    liveMapPan.scale = Math.max(0.2, Math.min(6.0, liveMapPan.scale * zoomFactor));
-    liveMapPan.userControlled = true;
+    liveMapCamera.scale = Math.max(0.2, Math.min(6.0, liveMapCamera.scale * zoomFactor));
+    liveMapCamera.userControlled = true;
   }, { passive: false });
 
   // Floating button controls
   document.getElementById("btn-mapping-zoom-in")?.addEventListener("click", () => {
-    liveMapPan.scale = Math.min(liveMapPan.scale * 1.25, 6.0);
-    liveMapPan.userControlled = true;
+    liveMapCamera.scale = Math.min(liveMapCamera.scale * 1.25, 6.0);
+    liveMapCamera.userControlled = true;
   });
   document.getElementById("btn-mapping-zoom-out")?.addEventListener("click", () => {
-    liveMapPan.scale = Math.max(liveMapPan.scale / 1.25, 0.2);
-    liveMapPan.userControlled = true;
+    liveMapCamera.scale = Math.max(liveMapCamera.scale / 1.25, 0.2);
+    liveMapCamera.userControlled = true;
   });
   document.getElementById("btn-mapping-recenter")?.addEventListener("click", () => {
-    liveMapPan.userControlled = false;
+    liveMapCamera.worldX = smoothRobotPose.x;
+    liveMapCamera.worldY = smoothRobotPose.y;
+    liveMapCamera.userControlled = false;
   });
 }
 
 function startLiveMapRenderer() {
-  clearInterval(liveMapRendererInterval);
+  stopLiveMapRenderer();
   const canvas = document.getElementById("mapping-live-canvas");
   const loadingEl = document.getElementById("mapping-canvas-loading");
   if (loadingEl) loadingEl.style.display = "flex";
@@ -881,248 +893,343 @@ function startLiveMapRenderer() {
   initMappingViewportInteractivity();
 
   let firstFrameLoaded = false;
+  latestMapImage = null;
 
-  const renderFrame = async () => {
+  // 1. Map Image & Metadata fetcher (every 1200ms)
+  const fetchMapData = async () => {
     try {
-      // 1. Fetch map image
-      const imgRes = await fetch(`${API_BASE}/api/v1/maps/current/image?rotate=0&t=${Date.now()}`);
-      if (!imgRes.ok) return;
-      const blob = await imgRes.blob();
-      const img = new Image();
+      const [imgRes, infoRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/maps/current/image?rotate=0&t=${Date.now()}`),
+        fetch(`${API_BASE}/api/v1/maps/current/info`)
+      ]);
 
-      // 2. Concurrently fetch map metadata and robot state
-      try {
-        const [infoRes, stateRes] = await Promise.all([
-          fetch(`${API_BASE}/api/v1/maps/current/info`),
-          fetch(`${API_BASE}/api/v1/state`)
-        ]);
-        if (infoRes.ok) {
-          const info = await infoRes.json();
-          if (info.loaded) liveMapMetadata = info;
-        }
-        if (stateRes.ok) {
-          const s = await stateRes.json();
-          if (s.localization && s.localization.x !== undefined) {
-            liveRobotPose = {
-              x: s.localization.x,
-              y: s.localization.y,
-              yaw: s.localization.yaw || 0
-            };
+      if (infoRes.ok) {
+        const info = await infoRes.json();
+        if (info.loaded) liveMapMetadata = info;
+      }
 
-            // Track departure movement from dock for automatic standoff & orientation calculation
-            const distFromDock = Math.hypot(liveRobotPose.x - liveDockPose.x, liveRobotPose.y - liveDockPose.y);
-            if (!liveHasMovedAway && distFromDock >= 0.20) {
-              const depAngle = Math.atan2(liveRobotPose.y - liveDockPose.y, liveRobotPose.x - liveDockPose.x);
-              liveDockPose.theta = depAngle;
-              liveStandoffPose = {
-                x: liveDockPose.x + 0.70 * Math.cos(depAngle),
-                y: liveDockPose.y + 0.70 * Math.sin(depAngle),
-                theta: depAngle // Robot back faces dock, front faces towards room
-              };
-              liveHasMovedAway = true;
-            }
+      if (imgRes.ok) {
+        const blob = await imgRes.blob();
+        const img = new Image();
+        img.onload = () => {
+          latestMapImage = img;
+          if (loadingEl) loadingEl.style.display = "none";
 
-            // Record trajectory point
-            const lastPt = liveTrajectory[liveTrajectory.length - 1];
-            if (!lastPt || Math.hypot(liveRobotPose.x - lastPt.x, liveRobotPose.y - lastPt.y) >= 0.08) {
-              liveTrajectory.push({ x: liveRobotPose.x, y: liveRobotPose.y });
-            }
+          if (!firstFrameLoaded && liveMapMetadata) {
+            firstFrameLoaded = true;
+            const fitScale = Math.min(
+              (canvas.width * 0.75) / (img.width || 200),
+              (canvas.height * 0.65) / (img.height || 200)
+            );
+            liveMapCamera.scale = Math.max(0.6, Math.min(fitScale, 2.5));
+            liveMapCamera.worldX = targetRobotPose.x || 0.0;
+            liveMapCamera.worldY = targetRobotPose.y || 0.0;
           }
-        }
-      } catch (_) {}
-
-      img.onload = () => {
-        // Enforce full canvas resolution
-        canvas.width = window.innerWidth || 800;
-        canvas.height = window.innerHeight || 1280;
-        const ctx = canvas.getContext("2d");
-
-        // Background: deep slate radar
-        ctx.fillStyle = "#0B0F19";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Subgrid background lines
-        ctx.strokeStyle = "rgba(30, 41, 59, 0.4)";
-        ctx.lineWidth = 1;
-        const gridStep = 40;
-        for (let x = 0; x < canvas.width; x += gridStep) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, canvas.height);
-          ctx.stroke();
-        }
-        for (let y = 0; y < canvas.height; y += gridStep) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(canvas.width, y);
-          ctx.stroke();
-        }
-
-        // Auto-center viewport on initial frame or upon recenter request
-        if (!liveMapPan.userControlled || !firstFrameLoaded) {
-          const fitScale = Math.min((canvas.width * 0.85) / img.width, (canvas.height * 0.75) / img.height);
-          liveMapPan.scale = Math.max(0.6, fitScale);
-          liveMapPan.x = (canvas.width - img.width * liveMapPan.scale) / 2;
-          liveMapPan.y = (canvas.height - img.height * liveMapPan.scale) / 2;
-          firstFrameLoaded = true;
-        }
-
-        // World to canvas coordinate transform helper
-        const worldToCanvas = (wx, wy) => {
-          if (!liveMapMetadata) {
-            return {
-              x: liveMapPan.x + (img.width / 2) * liveMapPan.scale,
-              y: liveMapPan.y + (img.height / 2) * liveMapPan.scale
-            };
-          }
-          const u = (wx - liveMapMetadata.origin.x) / liveMapMetadata.resolution;
-          const v = liveMapMetadata.height - ((wy - liveMapMetadata.origin.y) / liveMapMetadata.resolution);
-          return {
-            x: liveMapPan.x + u * liveMapPan.scale,
-            y: liveMapPan.y + v * liveMapPan.scale
-          };
+          URL.revokeObjectURL(img.src);
         };
-
-        // Draw occupancy grid map
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, liveMapPan.x, liveMapPan.y, img.width * liveMapPan.scale, img.height * liveMapPan.scale);
-        ctx.restore();
-
-        // Draw Trajectory Trail
-        if (liveTrajectory.length > 1) {
-          ctx.save();
-          ctx.strokeStyle = "rgba(56, 189, 248, 0.6)";
-          ctx.lineWidth = 3;
-          ctx.setLineDash([6, 6]);
-          ctx.beginPath();
-          const p0 = worldToCanvas(liveTrajectory[0].x, liveTrajectory[0].y);
-          ctx.moveTo(p0.x, p0.y);
-          for (let i = 1; i < liveTrajectory.length; i++) {
-            const pi = worldToCanvas(liveTrajectory[i].x, liveTrajectory[i].y);
-            ctx.lineTo(pi.x, pi.y);
-          }
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        // Draw Dock Standoff Marker (🎯)
-        if (liveStandoffPose) {
-          const sp = worldToCanvas(liveStandoffPose.x, liveStandoffPose.y);
-          ctx.save();
-          ctx.translate(sp.x, sp.y);
-          ctx.fillStyle = "rgba(6, 182, 212, 0.85)";
-          ctx.beginPath();
-          ctx.arc(0, 0, 10, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.strokeStyle = "#FFFFFF";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          ctx.font = "bold 11px system-ui, sans-serif";
-          ctx.fillStyle = "#A5F3FC";
-          ctx.textAlign = "center";
-          ctx.fillText("STANDOFF (0.7m)", 0, 22);
-          ctx.restore();
-        }
-
-        // Draw Charging Dock Marker (⚡)
-        if (liveDockPose) {
-          const dp = worldToCanvas(liveDockPose.x, liveDockPose.y);
-          ctx.save();
-          ctx.translate(dp.x, dp.y);
-          // Orientation arrow pointing towards standoff
-          ctx.rotate(-liveDockPose.theta);
-          ctx.fillStyle = "#10B981";
-          ctx.beginPath();
-          ctx.arc(0, 0, 14, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.strokeStyle = "#FFFFFF";
-          ctx.lineWidth = 2.5;
-          ctx.stroke();
-          // Arrow indicator
-          ctx.fillStyle = "#FFFFFF";
-          ctx.beginPath();
-          ctx.moveTo(18, 0);
-          ctx.lineTo(8, -6);
-          ctx.lineTo(8, 6);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-
-          // Dock label
-          ctx.save();
-          ctx.font = "bold 12px system-ui, sans-serif";
-          ctx.fillStyle = "#6EE7B7";
-          ctx.textAlign = "center";
-          ctx.fillText("DOCK (ORIGIN)", dp.x, dp.y - 20);
-          ctx.restore();
-        }
-
-        // Draw Live Robot Marker (🤖)
-        if (liveRobotPose) {
-          const rp = worldToCanvas(liveRobotPose.x, liveRobotPose.y);
-          ctx.save();
-          ctx.translate(rp.x, rp.y);
-
-          // Glowing pulse ring around robot
-          const pulse = (Date.now() % 1500) / 1500;
-          ctx.strokeStyle = `rgba(249, 115, 22, ${1.0 - pulse})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(0, 0, 18 + pulse * 14, 0, 2 * Math.PI);
-          ctx.stroke();
-
-          // Heading orientation
-          ctx.rotate(-liveRobotPose.yaw);
-
-          // Robot chassis
-          ctx.fillStyle = "#F97316";
-          ctx.beginPath();
-          ctx.arc(0, 0, 16, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.strokeStyle = "#FFFFFF";
-          ctx.lineWidth = 3;
-          ctx.stroke();
-
-          // Dark core
-          ctx.fillStyle = "#1E293B";
-          ctx.beginPath();
-          ctx.arc(0, 0, 8, 0, 2 * Math.PI);
-          ctx.fill();
-
-          // Direction arrow pointing forward
-          ctx.fillStyle = "#FFFFFF";
-          ctx.beginPath();
-          ctx.moveTo(22, 0);
-          ctx.lineTo(12, -7);
-          ctx.lineTo(12, 7);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-
-          // Label
-          ctx.save();
-          ctx.font = "bold 13px system-ui, sans-serif";
-          ctx.fillStyle = "#FDBA74";
-          ctx.textAlign = "center";
-          ctx.fillText("ROBOT", rp.x, rp.y + 30);
-          ctx.restore();
-        }
-
-        if (loadingEl) loadingEl.style.display = "none";
-        URL.revokeObjectURL(img.src);
-      };
-      img.src = URL.createObjectURL(blob);
+        img.src = URL.createObjectURL(blob);
+      }
     } catch (_) {}
   };
 
-  renderFrame();
-  liveMapRendererInterval = setInterval(renderFrame, 800);
+  // 2. High-frequency Robot Pose & Laser Scan poller (every 150ms)
+  const fetchRobotTelemetry = async () => {
+    try {
+      const [stateRes, scanRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/api/v1/state`),
+        fetch(`${API_BASE}/api/v1/state/scan`)
+      ]);
+
+      if (stateRes.status === "fulfilled" && stateRes.value.ok) {
+        const s = await stateRes.value.json();
+        if (s.localization && s.localization.x !== undefined) {
+          targetRobotPose = {
+            x: s.localization.x,
+            y: s.localization.y,
+            yaw: s.localization.yaw || 0
+          };
+
+          if (!firstFrameLoaded) {
+            smoothRobotPose.x = targetRobotPose.x;
+            smoothRobotPose.y = targetRobotPose.y;
+            smoothRobotPose.yaw = targetRobotPose.yaw;
+          }
+
+          // Track departure movement from dock for automatic standoff & orientation calculation
+          const distFromDock = Math.hypot(targetRobotPose.x - liveDockPose.x, targetRobotPose.y - liveDockPose.y);
+          if (!liveHasMovedAway && distFromDock >= 0.20) {
+            const depAngle = Math.atan2(targetRobotPose.y - liveDockPose.y, targetRobotPose.x - liveDockPose.x);
+            liveDockPose.theta = depAngle;
+            liveStandoffPose = {
+              x: liveDockPose.x + 0.70 * Math.cos(depAngle),
+              y: liveDockPose.y + 0.70 * Math.sin(depAngle),
+              theta: depAngle
+            };
+            liveHasMovedAway = true;
+          }
+
+          // Record trajectory point
+          const lastPt = liveTrajectory[liveTrajectory.length - 1];
+          if (!lastPt || Math.hypot(targetRobotPose.x - lastPt.x, targetRobotPose.y - lastPt.y) >= 0.06) {
+            liveTrajectory.push({ x: targetRobotPose.x, y: targetRobotPose.y });
+          }
+        }
+      }
+
+      if (scanRes.status === "fulfilled" && scanRes.value.ok) {
+        const scanData = await scanRes.value.json();
+        if (scanData && scanData.ranges) {
+          liveLaserScan = scanData;
+        }
+      }
+    } catch (_) {}
+  };
+
+  fetchMapData();
+  fetchRobotTelemetry();
+  liveMapFetchInterval = setInterval(fetchMapData, 1200);
+  liveMapFastPoller = setInterval(fetchRobotTelemetry, 150);
+
+  // 3. Silky-smooth 60 FPS Canvas Render Loop
+  const renderFrameLoop = () => {
+    liveMapAnimId = requestAnimationFrame(renderFrameLoop);
+
+    // Adjust canvas resolution to display size
+    const dWidth = window.innerWidth || 800;
+    const dHeight = window.innerHeight || 1280;
+    if (canvas.width !== dWidth || canvas.height !== dHeight) {
+      canvas.width = dWidth;
+      canvas.height = dHeight;
+    }
+
+    const ctx = canvas.getContext("2d");
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+
+    // Smoothly lerp robot pose towards target pose
+    smoothRobotPose.x += (targetRobotPose.x - smoothRobotPose.x) * 0.22;
+    smoothRobotPose.y += (targetRobotPose.y - smoothRobotPose.y) * 0.22;
+    let dyaw = targetRobotPose.yaw - smoothRobotPose.yaw;
+    while (dyaw < -Math.PI) dyaw += 2 * Math.PI;
+    while (dyaw > Math.PI) dyaw -= 2 * Math.PI;
+    smoothRobotPose.yaw += dyaw * 0.22;
+
+    // If auto-tracking enabled, smoothly follow robot
+    if (!liveMapCamera.userControlled && firstFrameLoaded) {
+      liveMapCamera.worldX += (smoothRobotPose.x - liveMapCamera.worldX) * 0.12;
+      liveMapCamera.worldY += (smoothRobotPose.y - liveMapCamera.worldY) * 0.12;
+    }
+
+    // World to Canvas transform
+    const res = (liveMapMetadata && liveMapMetadata.resolution) ? liveMapMetadata.resolution : 0.05;
+    const pxPerMeter = liveMapCamera.scale / res;
+
+    const worldToCanvas = (wx, wy) => {
+      return {
+        x: cx + (wx - liveMapCamera.worldX) * pxPerMeter,
+        y: cy - (wy - liveMapCamera.worldY) * pxPerMeter
+      };
+    };
+
+    // Background: deep radar slate
+    ctx.fillStyle = "#0B0F19";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Subgrid lines (anchored to world 1m grid)
+    ctx.strokeStyle = "rgba(30, 41, 59, 0.4)";
+    ctx.lineWidth = 1;
+    const meterPx = pxPerMeter; // 1 meter in screen pixels
+    if (meterPx >= 15) {
+      const startX = ((cx - liveMapCamera.worldX * meterPx) % meterPx + meterPx) % meterPx;
+      const startY = ((cy + liveMapCamera.worldY * meterPx) % meterPx + meterPx) % meterPx;
+      for (let x = startX; x < canvas.width; x += meterPx) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = startY; y < canvas.height; y += meterPx) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+    }
+
+    // Draw Occupancy Grid Map Image (Anchored in world space: zero jumps!)
+    if (latestMapImage && liveMapMetadata) {
+      const originX = liveMapMetadata.origin.x;
+      const originY = liveMapMetadata.origin.y;
+      const mapW = liveMapMetadata.width * res;
+      const mapH = liveMapMetadata.height * res;
+
+      // Top-left of map in world: (originX, originY + mapH)
+      const pTL = worldToCanvas(originX, originY + mapH);
+      const drawW = mapW * pxPerMeter;
+      const drawH = mapH * pxPerMeter;
+
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(latestMapImage, pTL.x, pTL.y, drawW, drawH);
+      ctx.restore();
+    }
+
+    // Draw Trajectory Trail
+    if (liveTrajectory.length > 1) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.65)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      const p0 = worldToCanvas(liveTrajectory[0].x, liveTrajectory[0].y);
+      ctx.moveTo(p0.x, p0.y);
+      for (let i = 1; i < liveTrajectory.length; i++) {
+        const pi = worldToCanvas(liveTrajectory[i].x, liveTrajectory[i].y);
+        ctx.lineTo(pi.x, pi.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Draw Live Lidar Laser Scan Markings
+    if (liveLaserScan && liveLaserScan.ranges) {
+      ctx.save();
+      ctx.fillStyle = "rgba(239, 68, 68, 0.85)"; // vibrant ruby lidar points
+      const angleMin = liveLaserScan.angle_min;
+      const angleInc = liveLaserScan.angle_increment;
+      const rMin = liveLaserScan.range_min || 0.05;
+      const rMax = liveLaserScan.range_max || 12.0;
+      const ranges = liveLaserScan.ranges;
+      const len = ranges.length;
+
+      // Sample every 2nd beam for crisp performance
+      for (let i = 0; i < len; i += 2) {
+        const r = ranges[i];
+        if (r === null || r < rMin || r > rMax) continue;
+        const beamAngle = smoothRobotPose.yaw + angleMin + i * angleInc;
+        const hitWx = smoothRobotPose.x + r * Math.cos(beamAngle);
+        const hitWy = smoothRobotPose.y + r * Math.sin(beamAngle);
+        const hp = worldToCanvas(hitWx, hitWy);
+
+        ctx.beginPath();
+        ctx.arc(hp.x, hp.y, 2.5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Draw Standoff Marker
+    if (liveStandoffPose) {
+      const sp = worldToCanvas(liveStandoffPose.x, liveStandoffPose.y);
+      ctx.save();
+      ctx.translate(sp.x, sp.y);
+      ctx.fillStyle = "rgba(6, 182, 212, 0.85)";
+      ctx.beginPath();
+      ctx.arc(0, 0, 10, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = "bold 11px system-ui, sans-serif";
+      ctx.fillStyle = "#A5F3FC";
+      ctx.textAlign = "center";
+      ctx.fillText("STANDOFF (0.7m)", 0, 22);
+      ctx.restore();
+    }
+
+    // Draw Charging Dock Marker
+    if (liveDockPose) {
+      const dp = worldToCanvas(liveDockPose.x, liveDockPose.y);
+      ctx.save();
+      ctx.translate(dp.x, dp.y);
+      ctx.rotate(-liveDockPose.theta);
+      ctx.fillStyle = "#10B981";
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = "#FFFFFF";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.moveTo(18, 0);
+      ctx.lineTo(8, -6);
+      ctx.lineTo(8, 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.font = "bold 12px system-ui, sans-serif";
+      ctx.fillStyle = "#6EE7B7";
+      ctx.textAlign = "center";
+      ctx.fillText("DOCK (ORIGIN)", dp.x, dp.y - 20);
+      ctx.restore();
+    }
+
+    // Draw Smooth Live Robot Marker
+    const rp = worldToCanvas(smoothRobotPose.x, smoothRobotPose.y);
+    ctx.save();
+    ctx.translate(rp.x, rp.y);
+
+    // Glowing pulse ring around robot
+    const pulse = (Date.now() % 1500) / 1500;
+    ctx.strokeStyle = `rgba(249, 115, 22, ${1.0 - pulse})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18 + pulse * 14, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Heading orientation
+    ctx.rotate(-smoothRobotPose.yaw);
+
+    // Chassis
+    ctx.fillStyle = "#F97316";
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Dark core
+    ctx.fillStyle = "#1E293B";
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Direction arrow pointing forward
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.moveTo(22, 0);
+    ctx.lineTo(12, -7);
+    ctx.lineTo(12, 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Label
+    ctx.save();
+    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.fillStyle = "#FDBA74";
+    ctx.textAlign = "center";
+    ctx.fillText("ROBOT", rp.x, rp.y + 30);
+    ctx.restore();
+  };
+
+  renderFrameLoop();
 }
 
 function stopLiveMapRenderer() {
-  clearInterval(liveMapRendererInterval);
-  liveMapRendererInterval = null;
+  if (liveMapAnimId) {
+    cancelAnimationFrame(liveMapAnimId);
+    liveMapAnimId = null;
+  }
+  clearInterval(liveMapFetchInterval);
+  liveMapFetchInterval = null;
+  clearInterval(liveMapFastPoller);
+  liveMapFastPoller = null;
+  latestMapImage = null;
   const loadingEl = document.getElementById("mapping-canvas-loading");
   if (loadingEl) loadingEl.style.display = "flex";
 }
@@ -1134,17 +1241,20 @@ function initMappingControls() {
     if (stoppingModal) stoppingModal.style.display = "flex";
 
     try {
-      const target = (activeMapName && activeMapName !== "default")
-        ? { mode: "navigation", map: activeMapName }
-        : { mode: "idle" };
+      // 1. Immediately send stop to motion to ensure wheels halted
+      try {
+        await fetch(`${API_BASE}/api/v1/motion/stop`, { method: "POST" });
+      } catch (_) {}
 
+      // 2. Request switch to idle
       await fetch(`${API_BASE}/api/v1/mode`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(target)
+        body: JSON.stringify({ mode: "idle" })
       });
 
-      for (let i = 0; i < 14; i++) {
+      // Poll until mapping is confirmed stopped (up to 6s)
+      for (let i = 0; i < 12; i++) {
         await new Promise(r => setTimeout(r, 500));
         try {
           const sRes = await fetch(`${API_BASE}/api/v1/mode`);

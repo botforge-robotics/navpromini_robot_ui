@@ -1645,6 +1645,46 @@ function requestViewerRender() {
   }
 }
 
+function placeDraftLocation(sx, sy) {
+  const canvas = document.getElementById("map-viewer-canvas");
+  if (!canvas) return;
+
+  const px = (sx - viewerPan.x) / viewerPan.scale;
+  const py = (sy - viewerPan.y) / viewerPan.scale;
+
+  let wx = 0, wy = 0;
+  if (viewerMetadata && viewerMetadata.resolution > 0) {
+    wx = viewerMetadata.origin.x + px * viewerMetadata.resolution;
+    wy = viewerMetadata.origin.y + (viewerMetadata.height - py) * viewerMetadata.resolution;
+  } else {
+    wx = px * 0.05;
+    wy = py * 0.05;
+  }
+
+  const prevTheta = viewerDraftPose ? viewerDraftPose.theta : 0;
+  viewerDraftPose = { x: wx, y: wy, theta: prevTheta };
+  viewerDraggingHeading = false;
+
+  updateViewerEditorBarUI();
+  requestViewerRender();
+}
+
+window.snapDraftToRobot = function() {
+  if (!liveRobotPose) {
+    showToast("Robot live position not available yet", true);
+    return;
+  }
+  viewerDraftPose = {
+    x: liveRobotPose.x,
+    y: liveRobotPose.y,
+    theta: liveRobotPose.yaw || 0
+  };
+  viewerDraggingHeading = false;
+  updateViewerEditorBarUI();
+  requestViewerRender();
+  showToast("Marker snapped to robot pose!");
+};
+
 function initMapViewerInteractivity() {
   const canvas = document.getElementById("map-viewer-canvas");
   if (!canvas || canvas._viewerInteractivity) return;
@@ -1670,62 +1710,52 @@ function initMapViewerInteractivity() {
 
   const getCanvasPos = (touchOrMouse) => {
     const rect = canvas.getBoundingClientRect();
-    return { sx: touchOrMouse.clientX - rect.left, sy: touchOrMouse.clientY - rect.top };
+    const scaleX = canvas.width / (rect.width || 1);
+    const scaleY = canvas.height / (rect.height || 1);
+    return {
+      sx: (touchOrMouse.clientX - rect.left) * scaleX,
+      sy: (touchOrMouse.clientY - rect.top) * scaleY
+    };
   };
 
-  // Touch Events (1-finger pan, 2-finger pinch, zero lag)
+  // Touch Events
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     if (e.touches.length === 1) {
       const t = e.touches[0];
-      isTouchDragging = true;
+      const { sx, sy } = getCanvasPos(t);
+      touchStartPos = { x: t.clientX, y: t.clientY, time: Date.now() };
       lastTouchX = t.clientX;
       lastTouchY = t.clientY;
-      touchStartPos = { x: t.clientX, y: t.clientY, time: Date.now() };
 
-      const { sx, sy } = getCanvasPos(t);
-
-      // Check if user tapped heading handle of draft location
+      // In save_location mode: check if touch is near the rotation handle (44px from marker)
       if (viewerEditorMode === "save_location" && viewerDraftPose) {
-        const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
-        const hx = dp.x + 45 * Math.cos(-viewerDraftPose.theta);
-        const hy = dp.y + 45 * Math.sin(-viewerDraftPose.theta);
-        if (Math.hypot(sx - hx, sy - hy) < 36) {
+        const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+        const handleDist = 44;
+        const hx = center.x + handleDist * Math.cos(-viewerDraftPose.theta);
+        const hy = center.y + handleDist * Math.sin(-viewerDraftPose.theta);
+        if (Math.hypot(sx - hx, sy - hy) < 38) {
           viewerDraggingHeading = true;
+          isTouchDragging = false;
           return;
         }
       }
 
-      // Long press timer for placing marker in save_location mode
-      if (viewerEditorMode === "save_location") {
-        if (viewerLongPressTimer) clearTimeout(viewerLongPressTimer);
-        viewerLongPressTimer = setTimeout(() => {
-          const w = toWorld(sx, sy);
-          viewerDraftPose = { x: w.x, y: w.y, theta: 0 };
-          viewerIsAdjustingAngle = true;
-          if (navigator.vibrate) navigator.vibrate(50);
-          updateViewerEditorBarUI();
-          requestViewerRender();
-          showToast("Marker placed! Drag to adjust orientation.");
-        }, 350);
-      }
+      isTouchDragging = true;
     } else if (e.touches.length === 2) {
-      if (viewerLongPressTimer) {
-        clearTimeout(viewerLongPressTimer);
-        viewerLongPressTimer = null;
-      }
       isTouchDragging = false;
       viewerDraggingHeading = false;
-      viewerIsAdjustingAngle = false;
 
       const t0 = e.touches[0];
       const t1 = e.touches[1];
       pinchDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
       pinchScale = viewerPan.scale;
       const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / (rect.width || 1);
+      const scaleY = canvas.height / (rect.height || 1);
       pinchMid = {
-        x: (t0.clientX + t1.clientX) / 2 - rect.left,
-        y: (t0.clientY + t1.clientY) / 2 - rect.top
+        x: ((t0.clientX + t1.clientX) / 2 - rect.left) * scaleX,
+        y: ((t0.clientY + t1.clientY) / 2 - rect.top) * scaleY
       };
       pinchPan = { x: viewerPan.x, y: viewerPan.y };
     }
@@ -1737,25 +1767,20 @@ function initMapViewerInteractivity() {
       const t = e.touches[0];
       const { sx, sy } = getCanvasPos(t);
 
-      // Cancel long press if finger moved
-      if (viewerLongPressTimer && Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y) > 10) {
-        clearTimeout(viewerLongPressTimer);
-        viewerLongPressTimer = null;
-      }
-
       // Rotating heading handle in save_location mode
-      if (viewerEditorMode === "save_location" && (viewerDraggingHeading || viewerIsAdjustingAngle) && viewerDraftPose) {
-        const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
-        const dx = sx - dp.x;
-        const dy = sy - dp.y;
-        if (Math.hypot(dx, dy) > 12) {
+      if (viewerEditorMode === "save_location" && viewerDraggingHeading && viewerDraftPose) {
+        const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+        const dx = sx - center.x;
+        const dy = sy - center.y;
+        if (Math.hypot(dx, dy) > 8) {
           viewerDraftPose.theta = -Math.atan2(dy, dx);
+          updateViewerEditorBarUI();
           requestViewerRender();
         }
         return;
       }
 
-      // Normal single-finger pan: NEVER zooms!
+      // Normal single-finger pan
       if (isTouchDragging) {
         const dx = t.clientX - lastTouchX;
         const dy = t.clientY - lastTouchY;
@@ -1783,27 +1808,28 @@ function initMapViewerInteractivity() {
   }, { passive: false });
 
   const endTouch = (e) => {
-    if (viewerLongPressTimer) {
-      clearTimeout(viewerLongPressTimer);
-      viewerLongPressTimer = null;
-    }
-
-    if (viewerDraggingHeading || viewerIsAdjustingAngle) {
+    if (viewerDraggingHeading) {
       viewerDraggingHeading = false;
-      viewerIsAdjustingAngle = false;
       updateViewerEditorBarUI();
       requestViewerRender();
+      return;
     }
 
     if (e.touches.length === 0) {
-      // Tap detection (<12px movement, <350ms duration)
-      if (touchStartPos && Math.hypot(lastTouchX - touchStartPos.x, lastTouchY - touchStartPos.y) < 12 && (Date.now() - touchStartPos.time) < 350) {
-        handleViewerCanvasTap(touchStartPos.x, touchStartPos.y);
+      // Tap detection (<15px movement, <350ms duration)
+      const moved = Math.hypot(lastTouchX - touchStartPos.x, lastTouchY - touchStartPos.y);
+      const elapsed = Date.now() - touchStartPos.time;
+      if (moved < 15 && elapsed < 350) {
+        const { sx, sy } = getCanvasPos({ clientX: touchStartPos.x, clientY: touchStartPos.y });
+        if (viewerEditorMode === "save_location") {
+          placeDraftLocation(sx, sy);
+        } else if (viewerEditorMode === "edit_dock") {
+          handleViewerCanvasTap(touchStartPos.x, touchStartPos.y);
+        }
       }
       isTouchDragging = false;
       pinchDist = 0;
     } else if (e.touches.length === 1) {
-      // Transition from 2-finger pinch back to 1-finger pan smoothly
       lastTouchX = e.touches[0].clientX;
       lastTouchY = e.touches[0].clientY;
       isTouchDragging = true;
@@ -1814,7 +1840,7 @@ function initMapViewerInteractivity() {
   canvas.addEventListener("touchend", endTouch, { passive: false });
   canvas.addEventListener("touchcancel", endTouch, { passive: false });
 
-  // Mouse fallback (desktop & testing)
+  // Mouse fallback
   let isMouseDown = false;
   let mouseStartX = 0;
   let mouseStartY = 0;
@@ -1822,6 +1848,17 @@ function initMapViewerInteractivity() {
 
   canvas.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
+    const { sx, sy } = getCanvasPos(e);
+    if (viewerEditorMode === "save_location" && viewerDraftPose) {
+      const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+      const handleDist = 44;
+      const hx = center.x + handleDist * Math.cos(-viewerDraftPose.theta);
+      const hy = center.y + handleDist * Math.sin(-viewerDraftPose.theta);
+      if (Math.hypot(sx - hx, sy - hy) < 38) {
+        viewerDraggingHeading = true;
+        return;
+      }
+    }
     isMouseDown = true;
     lastTouchX = e.clientX;
     lastTouchY = e.clientY;
@@ -1831,6 +1868,18 @@ function initMapViewerInteractivity() {
   });
 
   window.addEventListener("mousemove", (e) => {
+    if (viewerDraggingHeading && viewerDraftPose) {
+      const { sx, sy } = getCanvasPos(e);
+      const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+      const dx = sx - center.x;
+      const dy = sy - center.y;
+      if (Math.hypot(dx, dy) > 8) {
+        viewerDraftPose.theta = -Math.atan2(dy, dx);
+        updateViewerEditorBarUI();
+        requestViewerRender();
+      }
+      return;
+    }
     if (!isMouseDown) return;
     const dx = e.clientX - lastTouchX;
     const dy = e.clientY - lastTouchY;
@@ -1843,10 +1892,19 @@ function initMapViewerInteractivity() {
   });
 
   window.addEventListener("mouseup", (e) => {
+    if (viewerDraggingHeading) {
+      viewerDraggingHeading = false;
+      return;
+    }
     if (!isMouseDown) return;
     isMouseDown = false;
-    if (Math.hypot(e.clientX - mouseStartX, e.clientY - mouseStartY) < 8 && (Date.now() - mouseStartTime) < 300) {
-      handleViewerCanvasTap(e.clientX, e.clientY);
+    if (Math.hypot(e.clientX - mouseStartX, e.clientY - mouseStartY) < 10 && (Date.now() - mouseStartTime) < 300) {
+      const { sx, sy } = getCanvasPos(e);
+      if (viewerEditorMode === "save_location") {
+        placeDraftLocation(sx, sy);
+      } else if (viewerEditorMode === "edit_dock") {
+        handleViewerCanvasTap(e.clientX, e.clientY);
+      }
     }
   });
 
@@ -1855,13 +1913,11 @@ function initMapViewerInteractivity() {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.15 : 0.85;
     const newScale = Math.max(0.2, Math.min(6.0, viewerPan.scale * factor));
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+    const { sx, sy } = getCanvasPos(e);
     const ratio = newScale / viewerPan.scale;
 
-    viewerPan.x = mx - (mx - viewerPan.x) * ratio;
-    viewerPan.y = my - (my - viewerPan.y) * ratio;
+    viewerPan.x = sx - (sx - viewerPan.x) * ratio;
+    viewerPan.y = sy - (sy - viewerPan.y) * ratio;
     viewerPan.scale = newScale;
     viewerPan.userControlled = true;
     requestViewerRender();
@@ -1903,8 +1959,10 @@ function handleViewerCanvasTap(clientX, clientY) {
   if (!canvas) return;
 
   const rect = canvas.getBoundingClientRect();
-  const sx = clientX - rect.left;
-  const sy = clientY - rect.top;
+  const scaleX = canvas.width / (rect.width || 1);
+  const scaleY = canvas.height / (rect.height || 1);
+  const sx = (clientX - rect.left) * scaleX;
+  const sy = (clientY - rect.top) * scaleY;
 
   // Inverse transform: screen pixel -> world coordinates
   const u = (sx - viewerPan.x) / viewerPan.scale;
@@ -1913,7 +1971,6 @@ function handleViewerCanvasTap(clientX, clientY) {
   const wy = viewerMetadata.origin.y + (viewerMetadata.height - v) * viewerMetadata.resolution;
 
   if (viewerEditorMode === "edit_dock") {
-    // Push previous state into undo stack
     viewerDockUndoStack.push({
       dock: viewerNewDock ? { ...viewerNewDock } : null,
       standoff: viewerNewStandoff ? { ...viewerNewStandoff } : null,
@@ -1926,14 +1983,13 @@ function handleViewerCanvasTap(clientX, clientY) {
       if (!viewerNewStandoff) {
         viewerNewStandoff = { x: wx + 0.70, y: wy, theta: 0 };
       } else {
-        // Orientation faces toward standoff
         const dx = viewerNewStandoff.x - viewerNewDock.x;
         const dy = viewerNewStandoff.y - viewerNewDock.y;
         const angle = Math.atan2(dy, dx);
         viewerNewDock.theta = angle;
         viewerNewStandoff.theta = angle;
       }
-      viewerDockEditTarget = "standoff"; // Guide user to standoff next
+      viewerDockEditTarget = "standoff";
     } else {
       if (!viewerNewDock) {
         viewerNewDock = { x: wx - 0.70, y: wy, theta: 0 };
@@ -1948,19 +2004,15 @@ function handleViewerCanvasTap(clientX, clientY) {
     updateViewerEditorBarUI();
     requestViewerRender();
   } else if (viewerEditorMode === "save_location") {
-    // Tapping repositions the draft marker
-    const prevTheta = viewerDraftPose ? viewerDraftPose.theta : 0;
-    viewerDraftPose = { x: wx, y: wy, theta: prevTheta };
-    updateViewerEditorBarUI();
-    requestViewerRender();
+    placeDraftLocation(sx, sy);
   }
 }
 
 function centerViewerMap() {
   const canvas = document.getElementById("map-viewer-canvas");
   if (!canvas || !viewerMapImg) return;
-  canvas.width = window.innerWidth || 800;
-  canvas.height = window.innerHeight || 1280;
+  canvas.width = canvas.clientWidth || window.innerWidth || 800;
+  canvas.height = canvas.clientHeight || window.innerHeight || 1280;
   const fitScale = Math.min((canvas.width * 0.85) / viewerMapImg.width, (canvas.height * 0.75) / viewerMapImg.height);
   viewerPan.scale = Math.max(0.5, fitScale);
   viewerPan.x = (canvas.width - viewerMapImg.width * viewerPan.scale) / 2;
@@ -2002,7 +2054,7 @@ function drawViewerPillLabel(ctx, x, y, text, borderColor) {
 function drawPinHeadingArrow(ctx, center, headingAngle, color) {
   ctx.save();
   ctx.translate(center.x, center.y);
-  ctx.rotate(-headingAngle); // Invert theta for Canvas coordinate system
+  ctx.rotate(-headingAngle);
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(23, 0);
@@ -2018,12 +2070,18 @@ function renderViewerCanvas() {
   if (!canvas || !viewerMapImg) return;
   const ctx = canvas.getContext("2d");
 
-  // Modern Light Theme Canvas Background
-  ctx.fillStyle = "#F3F4F9";
+  // Keep canvas buffer matching display size
+  if (canvas.clientWidth > 0 && (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight)) {
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+  }
+
+  // Deep radar dark canvas background (matches map image)
+  ctx.fillStyle = "#0B0F19";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Subtle grid lines matching app style
-  ctx.strokeStyle = "rgba(209, 213, 219, 0.5)";
+  // Subtle radar grid lines
+  ctx.strokeStyle = "rgba(30, 41, 59, 0.45)";
   ctx.lineWidth = 1;
   const gridStep = 40;
   for (let x = 0; x < canvas.width; x += gridStep) {
@@ -2081,7 +2139,6 @@ function renderViewerCanvas() {
     const sp = toCanvasCoords(standoff.x, standoff.y);
     const distMeters = Math.hypot(standoff.x - dock.x, standoff.y - dock.y);
 
-    // Dock heading points towards standoff; standoff heading points towards dock
     const dockHeading = Math.atan2(standoff.y - dock.y, standoff.x - dock.x);
     const standoffHeading = Math.atan2(dock.y - standoff.y, dock.x - standoff.x);
 
@@ -2104,7 +2161,6 @@ function renderViewerCanvas() {
 
     // 3. Standoff Marker (🎯 Standoff Point - #2563EB Blue)
     if (viewerEditorMode === "edit_dock" && viewerDockEditTarget === "standoff") {
-      // Active editing pulse halo
       ctx.save();
       ctx.beginPath();
       ctx.arc(sp.x, sp.y, 22, 0, 2 * Math.PI);
@@ -2117,10 +2173,8 @@ function renderViewerCanvas() {
       ctx.restore();
     }
 
-    // Directional heading arrow pointing along standoffHeading toward dock
     drawPinHeadingArrow(ctx, sp, standoffHeading, "#2563EB");
 
-    // Standoff Pin Circle
     ctx.save();
     ctx.translate(sp.x, sp.y);
     ctx.fillStyle = "#2563EB";
@@ -2149,12 +2203,10 @@ function renderViewerCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    // Standoff Pill Label
     drawViewerPillLabel(ctx, sp.x, sp.y - 24, "2. Standoff Point (🎯)", "#2563EB");
 
     // 4. Charging Dock Marker (⚡ Dock Station - #10B981 Emerald Green)
     if (viewerEditorMode === "edit_dock" && viewerDockEditTarget === "dock") {
-      // Active editing pulse halo
       ctx.save();
       ctx.beginPath();
       ctx.arc(dp.x, dp.y, 22, 0, 2 * Math.PI);
@@ -2167,10 +2219,8 @@ function renderViewerCanvas() {
       ctx.restore();
     }
 
-    // Directional heading arrow pointing along dockHeading toward standoff
     drawPinHeadingArrow(ctx, dp, dockHeading, "#10B981");
 
-    // Dock Pin Circle
     ctx.save();
     ctx.translate(dp.x, dp.y);
     ctx.fillStyle = "#10B981";
@@ -2189,7 +2239,6 @@ function renderViewerCanvas() {
     ctx.fillText("⚡", 0, 0);
     ctx.restore();
 
-    // Dock Pill Label
     drawViewerPillLabel(ctx, dp.x, dp.y - 24, "1. Dock Station (⚡)", "#10B981");
   }
 
@@ -2216,59 +2265,112 @@ function renderViewerCanvas() {
     ctx.restore();
   }
 
-  // Draw Draft Pose Marker when in save_location mode
+  // Draw Draft Pose Marker when in save_location mode (Desktop Mission Planner visual parity)
   if (viewerEditorMode === "save_location" && viewerDraftPose) {
-    const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+    const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+    const yaw = viewerDraftPose.theta || 0;
+    const color = "#14B8A6"; // Desktop Mission Planner AppColors.accent (Teal)
+    const r = 14;
+    const handleDist = 44;
+    const handlePos = {
+      x: center.x + handleDist * Math.cos(-yaw),
+      y: center.y + handleDist * Math.sin(-yaw)
+    };
+
+    // 1. Anchor tether line to rotation handle node
     ctx.save();
-    ctx.translate(dp.x, dp.y);
-
-    // Glowing outer ring
-    ctx.fillStyle = "rgba(59, 130, 246, 0.25)";
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(0, 0, 26, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // Center pin
-    ctx.fillStyle = "#2563EB";
-    ctx.beginPath();
-    ctx.arc(0, 0, 13, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2.5;
+    ctx.moveTo(center.x, center.y);
+    ctx.lineTo(handlePos.x, handlePos.y);
     ctx.stroke();
 
-    // Direction cone
-    ctx.rotate(-viewerDraftPose.theta);
-    ctx.fillStyle = "rgba(37, 99, 235, 0.35)";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, 45, -Math.PI / 6, Math.PI / 6);
-    ctx.closePath();
+    ctx.moveTo(center.x, center.y);
+    ctx.lineTo(handlePos.x, handlePos.y);
+    ctx.stroke();
+
+    // Rotation handle node at tip
+    ctx.beginPath();
+    ctx.arc(handlePos.x, handlePos.y, 12, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(20, 184, 166, 0.25)";
     ctx.fill();
 
-    // Arrow pointer
+    ctx.beginPath();
+    ctx.arc(handlePos.x, handlePos.y, 8, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Circular rotation arrow in handle
     ctx.fillStyle = "#FFFFFF";
-    ctx.beginPath();
-    ctx.moveTo(22, 0);
-    ctx.lineTo(12, -7);
-    ctx.lineTo(12, 7);
-    ctx.closePath();
-    ctx.fill();
-
-    // Draggable heading handle at 45px radius
-    ctx.fillStyle = "#2563EB";
-    ctx.beginPath();
-    ctx.arc(45, 0, 9, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-
+    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("⟳", handlePos.x, handlePos.y);
     ctx.restore();
 
-    // Coordinate readout chip
-    const deg = Math.round(viewerDraftPose.theta * 180 / Math.PI);
-    drawViewerPillLabel(ctx, dp.x, dp.y - 32, `📍 X: ${viewerDraftPose.x.toFixed(2)}m, Y: ${viewerDraftPose.y.toFixed(2)}m, θ: ${deg}°`, "#2563EB");
+    // 2. Robot-style Chassis Body Disc
+    ctx.save();
+    // Outer shadow
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, r + 4, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+    ctx.fill();
+
+    // Translucent outer shock ring
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, r + 2, 0, 2 * Math.PI);
+    ctx.strokeStyle = "rgba(20, 184, 166, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Main chassis disc
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, r, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // 3. Prominent forward-pointing arrow chevron on chassis body
+    ctx.translate(center.x, center.y);
+    ctx.rotate(-yaw);
+
+    const arrowTip = r + 8;
+    const arrowBase = r * 0.15;
+    const arrowWing = r * 0.95;
+    const wingAngle = 0.70;
+
+    ctx.beginPath();
+    ctx.moveTo(arrowTip, 0);
+    ctx.lineTo(arrowWing * Math.cos(wingAngle), -arrowWing * Math.sin(wingAngle));
+    ctx.lineTo(arrowBase, 0);
+    ctx.lineTo(arrowWing * Math.cos(-wingAngle), -arrowWing * Math.sin(-wingAngle));
+    ctx.closePath();
+
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fill();
+
+    // Center pivot dot
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.5, 0, 2 * Math.PI);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fill();
+    ctx.restore();
+
+    // 4. Live Coordinate & Heading Pill Readout above marker
+    const deg = Math.round(yaw * 180 / Math.PI);
+    drawViewerPillLabel(ctx, center.x, center.y - 30, `📍 X: ${viewerDraftPose.x.toFixed(2)}m, Y: ${viewerDraftPose.y.toFixed(2)}m, θ: ${deg}°`, color);
   }
 }
 
@@ -2280,6 +2382,7 @@ window.openMapViewer = async function(mapName, options = {}) {
   viewerDraftPose = null;
   viewerDockUndoStack = [];
   viewerDockEditTarget = 'dock';
+  viewerPan.userControlled = false;
 
   const screen = document.getElementById("screen-map-viewer");
   const nameEl = document.getElementById("map-viewer-name");
@@ -2294,6 +2397,12 @@ window.openMapViewer = async function(mapName, options = {}) {
   if (legendRobot) legendRobot.style.display = (mapName === activeMapName) ? "flex" : "none";
   if (editorBar) editorBar.style.display = "none";
   if (loadingEl) loadingEl.style.display = "flex";
+
+  const canvas = document.getElementById("map-viewer-canvas");
+  if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+  }
 
   initMapViewerInteractivity();
 
@@ -2379,13 +2488,17 @@ function updateViewerEditorBarUI() {
   editorBar.style.display = "flex";
 
   if (viewerEditorMode === "save_location") {
+    const snapBtn = liveRobotPose
+      ? `<button type="button" class="btn btn-secondary btn-sm" onclick="snapDraftToRobot()" style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>Snap to Robot</button>`
+      : "";
     if (!viewerDraftPose) {
-      promptEl.textContent = "Long-press on map to place marker & drag to set heading";
+      promptEl.textContent = "Tap anywhere on map to place waypoint";
     } else {
-      const deg = Math.round(viewerDraftPose.theta * 180 / Math.PI);
-      promptEl.textContent = `Pose set (θ: ${deg}°)! Drag handle to rotate, then tap Save`;
+      const deg = Math.round((viewerDraftPose.theta || 0) * 180 / Math.PI);
+      promptEl.textContent = `Pose set (θ: ${deg}°)! Drag ⟳ handle to rotate, then tap Save`;
     }
     actionsEl.innerHTML = `
+      ${snapBtn}
       <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
       <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerSaveLocation()">✓ Save Waypoint</button>
     `;

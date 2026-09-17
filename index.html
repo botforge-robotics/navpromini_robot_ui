@@ -717,12 +717,50 @@
           </div>
         </div>
         <div class="map-viewer-mode-actions">
-          <button class="btn btn-secondary btn-sm" id="btn-viewer-add-location" onclick="promptViewerAddLocation()">
-            <span>📍 Save Location</span>
+          <button class="btn btn-secondary btn-sm" id="btn-viewer-layers" onclick="toggleViewerLayersPopover(event)" title="Map Layers">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            <span>Layers</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-viewer-add-location" onclick="toggleViewerSaveLocation()">
+            <span>📍 Save Station</span>
           </button>
           <button class="btn btn-secondary btn-sm" id="btn-viewer-edit-dock" onclick="toggleViewerEditDock()">
-            <span>⚡ Edit Dock Pose</span>
+            <span>⚡ Edit Dock</span>
           </button>
+        </div>
+      </div>
+
+      <!-- Floating Map Layers Popover -->
+      <div class="viewer-layers-popover" id="viewer-layers-popover" style="display: none;">
+        <div class="layers-popover-header">
+          <span>Map Layers</span>
+          <button type="button" class="layers-close-btn" onclick="toggleViewerLayersPopover(event, false)">✕</button>
+        </div>
+        <div class="layers-popover-body">
+          <label class="layer-toggle-item">
+            <div class="layer-label">
+              <strong>🏷️ Station Labels</strong>
+              <small>Show name pills above markers</small>
+            </div>
+            <input type="checkbox" id="layer-toggle-labels" checked onchange="handleViewerLayerChange('labels', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <label class="layer-toggle-item">
+            <div class="layer-label">
+              <strong>📡 Lidar Scan</strong>
+              <small>Live 2D laser scan points</small>
+            </div>
+            <input type="checkbox" id="layer-toggle-lidar" checked onchange="handleViewerLayerChange('lidar', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <label class="layer-toggle-item">
+            <div class="layer-label">
+              <strong>🗺️ Costmap Overlay</strong>
+              <small>Obstacle & safety inflation zones</small>
+            </div>
+            <input type="checkbox" id="layer-toggle-costmap" onchange="handleViewerLayerChange('costmap', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
 
@@ -1004,6 +1042,6 @@
     <div class="kiosk-toast" id="kiosk-toast" style="display: none;"></div>
   </div>
 
-  <script src="app.js?v=212"></script>
+  <script src="app.js?v=214"></script>
 </body>
 </html>

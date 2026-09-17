@@ -1832,6 +1832,15 @@ let viewerNewStandoff = null;
 let viewerPointers = new Map();
 let viewerInitialPinch = null;
 let viewerRenderRequested = false;
+let viewerLayers = {
+  labels: true,
+  lidar: true,
+  costmap: false
+};
+let viewerLidarScan = null;
+let viewerLidarInterval = null;
+let viewerCostmapImg = null;
+
 function requestViewerRender() {
   if (!viewerRenderRequested) {
     viewerRenderRequested = true;
@@ -1839,6 +1848,139 @@ function requestViewerRender() {
       viewerRenderRequested = false;
       renderViewerCanvas();
     });
+  }
+}
+
+window.toggleViewerLayersPopover = function(e, forceState) {
+  if (e && e.stopPropagation) e.stopPropagation();
+  const popover = document.getElementById("viewer-layers-popover");
+  if (!popover) return;
+  const isShown = popover.style.display !== "none";
+  const shouldShow = forceState !== undefined ? forceState : !isShown;
+  popover.style.display = shouldShow ? "block" : "none";
+};
+
+window.handleViewerLayerChange = function(layer, enabled) {
+  viewerLayers[layer] = !!enabled;
+  if (layer === "lidar") {
+    if (enabled) {
+      startViewerLidarPolling();
+    } else {
+      stopViewerLidarPolling();
+      viewerLidarScan = null;
+    }
+  } else if (layer === "costmap" && enabled) {
+    fetchViewerCostmap();
+  }
+  requestViewerRender();
+};
+
+function startViewerLidarPolling() {
+  stopViewerLidarPolling();
+  if (!viewerLayers.lidar) return;
+  pollViewerLidarScan();
+  viewerLidarInterval = setInterval(pollViewerLidarScan, 300);
+}
+
+function stopViewerLidarPolling() {
+  if (viewerLidarInterval) {
+    clearInterval(viewerLidarInterval);
+    viewerLidarInterval = null;
+  }
+}
+
+async function pollViewerLidarScan() {
+  if (!viewerLayers.lidar) return;
+  const screen = document.getElementById("screen-map-viewer");
+  if (!screen || screen.style.display === "none") {
+    stopViewerLidarPolling();
+    return;
+  }
+  // Only query lidar when looking at current active map
+  if (viewerMapName && activeMapName && viewerMapName !== activeMapName) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/state/scan`);
+    if (!res.ok) return;
+    const json = await res.json();
+    if (json && json.data) {
+      viewerLidarScan = json.data;
+      requestViewerRender();
+    }
+  } catch (e) {
+    // skip network blips
+  }
+}
+
+async function fetchViewerCostmap() {
+  if (!viewerLayers.costmap) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/maps/current/costmap?rotate=0&t=${Date.now()}`);
+    if (res.ok) {
+      const blob = await res.blob();
+      const img = new Image();
+      img.onload = () => {
+        viewerCostmapImg = img;
+        requestViewerRender();
+      };
+      img.src = URL.createObjectURL(blob);
+    } else {
+      showToast("Costmap active when navigation is running", false);
+    }
+  } catch (e) {
+    // skip
+  }
+}
+
+function handleViewerMarkerTap(sx, sy) {
+  if (viewerEditorMode) return;
+
+  // 1. Check Stations (Waypoints)
+  for (const wp of viewerWaypoints) {
+    if (wp.name === "Dock Standoff" || wp.name === "Charging Dock") continue;
+    const pt = toCanvasCoords(wp.x, wp.y);
+    if (Math.hypot(sx - pt.x, sy - pt.y) <= 30) {
+      if (viewerMapName && activeMapName && viewerMapName !== activeMapName) {
+        showToast(`Cannot navigate: "${wp.name}" is on map "${viewerMapName}", active map is "${activeMapName}"`, true);
+        return;
+      }
+      showDangerConfirmation({
+        title: "Send Robot to Station",
+        message: `Dispatch NavPro Mini to "${wp.name}"? The robot will navigate smoothly to this destination.`,
+        confirmText: "Dispatch Robot",
+        isDanger: false,
+        icon: "📍",
+        onConfirm: () => {
+          closeMapViewer();
+          navigateToLocation(wp.name);
+        }
+      });
+      return;
+    }
+  }
+
+  // 2. Check Charging Dock
+  const dock = viewerNewDock || viewerDockPose;
+  if (dock) {
+    const dp = toCanvasCoords(dock.x, dock.y);
+    if (Math.hypot(sx - dp.x, sy - dp.y) <= 30) {
+      if (viewerMapName && activeMapName && viewerMapName !== activeMapName) {
+        showToast(`Cannot dock: Charging dock is on map "${viewerMapName}", active map is "${activeMapName}"`, true);
+        return;
+      }
+      showDangerConfirmation({
+        title: "Return to Charging Dock",
+        message: "Send NavPro Mini to the Charging Station? The robot will navigate to staging and dock automatically to recharge.",
+        confirmText: "Auto-Dock Now",
+        isDanger: false,
+        icon: "⚡",
+        onConfirm: () => {
+          closeMapViewer();
+          triggerAutoDock();
+        }
+      });
+      return;
+    }
   }
 }
 
@@ -2022,6 +2164,8 @@ function initMapViewerInteractivity() {
           placeDraftLocation(sx, sy);
         } else if (viewerEditorMode === "edit_dock") {
           handleViewerCanvasTap(touchStartPos.x, touchStartPos.y);
+        } else {
+          handleViewerMarkerTap(sx, sy);
         }
       }
       isTouchDragging = false;
@@ -2101,6 +2245,8 @@ function initMapViewerInteractivity() {
         placeDraftLocation(sx, sy);
       } else if (viewerEditorMode === "edit_dock") {
         handleViewerCanvasTap(e.clientX, e.clientY);
+      } else {
+        handleViewerMarkerTap(sx, sy);
       }
     }
   });
@@ -2300,6 +2446,15 @@ function renderViewerCanvas() {
   ctx.drawImage(viewerMapImg, viewerPan.x, viewerPan.y, viewerMapImg.width * viewerPan.scale, viewerMapImg.height * viewerPan.scale);
   ctx.restore();
 
+  // Draw Costmap Overlay if layer enabled
+  if (viewerLayers.costmap && viewerCostmapImg) {
+    ctx.save();
+    ctx.globalAlpha = 0.65;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(viewerCostmapImg, viewerPan.x, viewerPan.y, viewerCostmapImg.width * viewerPan.scale, viewerCostmapImg.height * viewerPan.scale);
+    ctx.restore();
+  }
+
   // Draw Saved Waypoints (Stations)
   viewerWaypoints.forEach(wp => {
     if (wp.name === "Dock Standoff" || wp.name === "Charging Dock") return;
@@ -2323,8 +2478,10 @@ function renderViewerCanvas() {
     ctx.fill();
     ctx.restore();
 
-    // Pill badge label above pin
-    drawViewerPillLabel(ctx, pt.x, pt.y - 20, wp.name, "#2563EB");
+    // Pill badge label above pin (if labels layer enabled)
+    if (viewerLayers.labels) {
+      drawViewerPillLabel(ctx, pt.x, pt.y - 20, wp.name, "#2563EB");
+    }
   });
 
   // Draw Dock & Standoff Poses (Exact visual parity with Desktop Mission Planner)
@@ -2350,11 +2507,13 @@ function renderViewerCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    // 2. Distance Badge Pill in middle of line
-    const midX = (dp.x + sp.x) / 2;
-    const midY = (dp.y + sp.y) / 2;
-    const distText = `${(distMeters * 100).toFixed(1)} cm (${distMeters.toFixed(2)} m)`;
-    drawViewerPillLabel(ctx, midX, midY - 12, distText, "#10B981");
+    // 2. Distance Badge Pill in middle of line (if labels layer enabled)
+    if (viewerLayers.labels) {
+      const midX = (dp.x + sp.x) / 2;
+      const midY = (dp.y + sp.y) / 2;
+      const distText = `${(distMeters * 100).toFixed(1)} cm (${distMeters.toFixed(2)} m)`;
+      drawViewerPillLabel(ctx, midX, midY - 12, distText, "#10B981");
+    }
 
     // 3. Standoff Marker (🎯 Standoff Point - #2563EB Blue)
     if (viewerEditorMode === "edit_dock" && viewerDockEditTarget === "standoff") {
@@ -2400,7 +2559,9 @@ function renderViewerCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    drawViewerPillLabel(ctx, sp.x, sp.y - 24, "2. Standoff Point (🎯)", "#2563EB");
+    if (viewerLayers.labels) {
+      drawViewerPillLabel(ctx, sp.x, sp.y - 24, "2. Standoff Point (🎯)", "#2563EB");
+    }
 
     // 4. Charging Dock Marker (⚡ Dock Station - #10B981 Emerald Green)
     if (viewerEditorMode === "edit_dock" && viewerDockEditTarget === "dock") {
@@ -2436,7 +2597,37 @@ function renderViewerCanvas() {
     ctx.fillText("⚡", 0, 0);
     ctx.restore();
 
-    drawViewerPillLabel(ctx, dp.x, dp.y - 24, "1. Dock Station (⚡)", "#10B981");
+    if (viewerLayers.labels) {
+      drawViewerPillLabel(ctx, dp.x, dp.y - 24, "1. Dock Station (⚡)", "#10B981");
+    }
+  }
+
+  // Draw Live 2D Lidar Scan Points if layer enabled and map is active
+  if (viewerLayers.lidar && viewerMapName === activeMapName && liveRobotPose && viewerLidarScan && Array.isArray(viewerLidarScan.ranges)) {
+    const ranges = viewerLidarScan.ranges;
+    const angleMin = viewerLidarScan.angle_min || 0;
+    const angleInc = viewerLidarScan.angle_increment || 0;
+    const rMin = viewerLidarScan.range_min || 0.15;
+    const rMax = viewerLidarScan.range_max || 12.0;
+    const rx = liveRobotPose.x;
+    const ry = liveRobotPose.y;
+    const ryaw = liveRobotPose.yaw || 0;
+
+    ctx.save();
+    ctx.fillStyle = "#10B981"; // Vibrant Emerald Green lidar returns
+    for (let i = 0; i < ranges.length; i += 2) {
+      const r = ranges[i];
+      if (r === null || r === undefined || r < rMin || r > rMax) continue;
+      const beamAngle = angleMin + i * angleInc;
+      const mapAngle = ryaw + beamAngle;
+      const px = rx + r * Math.cos(mapAngle);
+      const py = ry + r * Math.sin(mapAngle);
+      const pt = toCanvasCoords(px, py);
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, 2, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // Draw Live Robot Marker if this map is active
@@ -2586,6 +2777,8 @@ window.openMapViewer = async function(mapName, options = {}) {
   const badgeEl = document.getElementById("map-viewer-active-badge");
   const loadingEl = document.getElementById("map-viewer-loading");
   const legendRobot = document.getElementById("legend-robot-item");
+  const popover = document.getElementById("viewer-layers-popover");
+  if (popover) popover.style.display = "none";
 
   if (screen) screen.style.display = "flex";
   if (nameEl) nameEl.textContent = mapName;
@@ -2602,6 +2795,11 @@ window.openMapViewer = async function(mapName, options = {}) {
   }
 
   initMapViewerInteractivity();
+
+  // Start lidar polling if enabled
+  if (viewerLayers.lidar) {
+    startViewerLidarPolling();
+  }
 
   try {
     // 1. Fetch map image
@@ -2661,6 +2859,9 @@ window.openMapViewer = async function(mapName, options = {}) {
 window.closeMapViewer = function() {
   const screen = document.getElementById("screen-map-viewer");
   if (screen) screen.style.display = "none";
+  const popover = document.getElementById("viewer-layers-popover");
+  if (popover) popover.style.display = "none";
+  stopViewerLidarPolling();
   viewerEditorMode = null;
   viewerNewDock = null;
   viewerNewStandoff = null;
@@ -2704,6 +2905,8 @@ function updateViewerEditorBarUI() {
 
   if (!viewerEditorMode) {
     editorBar.style.display = "none";
+    promptEl.innerHTML = "";
+    actionsEl.innerHTML = "";
     return;
   }
 
@@ -2715,15 +2918,15 @@ function updateViewerEditorBarUI() {
       ? `<button type="button" class="btn btn-secondary btn-sm" onclick="snapDraftToRobot()" style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>Snap to Robot</button>`
       : "";
     if (!viewerDraftPose) {
-      promptEl.innerHTML = `📍 <strong>Save Waypoint:</strong> Tap map to place location marker`;
+      promptEl.innerHTML = `📍 <strong>Save Station:</strong> Tap map to place location marker`;
     } else {
       const deg = Math.round((viewerDraftPose.theta || 0) * 180 / Math.PI);
-      promptEl.innerHTML = `📍 <strong>Pose set (${deg}°):</strong> Tap map to move, drag ⟳ to rotate, then Save`;
+      promptEl.innerHTML = `📍 <strong>Station Pose Set (${deg}°):</strong> Tap to move, drag ⟳ handle to rotate, then Save`;
     }
     actionsEl.innerHTML = `
       ${snapBtn}
       <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
-      <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerSaveLocation()">✓ Save Waypoint</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerSaveLocation()">✓ Save Station</button>
     `;
   } else if (viewerEditorMode === "edit_dock") {
     editorBar.className = "map-viewer-editor-bar mode-edit-dock";
@@ -2752,16 +2955,22 @@ function updateViewerEditorBarUI() {
 window.toggleViewerEditDock = function() {
   if (viewerEditorMode === "edit_dock") {
     cancelViewerEditMode();
+    showToast("Exited dock editing mode");
     return;
   }
-  viewerEditorMode = "edit_dock";
+  // Clear any draft station pose
   viewerDraftPose = null;
+  viewerIsAdjustingAngle = false;
+  viewerDraggingHeading = false;
+
+  viewerEditorMode = "edit_dock";
   viewerDockEditTarget = "dock";
   viewerDockUndoStack = [];
   viewerNewDock = viewerDockPose ? { ...viewerDockPose } : null;
   viewerNewStandoff = viewerStandoffPose ? { ...viewerStandoffPose } : null;
   updateViewerEditorBarUI();
   renderViewerCanvas();
+  showToast("⚡ Edit Dock: Tap map to place Charging Dock position");
 };
 
 window.setDockEditTarget = function(target) {
@@ -2784,17 +2993,21 @@ window.undoViewerDock = function() {
 window.toggleViewerSaveLocation = function() {
   if (viewerEditorMode === "save_location") {
     cancelViewerEditMode();
+    showToast("Exited station placement mode");
     return;
   }
-  viewerEditorMode = "save_location";
+  // Clear any dock edit state
   viewerNewDock = null;
   viewerNewStandoff = null;
   viewerDockUndoStack = [];
+
+  viewerEditorMode = "save_location";
   viewerDraftPose = liveRobotPose ? { x: liveRobotPose.x, y: liveRobotPose.y, theta: liveRobotPose.yaw || 0 } : null;
   viewerIsAdjustingAngle = false;
   viewerDraggingHeading = false;
   updateViewerEditorBarUI();
   renderViewerCanvas();
+  showToast("📍 Save Station: Tap map to place location marker");
 };
 
 window.promptViewerAddLocation = function() {
@@ -2839,6 +3052,8 @@ window.cancelViewerEditMode = function() {
   viewerNewStandoff = null;
   viewerDraftPose = null;
   viewerDockUndoStack = [];
+  viewerIsAdjustingAngle = false;
+  viewerDraggingHeading = false;
   updateViewerEditorBarUI();
   renderViewerCanvas();
 };

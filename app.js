@@ -4,6 +4,7 @@
 // 1. Prevent browser-level pinch-to-zoom and gesture zooming across the entire kiosk
 ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => {
   window.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
 });
 
 window.addEventListener('touchstart', (e) => {
@@ -16,6 +17,18 @@ window.addEventListener('touchmove', (e) => {
   if (e.touches.length > 1 && !e.target.closest('#map-viewer-canvas') && !e.target.closest('#mapping-live-canvas')) {
     e.preventDefault();
   }
+}, { passive: false });
+
+// Prevent double-tap zoom
+let lastTouchEndTime = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTouchEndTime <= 280) {
+    if (!e.target.closest('input') && !e.target.closest('textarea')) {
+      e.preventDefault();
+    }
+  }
+  lastTouchEndTime = now;
 }, { passive: false });
 
 window.addEventListener('wheel', (e) => {
@@ -536,28 +549,33 @@ function updateNavigationState(navData, isMissionActive = false) {
       // Update Destination title
       const destEl = document.getElementById("nav-screen-destination");
       if (destEl) {
+        let targetName = "";
         if (navData.target_waypoint) {
-          destEl.textContent = navData.target_waypoint;
+          targetName = navData.target_waypoint;
         } else if (navData.target && typeof navData.target === "object") {
           if (navData.target.name) {
-            destEl.textContent = navData.target.name;
+            targetName = navData.target.name;
           } else if (navData.target.x !== undefined && navData.target.y !== undefined) {
-            destEl.textContent = `Target (${navData.target.x.toFixed(2)}, ${navData.target.y.toFixed(2)})`;
+            const tx = Number(navData.target.x);
+            const ty = Number(navData.target.y);
+            const matchedWp = (cachedWaypoints || []).find(w => Math.hypot(w.x - tx, w.y - ty) < 0.4);
+            targetName = matchedWp && matchedWp.name ? matchedWp.name : "Designated Station";
           } else {
-            destEl.textContent = "Autonomous Waypoint";
+            targetName = "Designated Station";
           }
         } else {
-          destEl.textContent = "Autonomous Waypoint";
+          targetName = "Designated Station";
         }
+        destEl.innerHTML = `Navigating to <span class="nav-target-highlight">${escapeHtml(targetName)}</span>`;
       }
 
-      // Update Distance Remaining
+      // Update Distance Remaining with clean user typography
       const distEl = document.getElementById("nav-screen-distance");
       if (distEl) {
         if (navData.distance_remaining !== undefined && navData.distance_remaining !== null) {
-          distEl.textContent = `Approaching pose (${navData.distance_remaining.toFixed(1)}m remaining)...`;
+          distEl.textContent = `${navData.distance_remaining.toFixed(1)}m remaining • Moving safely to destination`;
         } else {
-          distEl.textContent = "Approaching target pose...";
+          distEl.textContent = "Guiding robot smoothly to target location...";
         }
       }
 
@@ -605,21 +623,53 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
   const subEl = document.getElementById("dock-progress-subtitle");
   const markerEl = document.getElementById("dock-marker-icon");
   const cancelBtn = document.getElementById("btn-cancel-docking");
+  const cameraCard = document.getElementById("dock-camera-card");
+  const cameraImg = document.getElementById("dock-camera-preview-img");
+  const tagStatusEl = document.getElementById("dock-camera-tag-status");
+  const radarAnim = document.getElementById("docking-target-animation");
 
   if (dockOp === "docking") {
     dockScreen.style.display = "flex";
-    if (titleEl) titleEl.textContent = "Auto-Docking In Progress";
-    if (subEl) subEl.textContent = (dockData && dockData.message) || "Aligning with charger visual marker and engaging contact pads...";
-    if (markerEl) markerEl.textContent = "🎯";
+    if (cameraCard) cameraCard.style.display = "flex";
+    if (radarAnim) radarAnim.style.display = "none";
+
+    // Connect MJPEG stream if not active
+    if (cameraImg && (!cameraImg.src || !cameraImg.src.includes("/api/v1/dock/stream.mjpg"))) {
+      cameraImg.src = `${API_BASE}/api/v1/dock/stream.mjpg?t=${Date.now()}`;
+      cameraImg.onerror = () => {
+        cameraImg.src = `${API_BASE}/api/v1/dock/debug_image?t=${Date.now()}`;
+      };
+    }
+
+    const tagVisible = !!((dockData && dockData.tag_visible) || (stateData && stateData.dock && stateData.dock.tag_visible));
+    if (tagStatusEl) {
+      if (tagVisible) {
+        tagStatusEl.textContent = "Charger Tag Locked";
+        tagStatusEl.className = "dock-camera-tag-status status-locked";
+      } else {
+        tagStatusEl.textContent = "Searching for Charger...";
+        tagStatusEl.className = "dock-camera-tag-status status-searching";
+      }
+    }
+
+    if (titleEl) titleEl.textContent = "Connecting to Charging Station";
+    if (subEl) subEl.textContent = tagVisible
+      ? "Locked onto dock marker — visual-servoing into charging contact pins..."
+      : "Aligning robot heading and searching for charging station marker...";
     if (cancelBtn) cancelBtn.textContent = "Cancel Docking";
   } else if (dockOp === "undocking") {
     dockScreen.style.display = "flex";
-    if (titleEl) titleEl.textContent = "Undocking In Progress";
-    if (subEl) subEl.textContent = (dockData && dockData.message) || "Backing away from charging station...";
+    if (cameraCard) cameraCard.style.display = "none";
+    if (radarAnim) radarAnim.style.display = "flex";
+    if (cameraImg && cameraImg.src) cameraImg.src = "";
+
+    if (titleEl) titleEl.textContent = "Disengaging from Charger";
+    if (subEl) subEl.textContent = "Backing away smoothly from charging dock to staging area...";
     if (markerEl) markerEl.textContent = "⚡";
     if (cancelBtn) cancelBtn.textContent = "Cancel Undock";
   } else {
-    // Docking/undocking idle or finished -> auto-hide
+    // Docking/undocking idle or finished -> disconnect camera and auto-hide
+    if (cameraImg && cameraImg.src) cameraImg.src = "";
     if (dockScreen.style.display === "flex") {
       dockScreen.style.display = "none";
       if (previousDockOperation === "docking") {
@@ -631,14 +681,14 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
           showToast("Robot successfully docked & charging!");
           triggerFaceExpression("happy");
         } else if (dockOp === "failed") {
-          showToast("Docking failed or canceled.", true);
+          showToast("Docking could not be completed.", true);
         }
       } else if (previousDockOperation === "undocking") {
         if (dockOp === "undocked" || dockOp === "idle") {
-          showToast("Robot undocked successfully!");
+          showToast("Robot disengaged from dock successfully!");
           triggerFaceExpression("happy");
         } else if (dockOp === "failed") {
-          showToast("Undock failed or canceled.", true);
+          showToast("Undock operation canceled or interrupted.", true);
         }
       }
     }
@@ -709,6 +759,24 @@ function updatePowerState(pState) {
         chargingScreenDismissed = false;
         if (chargingScreen) chargingScreen.style.display = "none";
         triggerFaceExpression("wakeup");
+      }
+
+      // Update quick dock / undock buttons on dashboard bottom bar
+      const quickDockBtn = document.getElementById("btn-quick-dock");
+      const quickUndockBtn = document.getElementById("btn-quick-undock");
+      if (quickDockBtn) {
+        const isChargingOrFull = isCharging || isFull;
+        if (isChargingOrFull) {
+          quickDockBtn.classList.add("is-charging");
+          const label = quickDockBtn.querySelector(".dock-quick-label");
+          if (label) label.textContent = isFull ? "Docked (Full)" : "Docked";
+          if (quickUndockBtn) quickUndockBtn.style.opacity = "1";
+        } else {
+          quickDockBtn.classList.remove("is-charging");
+          const label = quickDockBtn.querySelector(".dock-quick-label");
+          if (label) label.textContent = "Auto-Dock";
+          if (quickUndockBtn) quickUndockBtn.style.opacity = "0.75";
+        }
       }
 
       isRobotCharging = isCharging;
@@ -2505,10 +2573,10 @@ function renderViewerCanvas() {
 
 window.openMapViewer = async function(mapName, options = {}) {
   viewerMapName = mapName;
-  viewerEditorMode = null;
+  viewerEditorMode = options.mode || null;
   viewerNewDock = null;
   viewerNewStandoff = null;
-  viewerDraftPose = null;
+  viewerDraftPose = (options.mode === "save_location" && liveRobotPose) ? { x: liveRobotPose.x, y: liveRobotPose.y, theta: liveRobotPose.yaw || 0 } : null;
   viewerDockUndoStack = [];
   viewerDockEditTarget = 'dock';
   viewerPan.userControlled = false;
@@ -2517,15 +2585,15 @@ window.openMapViewer = async function(mapName, options = {}) {
   const nameEl = document.getElementById("map-viewer-name");
   const badgeEl = document.getElementById("map-viewer-active-badge");
   const loadingEl = document.getElementById("map-viewer-loading");
-  const editorBar = document.getElementById("map-viewer-editor-bar");
   const legendRobot = document.getElementById("legend-robot-item");
 
   if (screen) screen.style.display = "flex";
   if (nameEl) nameEl.textContent = mapName;
   if (badgeEl) badgeEl.style.display = (mapName === activeMapName) ? "inline-flex" : "none";
   if (legendRobot) legendRobot.style.display = (mapName === activeMapName) ? "flex" : "none";
-  if (editorBar) editorBar.style.display = "none";
   if (loadingEl) loadingEl.style.display = "flex";
+
+  updateViewerEditorBarUI();
 
   const canvas = document.getElementById("map-viewer-canvas");
   if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
@@ -2585,11 +2653,8 @@ window.openMapViewer = async function(mapName, options = {}) {
     console.warn("Failed loading map viewer data:", err);
   } finally {
     if (loadingEl) loadingEl.style.display = "none";
+    updateViewerEditorBarUI();
     renderViewerCanvas();
-
-    if (options.mode === "save_location") {
-      toggleViewerSaveLocation();
-    }
   }
 };
 
@@ -2601,12 +2666,40 @@ window.closeMapViewer = function() {
   viewerNewStandoff = null;
   viewerDraftPose = null;
   viewerDockUndoStack = [];
+  updateViewerEditorBarUI();
 };
 
 function updateViewerEditorBarUI() {
   const editorBar = document.getElementById("map-viewer-editor-bar");
   const promptEl = document.getElementById("editor-bar-prompt");
   const actionsEl = document.getElementById("map-viewer-editor-bar")?.querySelector(".editor-bar-actions");
+  const btnAddLoc = document.getElementById("btn-viewer-add-location");
+  const btnEditDock = document.getElementById("btn-viewer-edit-dock");
+
+  if (btnAddLoc) {
+    const isSave = viewerEditorMode === "save_location";
+    btnAddLoc.classList.toggle("active", isSave);
+    if (isSave) {
+      btnAddLoc.classList.remove("btn-secondary");
+      btnAddLoc.classList.add("btn-primary");
+    } else {
+      btnAddLoc.classList.remove("btn-primary");
+      btnAddLoc.classList.add("btn-secondary");
+    }
+  }
+
+  if (btnEditDock) {
+    const isDock = viewerEditorMode === "edit_dock";
+    btnEditDock.classList.toggle("active", isDock);
+    if (isDock) {
+      btnEditDock.classList.remove("btn-secondary");
+      btnEditDock.classList.add("btn-primary");
+    } else {
+      btnEditDock.classList.remove("btn-primary");
+      btnEditDock.classList.add("btn-secondary");
+    }
+  }
+
   if (!editorBar || !promptEl || !actionsEl) return;
 
   if (!viewerEditorMode) {
@@ -2617,14 +2710,15 @@ function updateViewerEditorBarUI() {
   editorBar.style.display = "flex";
 
   if (viewerEditorMode === "save_location") {
+    editorBar.className = "map-viewer-editor-bar mode-save-location";
     const snapBtn = liveRobotPose
       ? `<button type="button" class="btn btn-secondary btn-sm" onclick="snapDraftToRobot()" style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>Snap to Robot</button>`
       : "";
     if (!viewerDraftPose) {
-      promptEl.textContent = "Tap anywhere on map to place waypoint";
+      promptEl.innerHTML = `📍 <strong>Save Waypoint:</strong> Tap map to place location marker`;
     } else {
       const deg = Math.round((viewerDraftPose.theta || 0) * 180 / Math.PI);
-      promptEl.textContent = `Pose set (θ: ${deg}°)! Drag ⟳ handle to rotate, then tap Save`;
+      promptEl.innerHTML = `📍 <strong>Pose set (${deg}°):</strong> Tap map to move, drag ⟳ to rotate, then Save`;
     }
     actionsEl.innerHTML = `
       ${snapBtn}
@@ -2632,13 +2726,14 @@ function updateViewerEditorBarUI() {
       <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerSaveLocation()">✓ Save Waypoint</button>
     `;
   } else if (viewerEditorMode === "edit_dock") {
+    editorBar.className = "map-viewer-editor-bar mode-edit-dock";
     if (viewerDockEditTarget === "dock") {
-      promptEl.textContent = "⚡ Tap map to place Charging Dock position";
+      promptEl.innerHTML = `⚡ <strong>Edit Dock:</strong> Tap map to place Charging Dock position`;
     } else {
       const dist = (viewerNewDock && viewerNewStandoff)
         ? ` (${Math.hypot(viewerNewStandoff.x - viewerNewDock.x, viewerNewStandoff.y - viewerNewDock.y).toFixed(2)}m)`
         : "";
-      promptEl.textContent = `🎯 Tap map to place Standoff staging pose${dist}`;
+      promptEl.innerHTML = `🎯 <strong>Edit Standoff:</strong> Tap map to place Standoff staging pose${dist}`;
     }
 
     const canUndo = viewerDockUndoStack.length > 0;
@@ -2655,7 +2750,12 @@ function updateViewerEditorBarUI() {
 }
 
 window.toggleViewerEditDock = function() {
+  if (viewerEditorMode === "edit_dock") {
+    cancelViewerEditMode();
+    return;
+  }
   viewerEditorMode = "edit_dock";
+  viewerDraftPose = null;
   viewerDockEditTarget = "dock";
   viewerDockUndoStack = [];
   viewerNewDock = viewerDockPose ? { ...viewerDockPose } : null;
@@ -2682,8 +2782,15 @@ window.undoViewerDock = function() {
 };
 
 window.toggleViewerSaveLocation = function() {
+  if (viewerEditorMode === "save_location") {
+    cancelViewerEditMode();
+    return;
+  }
   viewerEditorMode = "save_location";
-  viewerDraftPose = null;
+  viewerNewDock = null;
+  viewerNewStandoff = null;
+  viewerDockUndoStack = [];
+  viewerDraftPose = liveRobotPose ? { x: liveRobotPose.x, y: liveRobotPose.y, theta: liveRobotPose.yaw || 0 } : null;
   viewerIsAdjustingAngle = false;
   viewerDraggingHeading = false;
   updateViewerEditorBarUI();
@@ -2696,7 +2803,7 @@ window.promptViewerAddLocation = function() {
 
 window.confirmViewerSaveLocation = function() {
   if (!viewerDraftPose) {
-    showToast("Long-press on map to place a location marker first", true);
+    showToast("Tap on map to place a location marker first", true);
     return;
   }
   openTouchKeyboard("Station Name:", async (name) => {
@@ -2732,8 +2839,7 @@ window.cancelViewerEditMode = function() {
   viewerNewStandoff = null;
   viewerDraftPose = null;
   viewerDockUndoStack = [];
-  const editorBar = document.getElementById("map-viewer-editor-bar");
-  if (editorBar) editorBar.style.display = "none";
+  updateViewerEditorBarUI();
   renderViewerCanvas();
 };
 
@@ -2847,6 +2953,7 @@ function makeSwipeable(containerEl) {
 
     let startX = 0;
     let startY = 0;
+    let startTime = 0;
     let currentDx = 0;
     let isSwiping = false;
     let isScrolling = false;
@@ -2854,6 +2961,7 @@ function makeSwipeable(containerEl) {
     const resetOtherSwipes = () => {
       document.querySelectorAll(".swipeable-content.swiped-open").forEach(el => {
         if (el !== content) {
+          el.style.transition = "transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1)";
           el.style.transform = "translateX(0)";
           el.classList.remove("swiped-open");
           el.closest(".swipeable-wrapper")?.classList.remove("has-swipe-open", "is-swiping");
@@ -2865,6 +2973,7 @@ function makeSwipeable(containerEl) {
       if (e.target.closest("button") || e.target.closest("input") || e.target.closest("select") || e.target.closest("a")) return;
       startX = e.clientX;
       startY = e.clientY;
+      startTime = Date.now();
       currentDx = 0;
       isSwiping = false;
       isScrolling = false;
@@ -2881,7 +2990,7 @@ function makeSwipeable(containerEl) {
           isScrolling = true;
           return;
         }
-        if (Math.abs(dx) > 8) {
+        if (Math.abs(dx) > 6) {
           isSwiping = true;
           wrapper.classList.add("is-swiping");
           resetOtherSwipes();
@@ -2890,16 +2999,40 @@ function makeSwipeable(containerEl) {
 
       if (isSwiping) {
         const baseOffset = content.classList.contains("swiped-open") ? -90 : 0;
-        currentDx = Math.min(20, Math.max(-120, baseOffset + dx));
+        currentDx = Math.min(10, Math.max(-105, baseOffset + dx));
         content.style.transform = `translateX(${currentDx}px)`;
       }
     });
 
-    const finishSwipe = () => {
+    const finishSwipe = (e) => {
+      const elapsed = Math.max(1, Date.now() - startTime);
+      const wasOpen = content.classList.contains("swiped-open");
+      const totalDx = e.clientX - startX;
+      const velocity = totalDx / elapsed;
+
+      content.style.transition = "transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1)";
+
+      // Tap on open item snaps closed immediately
+      if (!isSwiping && wasOpen && Math.hypot(totalDx, (e.clientY || startY) - startY) < 12) {
+        content.style.transform = "translateX(0)";
+        content.classList.remove("swiped-open");
+        wrapper.classList.remove("has-swipe-open", "is-swiping");
+        return;
+      }
+
       if (!isSwiping) return;
       isSwiping = false;
-      content.style.transition = "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)";
-      if (currentDx < -45) {
+
+      let shouldOpen = false;
+      if (wasOpen) {
+        // Drag right to close
+        shouldOpen = !(totalDx > 20 || velocity > 0.2 || currentDx > -45);
+      } else {
+        // Drag left to open delete side
+        shouldOpen = (totalDx < -25 || velocity < -0.22 || currentDx < -35);
+      }
+
+      if (shouldOpen) {
         content.style.transform = "translateX(-90px)";
         content.classList.add("swiped-open");
         wrapper.classList.add("has-swipe-open");
@@ -2919,6 +3052,7 @@ function makeSwipeable(containerEl) {
 document.addEventListener("pointerdown", (e) => {
   if (!e.target.closest(".swipeable-wrapper")) {
     document.querySelectorAll(".swipeable-content.swiped-open").forEach(el => {
+      el.style.transition = "transform 0.18s cubic-bezier(0.2, 0.9, 0.3, 1)";
       el.style.transform = "translateX(0)";
       el.classList.remove("swiped-open");
       el.closest(".swipeable-wrapper")?.classList.remove("has-swipe-open", "is-swiping");
@@ -3080,7 +3214,7 @@ async function loadMaps() {
             <div style="display: flex; gap: 8px; align-items: center;">
               ${isCur 
                 ? `<button class="btn btn-secondary btn-sm" onclick="openMapViewer('${escapeQuotes(mapName)}')">Preview & Edit</button>`
-                : `<button class="btn btn-primary btn-sm" onclick="activateMap('${escapeQuotes(mapName)}')">Load Map</button>`
+                : `<button class="btn btn-primary btn-sm" onclick="confirmActivateMap('${escapeQuotes(mapName)}')">Load Map</button>`
               }
             </div>
           </div>
@@ -3093,6 +3227,17 @@ async function loadMaps() {
     list.innerHTML = `<p style="color: var(--danger); padding: 16px;">Failed to load maps: ${escapeHtml(e.message)}</p>`;
   }
 }
+
+window.confirmActivateMap = function(mapName) {
+  showDangerConfirmation({
+    title: "Switch Active Map",
+    message: `Switching active map to "${mapName}" will reload stations, routines, and navigation for this environment. Continue?`,
+    confirmText: "Load Map",
+    isDanger: false,
+    icon: "🗺️",
+    onConfirm: () => activateMap(mapName)
+  });
+};
 
 window.activateMap = async function(mapName) {
   try {
@@ -3220,7 +3365,7 @@ window.navigateToLocation = async function(wpName) {
     // Show navigation progress screen immediately
     const navScreen = document.getElementById("screen-nav-progress");
     const destEl = document.getElementById("nav-screen-destination");
-    if (destEl) destEl.textContent = wpName;
+    if (destEl) destEl.innerHTML = `Navigating to <span class="nav-target-highlight">${escapeHtml(wpName)}</span>`;
     if (navScreen) navScreen.style.display = "flex";
 
     await fetch(`${API_BASE}/api/v1/navigation/goto`, {
@@ -3235,6 +3380,42 @@ window.navigateToLocation = async function(wpName) {
     const navScreen = document.getElementById("screen-nav-progress");
     if (navScreen) navScreen.style.display = "none";
     showToast(`Navigation failed: ${e.message}`, true);
+  }
+};
+
+window.triggerAutoDock = async function() {
+  try {
+    showToast("Starting Auto-Dock to charging station...");
+    triggerFaceExpression("thinking");
+    const res = await fetch(`${API_BASE}/api/v1/dock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ navigate_to_staging: true })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail?.message || err.error?.message || "Robot busy or dock unavailable");
+    }
+  } catch (e) {
+    showToast(`Auto-Dock failed: ${e.message}`, true);
+  }
+};
+
+window.triggerUndock = async function() {
+  try {
+    showToast("Undocking from charging station...");
+    triggerFaceExpression("thinking");
+    const res = await fetch(`${API_BASE}/api/v1/undock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail?.message || err.error?.message || "Robot busy or not docked");
+    }
+  } catch (e) {
+    showToast(`Undock failed: ${e.message}`, true);
   }
 };
 

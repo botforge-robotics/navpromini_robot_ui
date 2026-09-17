@@ -746,13 +746,17 @@ body, html {
 .dashboard-bottom-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-top: 16px;
-  padding-top: 10px;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding: 4px 6px 0 6px;
+  gap: 12px;
 }
 
 .dashboard-swipe-prompt {
-  padding: 10px 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 20px;
   border-radius: var(--radius-full);
   background: #FFFFFF;
   border: 1.5px solid var(--border-strong);
@@ -767,6 +771,59 @@ body, html {
 .dashboard-swipe-prompt:active {
   transform: scale(0.95);
   border-color: var(--primary);
+}
+
+.dashboard-dock-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-dock-quick {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 800;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+}
+
+.btn-quick-dock {
+  background: #FFF7ED;
+  color: #C2410C;
+  border-color: #FDBA74;
+}
+
+.btn-quick-dock:active {
+  transform: scale(0.95);
+  background: #FFEDD5;
+}
+
+.btn-quick-dock.is-charging {
+  background: #ECFDF5;
+  color: #047857;
+  border-color: #A7F3D0;
+}
+
+.btn-quick-undock {
+  background: #F1F5F9;
+  color: #334155;
+  border-color: #CBD5E1;
+}
+
+.btn-quick-undock:active {
+  transform: scale(0.95);
+  background: #E2E8F0;
+}
+
+.dock-quick-icon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 /* Subpages Viewport & Tab Pages (CENTERED ALIGNMENT) */
@@ -1307,26 +1364,128 @@ body, html {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
   max-width: 580px;
   width: 90%;
   text-align: center;
   background: #FFFFFF;
-  padding: 36px 32px;
+  padding: 32px 28px;
   border-radius: var(--radius-xl);
   border: 1.5px solid var(--border);
   box-shadow: var(--shadow-modal);
 }
 
 .docking-screen-content h2, .nav-screen-content h1 {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 900;
   color: var(--text-primary);
+  line-height: 1.25;
 }
 
 .docking-screen-content p, .nav-screen-content p {
   font-size: 15px;
   color: var(--text-secondary);
+}
+
+/* Dock Alignment Camera Feed Card */
+.dock-camera-card {
+  width: 100%;
+  max-width: 440px;
+  background: #0B0F19;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1.5px solid #1E293B;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+
+.dock-camera-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: #0F172A;
+  border-bottom: 1px solid #1E293B;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.dock-camera-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #F87171;
+}
+
+.dock-pulse-dot {
+  width: 8px;
+  height: 8px;
+  background: #EF4444;
+  border-radius: 50%;
+  animation: pulseGlow 1.2s infinite;
+}
+
+.dock-camera-tag-status {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.dock-camera-tag-status.status-searching {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.dock-camera-tag-status.status-locked {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.dock-camera-preview-wrapper {
+  position: relative;
+  width: 100%;
+  height: 210px;
+  background: #020617;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#dock-camera-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dock-camera-overlay-cross {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dock-camera-overlay-cross .reticle-h {
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dock-camera-overlay-cross .reticle-v {
+  position: absolute;
+  height: 100%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .docking-target-animation {
@@ -1361,6 +1520,10 @@ body, html {
 }
 
 /* 3. NAVIGATION PROGRESS SCREEN */
+.nav-target-highlight {
+  color: #EA580C;
+  font-weight: 900;
+}
 .nav-radar-animation {
   position: relative;
   width: 160px;
@@ -2068,6 +2231,7 @@ body, html {
   height: 100%;
   overflow: hidden;
   background: #0B0F19;
+  touch-action: none;
   z-index: 250;
 }
 
@@ -2202,6 +2366,17 @@ body, html {
   font-size: 15px;
   box-shadow: 0 8px 24px rgba(203, 60, 0, 0.35);
   z-index: 22;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.map-viewer-editor-bar.mode-save-location {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(29, 78, 216, 0.96));
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
+}
+
+.map-viewer-editor-bar.mode-edit-dock {
+  background: linear-gradient(135deg, rgba(203, 60, 0, 0.96), rgba(152, 45, 0, 0.96));
+  box-shadow: 0 8px 24px rgba(203, 60, 0, 0.35);
 }
 
 .editor-bar-actions {

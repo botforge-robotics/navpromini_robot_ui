@@ -93,6 +93,16 @@ class RobotKioskWindow(Gtk.Window):
                 wv.set_zoom_level(1.0)
         self.webview.connect('notify::zoom-level', _lock_zoom)
 
+        # Block native GTK pinch-to-zoom gestures from scaling the webview
+        try:
+            self.zoom_gesture = Gtk.GestureZoom.new(self.webview)
+            self.zoom_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            def _claim_zoom(gesture, *args):
+                gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+            self.zoom_gesture.connect('scale-changed', _claim_zoom)
+        except Exception:
+            pass
+
         # Intercept Ctrl+scroll to prevent browser zoom
         def _on_scroll(widget, event):
             if event.state & Gdk.ModifierType.CONTROL_MASK:

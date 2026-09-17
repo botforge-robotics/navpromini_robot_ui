@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NavPro Mini — Onboard Screen UI</title>
-  <link rel="stylesheet" href="style.css?v=206">
+  <link rel="stylesheet" href="style.css?v=212">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -245,11 +245,23 @@
                   </div>
                 </div>
 
-                <!-- Bottom Swipe Hint Back to Face -->
+                <!-- Bottom Swipe Hint & Quick Dock Controls -->
                 <div class="dashboard-bottom-bar">
                   <button class="dashboard-swipe-prompt" id="dash-swipe-to-face" onclick="setSwipeIndex(0)">
-                    <span>⬅ View Robot Face</span>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align: -2px;"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M9 15c1.5 1.5 4.5 1.5 6 0"/></svg>
+                    <span>Robot Face</span>
                   </button>
+
+                  <div class="dashboard-dock-actions">
+                    <button type="button" class="btn-dock-quick btn-quick-dock" id="btn-quick-dock" onclick="triggerAutoDock()" title="Auto-Dock to Charger">
+                      <span class="dock-quick-icon">⚡</span>
+                      <span class="dock-quick-label">Auto-Dock</span>
+                    </button>
+                    <button type="button" class="btn-dock-quick btn-quick-undock" id="btn-quick-undock" onclick="triggerUndock()" title="Undock from Charger">
+                      <span class="dock-quick-icon">🚀</span>
+                      <span class="dock-quick-label">Undock</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -473,14 +485,30 @@
     <!-- 2. DOCKING / UNDOCKING ANIMATION SCREEN (Auto-appears during dock/undock) -->
     <div class="kiosk-full-screen" id="screen-docking-progress" style="display: none;">
       <div class="docking-screen-content">
-        <div class="docking-target-animation">
+        <!-- Live Alignment Camera Feed Card (Shows alignment lines and marker tracking) -->
+        <div class="dock-camera-card" id="dock-camera-card">
+          <div class="dock-camera-header">
+            <span class="dock-camera-live-badge"><span class="dock-pulse-dot"></span> LIVE ALIGNMENT FEED</span>
+            <span class="dock-camera-tag-status status-searching" id="dock-camera-tag-status">Searching for Charger</span>
+          </div>
+          <div class="dock-camera-preview-wrapper">
+            <img id="dock-camera-preview-img" alt="Dock Alignment Camera" src="" />
+            <div class="dock-camera-overlay-cross">
+              <div class="reticle-line reticle-h"></div>
+              <div class="reticle-line reticle-v"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="docking-target-animation" id="docking-target-animation" style="display: none;">
           <div class="dock-radar-circle dock-radar-3"></div>
           <div class="dock-radar-circle dock-radar-2"></div>
           <div class="dock-radar-circle dock-radar-1"></div>
-          <div class="dock-target-marker" id="dock-marker-icon">🎯</div>
+          <div class="dock-target-marker" id="dock-marker-icon">⚡</div>
         </div>
-        <h2 id="dock-progress-title">Auto-Docking In Progress</h2>
-        <p id="dock-progress-subtitle">Aligning with charger visual marker and engaging contact pads...</p>
+
+        <h2 id="dock-progress-title">Connecting to Charging Station</h2>
+        <p id="dock-progress-subtitle">Aligning with charging dock guide and locking onto contact pins...</p>
         <button class="btn btn-danger btn-lg" id="btn-cancel-docking">Cancel Docking</button>
       </div>
     </div>
@@ -492,13 +520,13 @@
           <div class="nav-pulse-ring"></div>
           <div class="nav-target-pin">📍</div>
         </div>
-        <div class="nav-status-badge">NAVIGATING TO DESTINATION</div>
-        <h1 class="nav-dest-title" id="nav-screen-destination">Station Name</h1>
-        <p class="nav-distance-text" id="nav-screen-distance">Approaching target pose...</p>
+        <div class="nav-status-badge">EN ROUTE</div>
+        <h1 class="nav-dest-title" id="nav-screen-destination">Navigating to <span class="nav-target-highlight">Station</span></h1>
+        <p class="nav-distance-text" id="nav-screen-distance">Guiding robot smoothly to target location...</p>
         <div class="nav-progress-track">
           <div class="nav-progress-bar" id="nav-screen-bar"></div>
         </div>
-        <button class="btn btn-danger btn-lg" id="btn-cancel-navigation">Halt & Cancel Goal</button>
+        <button class="btn btn-danger btn-lg" id="btn-cancel-navigation">Stop Navigation</button>
       </div>
     </div>
 
@@ -506,16 +534,16 @@
     <div class="kiosk-full-screen" id="screen-mission-progress" style="display: none;">
       <div class="mission-screen-content">
         <div class="mission-header-bar">
-          <div class="mission-type-pill" id="mission-screen-type">WORKFLOW</div>
-          <h1 id="mission-screen-title">Active Mission Name</h1>
+          <div class="mission-type-pill" id="mission-screen-type">ROUTINE</div>
+          <h1 id="mission-screen-title">Active Routine</h1>
           <div class="mission-time-counter" id="mission-screen-time">00:00</div>
         </div>
         <div class="mission-active-node-box">
           <span class="node-status-pulse"></span>
           <div class="node-details">
-            <span class="node-tag">ACTIVE STEP</span>
-            <h2 id="mission-screen-node">Node 1: Initialize</h2>
-            <p id="mission-screen-step-desc">Executing navigation behavior...</p>
+            <span class="node-tag">CURRENT TASK</span>
+            <h2 id="mission-screen-node">Task 1: In Progress</h2>
+            <p id="mission-screen-step-desc">Executing autonomous routine action...</p>
           </div>
         </div>
         <div class="mission-progress-container">
@@ -524,8 +552,8 @@
           </div>
         </div>
         <div class="mission-control-buttons">
-          <button class="btn btn-secondary btn-lg" id="btn-mission-pause-screen">Pause Mission</button>
-          <button class="btn btn-danger btn-lg" id="btn-mission-abort-screen">Abort Mission</button>
+          <button class="btn btn-secondary btn-lg" id="btn-mission-pause-screen">Pause Routine</button>
+          <button class="btn btn-danger btn-lg" id="btn-mission-abort-screen">Stop Routine</button>
         </div>
       </div>
     </div>
@@ -700,11 +728,8 @@
 
       <!-- Floating Editor Bar when in Edit Dock or Save Location mode -->
       <div class="map-viewer-editor-bar" id="map-viewer-editor-bar" style="display: none;">
-        <div class="editor-bar-prompt" id="editor-bar-prompt">Tap map to place Charging Dock</div>
-        <div class="editor-bar-actions">
-          <button class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
-          <button class="btn btn-primary btn-sm" id="btn-save-viewer-edit" onclick="saveViewerEditMode()">Save Changes</button>
-        </div>
+        <div class="editor-bar-prompt" id="editor-bar-prompt"></div>
+        <div class="editor-bar-actions"></div>
       </div>
 
       <!-- Floating Bottom Legend -->
@@ -979,6 +1004,6 @@
     <div class="kiosk-toast" id="kiosk-toast" style="display: none;"></div>
   </div>
 
-  <script src="app.js?v=209"></script>
+  <script src="app.js?v=212"></script>
 </body>
 </html>

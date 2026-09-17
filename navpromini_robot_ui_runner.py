@@ -77,7 +77,11 @@ class RobotKioskWindow(Gtk.Window):
         settings.set_enable_smooth_scrolling(True)
         settings.set_javascript_can_open_windows_automatically(False)
         settings.set_media_playback_allows_inline(True)
-        settings.set_enable_developer_extras(False)
+        settings.set_enable_developer_extras(True)
+        try:
+            settings.set_enable_write_console_messages_to_stdout(True)
+        except Exception:
+            pass
         settings.set_zoom_text_only(False)
 
         # WebKit WebView with Ephemeral Context
@@ -124,6 +128,7 @@ class RobotKioskWindow(Gtk.Window):
 
         self.webview.load_uri(target_url)
         self.show_all()
+        self.webview.grab_focus()
 
         GLib.timeout_add(1000, self._keep_fullscreen)
 
@@ -131,6 +136,27 @@ class RobotKioskWindow(Gtk.Window):
         self.fullscreen()
         self.set_keep_above(True)
         return False
+
+def start_eval_server(win, port=8092):
+    class EvalHandler(SimpleHTTPRequestHandler):
+        def do_POST(self):
+            content_len = int(self.headers.get('Content-Length', 0))
+            post_body = self.rfile.read(content_len).decode('utf-8')
+            GLib.idle_add(win.webview.run_javascript, post_body, None, None, None)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}\n')
+        def log_message(self, format, *args):
+            pass
+
+    try:
+        server = HTTPServer(('127.0.0.1', port), EvalHandler)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        print(f"[Kiosk] Local automation eval server listening on port {port}")
+    except Exception as e:
+        print(f"[Kiosk] Could not start eval server: {e}")
 
 def main():
     script_dir = Path(__file__).resolve().parent
@@ -141,6 +167,9 @@ def main():
         ui_dir = script_dir / "usr" / "share" / "navpromini-robot-ui"
 
     url = f"http://127.0.0.1:{PORT}/"
+    if len(sys.argv) > 1 and sys.argv[1].startswith("http"):
+        url = sys.argv[1]
+
     if not is_port_open(PORT):
         print(f"[Kiosk] Port {PORT} offline. Starting internal HTTP server on port {PORT}...")
         start_internal_server(ui_dir, PORT)
@@ -151,6 +180,7 @@ def main():
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
     win = RobotKioskWindow(url)
+    start_eval_server(win, port=8092)
     Gtk.main()
 
 if __name__ == "__main__":

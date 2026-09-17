@@ -1062,103 +1062,201 @@ body, html {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 36px;
+  gap: 24px;
   max-width: 580px;
-  width: 90%;
+  width: 92%;
   text-align: center;
 }
 
-.charging-pulse-ring {
-  width: 250px;
-  height: 250px;
+/* Charging Animation Stage containing the sphere, aura, and merging bubbles */
+.charging-animation-stage {
+  position: relative;
+  width: 270px;
+  height: 270px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+/* Radiant background glow aura behind the orb */
+.charging-energy-aura {
+  position: absolute;
+  width: 270px;
+  height: 270px;
   border-radius: 50%;
-  background: #FFFFFF;
-  border: 6px solid var(--success);
-  box-shadow: 0 0 50px var(--success-glow);
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.28) 0%, rgba(5, 150, 105, 0.12) 55%, transparent 75%);
+  pointer-events: none;
+  animation: auraBreathe 3s infinite ease-in-out;
+}
+
+/* Concentric expanding ripples that pulse outward as energy merges */
+.charging-ripple-ring {
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 2px solid rgba(16, 185, 129, 0.5);
+  pointer-events: none;
+  animation: energyRipple 2.8s infinite cubic-bezier(0.1, 0.7, 0.3, 1);
+}
+.charging-ripple-ring.r1 { animation-delay: 0s; }
+.charging-ripple-ring.r2 { animation-delay: 1.4s; }
+
+/* Main Central Energy Sphere */
+.charging-pulse-ring {
+  position: relative;
+  z-index: 5;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #FFFFFF 0%, #F0FDF4 60%, #DCFCE7 100%);
+  border: 5px solid #10B981;
+  box-shadow: 0 0 45px rgba(16, 185, 129, 0.55), inset 0 0 25px rgba(16, 185, 129, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   animation: chargingPulse 3s infinite ease-in-out;
+  overflow: hidden;
+}
+
+.charging-inner-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 120%, rgba(16, 185, 129, 0.35) 0%, transparent 70%);
+  pointer-events: none;
+  animation: innerGlowPulse 2.5s infinite ease-in-out alternate;
 }
 
 .charging-inner-ring {
+  position: relative;
+  z-index: 6;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .charging-bolt-large {
-  font-size: 40px;
-  animation: pulseGlow 1.5s infinite;
+  font-size: 36px;
+  color: #10B981;
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.7));
+  animation: boltFlicker 1.8s infinite ease-in-out;
 }
 
 .charging-large-pct {
-  font-size: 72px;
+  font-size: 58px;
   font-weight: 900;
   font-family: var(--font-mono);
-  color: var(--text-primary);
+  color: #0F172A;
   line-height: 1;
+  letter-spacing: -1px;
 }
 
 .charging-state-text {
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 2px;
-  color: var(--success);
+  color: #059669;
+  text-transform: uppercase;
 }
 
-/* Charging Bubbles Stream Animation */
-.charging-bubbles-container {
-  position: relative;
-  width: 200px;
-  height: 120px;
-  margin-top: -24px;
-  margin-bottom: -16px;
-  overflow: visible;
+/* Rising Energy Stream: Bubbles start well below and rise straight into the center core! */
+.charging-bubbles-stream {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -110px;
+  top: 0;
   pointer-events: none;
+  z-index: 4;
 }
 
 .charging-bubble {
   position: absolute;
+  left: 50%;
   bottom: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #6EE7B7, #10B981 70%, #059669);
-  box-shadow: 0 0 14px rgba(16, 185, 129, 0.7), inset 0 0 4px rgba(255, 255, 255, 0.6);
+  background: radial-gradient(circle at 35% 35%, #A7F3D0, #10B981 65%, #047857);
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.85), inset 0 0 5px rgba(255, 255, 255, 0.7);
   opacity: 0;
-  animation: bubbleRise 2.5s infinite ease-in;
+  animation: bubbleMergeIntoCenter 2.4s infinite cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.charging-bubble.b1 { left: 46%; width: 14px; height: 14px; animation-delay: 0s; }
-.charging-bubble.b2 { left: 32%; width: 18px; height: 18px; animation-delay: 0.35s; }
-.charging-bubble.b3 { left: 58%; width: 12px; height: 12px; animation-delay: 0.7s; }
-.charging-bubble.b4 { left: 42%; width: 22px; height: 22px; animation-delay: 1.05s; }
-.charging-bubble.b5 { left: 52%; width: 16px; height: 16px; animation-delay: 1.4s; }
-.charging-bubble.b6 { left: 36%; width: 10px; height: 10px; animation-delay: 1.75s; }
-.charging-bubble.b7 { left: 62%; width: 20px; height: 20px; animation-delay: 2.1s; }
-.charging-bubble.b8 { left: 48%; width: 15px; height: 15px; animation-delay: 1.25s; }
+/* Staggered particle paths with varying x offsets, sizes, and delays */
+.charging-bubble.b1  { width: 14px; height: 14px; margin-left: -7px;  animation-delay: 0s;    --x-drift: -22px; }
+.charging-bubble.b2  { width: 22px; height: 22px; margin-left: -11px; animation-delay: 0.25s; --x-drift: 28px;  }
+.charging-bubble.b3  { width: 16px; height: 16px; margin-left: -8px;  animation-delay: 0.5s;  --x-drift: -10px; }
+.charging-bubble.b4  { width: 26px; height: 26px; margin-left: -13px; animation-delay: 0.75s; --x-drift: 18px;  }
+.charging-bubble.b5  { width: 18px; height: 18px; margin-left: -9px;  animation-delay: 1.0s;  --x-drift: -34px; }
+.charging-bubble.b6  { width: 12px; height: 12px; margin-left: -6px;  animation-delay: 1.25s; --x-drift: 8px;   }
+.charging-bubble.b7  { width: 24px; height: 24px; margin-left: -12px; animation-delay: 1.5s;  --x-drift: -18px; }
+.charging-bubble.b8  { width: 15px; height: 15px; margin-left: -7.5px;animation-delay: 1.75s; --x-drift: 32px;  }
+.charging-bubble.b9  { width: 20px; height: 20px; margin-left: -10px; animation-delay: 2.0s;  --x-drift: -6px;  }
+.charging-bubble.b10 { width: 14px; height: 14px; margin-left: -7px;  animation-delay: 2.2s;  --x-drift: 14px;  }
 
-@keyframes bubbleRise {
+/* Keyframe: Rises from bottom (translateY(0)), drifts along X, and enters directly into center orb */
+@keyframes bubbleMergeIntoCenter {
   0% {
-    transform: translateY(110px) scale(0.5);
+    transform: translate(calc(var(--x-drift) * 1.6), 0px) scale(0.4);
     opacity: 0;
   }
   15% {
-    opacity: 0.85;
+    opacity: 0.9;
+    transform: translate(calc(var(--x-drift) * 1.3), -50px) scale(0.85);
   }
-  75% {
+  50% {
+    opacity: 1;
+    transform: translate(calc(var(--x-drift) * 0.7), -140px) scale(1.1);
+  }
+  80% {
     opacity: 0.95;
+    transform: translate(calc(var(--x-drift) * 0.25), -210px) scale(0.9);
   }
-  92% {
-    transform: translateY(16px) scale(1.1);
-    opacity: 0.75;
+  95% {
+    opacity: 0.9;
+    transform: translate(0px, -245px) scale(0.65);
+    filter: brightness(1.6) drop-shadow(0 0 16px #34D399);
   }
   100% {
-    transform: translateY(0px) scale(0.2);
+    /* Merges fully into the center of the sphere! */
+    transform: translate(0px, -255px) scale(0.1);
     opacity: 0;
-    filter: blur(1px);
+    filter: blur(2px) brightness(2);
   }
+}
+
+@keyframes energyRipple {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.9;
+    border-color: rgba(52, 211, 153, 0.8);
+  }
+  50% {
+    border-color: rgba(16, 185, 129, 0.4);
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+    border-color: rgba(5, 150, 105, 0);
+  }
+}
+
+@keyframes auraBreathe {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 1; filter: drop-shadow(0 0 35px rgba(16, 185, 129, 0.4)); }
+}
+
+@keyframes innerGlowPulse {
+  0% { opacity: 0.3; transform: scaleY(0.8); }
+  100% { opacity: 0.8; transform: scaleY(1.2); }
+}
+
+@keyframes boltFlicker {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.6)); }
+  50% { transform: scale(1.12); filter: drop-shadow(0 0 20px rgba(52, 211, 153, 1)); }
 }
 
 .charging-info-card {

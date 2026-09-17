@@ -430,23 +430,34 @@
     <!-- 1. DOCKED & CHARGING SCREEN (Auto-appears when docked) -->
     <div class="kiosk-full-screen" id="screen-charging" style="display: none;">
       <div class="charging-screen-content">
-        <div class="charging-pulse-ring">
-          <div class="charging-inner-ring">
-            <span class="charging-bolt-large">⚡</span>
-            <span class="charging-large-pct" id="charging-screen-pct">--%</span>
-            <span class="charging-state-text" id="charging-state-text">FAST CHARGING</span>
+        <!-- Futuristic Charging Orb with particles fusing into center -->
+        <div class="charging-animation-stage">
+          <div class="charging-ripple-ring r1"></div>
+          <div class="charging-ripple-ring r2"></div>
+          <div class="charging-energy-aura"></div>
+
+          <!-- Rising stream of energy bubbles fusing seamlessly into center orb -->
+          <div class="charging-bubbles-stream" id="charging-bubbles">
+            <span class="charging-bubble b1"></span>
+            <span class="charging-bubble b2"></span>
+            <span class="charging-bubble b3"></span>
+            <span class="charging-bubble b4"></span>
+            <span class="charging-bubble b5"></span>
+            <span class="charging-bubble b6"></span>
+            <span class="charging-bubble b7"></span>
+            <span class="charging-bubble b8"></span>
+            <span class="charging-bubble b9"></span>
+            <span class="charging-bubble b10"></span>
           </div>
-        </div>
-        <!-- Rising bubbles merging with charging circle -->
-        <div class="charging-bubbles-container" id="charging-bubbles">
-          <span class="charging-bubble b1"></span>
-          <span class="charging-bubble b2"></span>
-          <span class="charging-bubble b3"></span>
-          <span class="charging-bubble b4"></span>
-          <span class="charging-bubble b5"></span>
-          <span class="charging-bubble b6"></span>
-          <span class="charging-bubble b7"></span>
-          <span class="charging-bubble b8"></span>
+
+          <div class="charging-pulse-ring">
+            <div class="charging-inner-glow"></div>
+            <div class="charging-inner-ring">
+              <span class="charging-bolt-large">⚡</span>
+              <span class="charging-large-pct" id="charging-screen-pct">--%</span>
+              <span class="charging-state-text" id="charging-state-text">FAST CHARGING</span>
+            </div>
+          </div>
         </div>
         <div class="charging-info-card">
           <h2>Docked at Charging Station</h2>

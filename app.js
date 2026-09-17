@@ -496,29 +496,46 @@ function updatePowerState(pState) {
     const rawPct = b.percentage !== undefined ? b.percentage : (b.soc_percent !== undefined ? b.soc_percent : (b.battery_level !== undefined ? b.battery_level : null));
     
     if (rawPct !== null && rawPct !== undefined && !isNaN(rawPct)) {
-      const pct = Math.max(0, Math.min(100, Math.round(Number(rawPct))));
+      let val = Number(rawPct);
+      if (val <= 1.0 && val > 0.0) val *= 100.0;
+      val = Math.max(0, Math.min(100, val));
+
+      // Up to 2 decimal places without trailing zeros (e.g. 99.8%, 99.85%, 100%, 85%)
+      let displayPct;
+      if (val >= 99.95) {
+        displayPct = "100";
+      } else if (Number.isInteger(val)) {
+        displayPct = val.toString();
+      } else {
+        const d2 = val.toFixed(2);
+        displayPct = d2.endsWith('0') ? val.toFixed(1) : d2;
+      }
 
       // Update header battery chip
       const pctEl = document.getElementById("battery-pct");
       const boltEl = document.getElementById("charging-bolt");
-      if (pctEl) pctEl.textContent = `${pct}%`;
+      if (pctEl) pctEl.textContent = `${displayPct}%`;
       if (boltEl) boltEl.style.display = isCharging ? "inline" : "none";
 
       // Update full-screen charging overlay if visible
       const chargingScreen = document.getElementById("screen-charging");
       const chargingPct = document.getElementById("charging-screen-pct");
-      if (chargingPct) chargingPct.textContent = `${pct}%`;
+      if (chargingPct) chargingPct.textContent = `${displayPct}%`;
 
-      const isFull = pct >= 100 || b.status === "Full" || b.status === "full" || b.status === "completed";
+      // Truly full only when >= 99.95% or hardware reports full and not charging current
+      const isFull = (val >= 99.95 && (!isCharging || (b.current !== undefined && b.current < 0.1))) ||
+                     b.status === "Full" || b.status === "full" || b.status === "completed" ||
+                     b.power_supply_status === "Full" || b.power_supply_status === 4;
+
       const chargingStateText = document.getElementById("charging-state-text");
       const chargingInfoDesc = document.getElementById("charging-info-desc");
       if (chargingStateText) {
-        chargingStateText.textContent = isFull ? "CHARGING COMPLETED" : "FAST CHARGING";
+        chargingStateText.textContent = isFull ? "CHARGING COMPLETED" : (val > 80 ? "BALANCING / TOP-UP" : "FAST CHARGING");
       }
       if (chargingInfoDesc) {
         chargingInfoDesc.textContent = isFull
           ? "Battery is fully charged (100%). Robot is ready for operations."
-          : "The robot is currently locked in dock position and recharging its battery.";
+          : `Robot is locked on dock and actively charging (${displayPct}%).`;
       }
 
       // Auto-display charging screen when docked and charging

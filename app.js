@@ -790,6 +790,16 @@ let activeTouchPointers = new Map();
 let initialPinchDistance = null;
 let initialPinchScale = 1.0;
 let latestMapImage = null;
+let liveRosWs = null;
+let liveRosWsReconnectTimer = null;
+let liveMapOdomTf = null;
+
+function quatToEulerYaw(q) {
+  if (!q) return 0.0;
+  const siny_cosp = 2.0 * (q.w * q.z + q.x * q.y);
+  const cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
+  return Math.atan2(siny_cosp, cosy_cosp);
+}
 
 function initMappingViewportInteractivity() {
   const canvas = document.getElementById("mapping-live-canvas");
@@ -932,63 +942,163 @@ function startLiveMapRenderer() {
     } catch (_) {}
   };
 
-  // 2. High-frequency Robot Pose & Laser Scan poller (every 150ms)
-  const fetchRobotTelemetry = async () => {
-    try {
-      const [stateRes, scanRes] = await Promise.allSettled([
-        fetch(`${API_BASE}/api/v1/state`),
-        fetch(`${API_BASE}/api/v1/state/scan`)
-      ]);
+  // 2. High-speed ROSBridge WebSocket (port 9090) for zero-latency pose & lidar sync
+  const connectRosBridge = () => {
+    if (liveRosWs) {
+      try { liveRosWs.close(); } catch (_) {}
+      liveRosWs = null;
+    }
+    clearTimeout(liveRosWsReconnectTimer);
 
-      if (stateRes.status === "fulfilled" && stateRes.value.ok) {
-        const s = await stateRes.value.json();
+    try {
+      const wsHost = window.location.hostname || "127.0.0.1";
+      liveRosWs = new WebSocket(`ws://${wsHost}:9090`);
+
+      liveRosWs.onopen = () => {
+        // Track map -> odom transform live from /tf
+        liveRosWs.send(JSON.stringify({
+          op: "subscribe",
+          topic: "/tf",
+          type: "tf2_msgs/msg/TFMessage",
+          throttle_rate: 50
+        }));
+
+        // Subscribe to /odom for low-latency, smooth odometry
+        liveRosWs.send(JSON.stringify({
+          op: "subscribe",
+          topic: "/odom",
+          type: "nav_msgs/msg/Odometry",
+          throttle_rate: 50
+        }));
+
+        // Subscribe to /scan_filtered for laser scan overlay
+        liveRosWs.send(JSON.stringify({
+          op: "subscribe",
+          topic: "/scan_filtered",
+          type: "sensor_msgs/msg/LaserScan",
+          throttle_rate: 100
+        }));
+      };
+
+      liveRosWs.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.op !== "publish" || !payload.msg) return;
+
+          if (payload.topic === "/tf") {
+            const transforms = payload.msg.transforms || [];
+            for (const t of transforms) {
+              const parent = (t.header?.frame_id || "").replace(/\//g, "");
+              const child = (t.child_frame_id || "").replace(/\//g, "");
+              if (parent === "map" && child === "odom") {
+                const tr = t.transform;
+                liveMapOdomTf = {
+                  x: tr.translation.x,
+                  y: tr.translation.y,
+                  theta: quatToEulerYaw(tr.rotation)
+                };
+                break;
+              }
+            }
+          } else if (payload.topic === "/odom") {
+            const pos = payload.msg.pose?.pose?.position;
+            const orient = payload.msg.pose?.pose?.orientation;
+            if (pos && orient) {
+              const ox = pos.x;
+              const oy = pos.y;
+              const odomYaw = quatToEulerYaw(orient);
+
+              let mx = ox;
+              let my = oy;
+              let myaw = odomYaw;
+
+              if (liveMapOdomTf) {
+                const c = Math.cos(liveMapOdomTf.theta);
+                const s = Math.sin(liveMapOdomTf.theta);
+                mx = liveMapOdomTf.x + c * ox - s * oy;
+                my = liveMapOdomTf.y + s * ox + c * oy;
+                myaw = liveMapOdomTf.theta + odomYaw;
+              }
+
+              targetRobotPose = { x: mx, y: my, yaw: myaw };
+
+              if (!firstFrameLoaded) {
+                smoothRobotPose.x = mx;
+                smoothRobotPose.y = my;
+                smoothRobotPose.yaw = myaw;
+              }
+
+              // Update dock heading and standoff once robot moves >= 0.20m from starting dock position
+              const distFromDock = Math.hypot(targetRobotPose.x - liveDockPose.x, targetRobotPose.y - liveDockPose.y);
+              if (!liveHasMovedAway && distFromDock >= 0.20) {
+                const depAngle = Math.atan2(targetRobotPose.y - liveDockPose.y, targetRobotPose.x - liveDockPose.x);
+                liveDockPose.theta = depAngle;
+                liveStandoffPose = {
+                  x: liveDockPose.x + 0.70 * Math.cos(depAngle),
+                  y: liveDockPose.y + 0.70 * Math.sin(depAngle),
+                  theta: depAngle
+                };
+                liveHasMovedAway = true;
+              }
+
+              // Record trajectory point
+              const lastPt = liveTrajectory[liveTrajectory.length - 1];
+              if (!lastPt || Math.hypot(targetRobotPose.x - lastPt.x, targetRobotPose.y - lastPt.y) >= 0.06) {
+                liveTrajectory.push({ x: targetRobotPose.x, y: targetRobotPose.y });
+              }
+            }
+          } else if (payload.topic === "/scan_filtered" || payload.topic === "/scan") {
+            if (payload.msg && payload.msg.ranges) {
+              liveLaserScan = payload.msg;
+            }
+          }
+        } catch (_) {}
+      };
+
+      liveRosWs.onerror = () => {
+        try { liveRosWs.close(); } catch (_) {}
+      };
+
+      liveRosWs.onclose = () => {
+        liveRosWs = null;
+        clearTimeout(liveRosWsReconnectTimer);
+        liveRosWsReconnectTimer = setTimeout(() => {
+          if (document.getElementById("screen-mapping-live")?.style.display === "flex") {
+            connectRosBridge();
+          }
+        }, 2000);
+      };
+    } catch (_) {}
+  };
+
+  // 3. Fallback HTTP telemetry poller (only used if WebSocket is not yet connected)
+  const fetchRobotTelemetry = async () => {
+    if (liveRosWs && liveRosWs.readyState === WebSocket.OPEN) return;
+    try {
+      const stateRes = await fetch(`${API_BASE}/api/v1/state`);
+      if (stateRes.ok) {
+        const s = await stateRes.json();
         if (s.localization && s.localization.x !== undefined) {
           targetRobotPose = {
             x: s.localization.x,
             y: s.localization.y,
             yaw: s.localization.yaw || 0
           };
-
           if (!firstFrameLoaded) {
             smoothRobotPose.x = targetRobotPose.x;
             smoothRobotPose.y = targetRobotPose.y;
             smoothRobotPose.yaw = targetRobotPose.yaw;
           }
-
-          // Track departure movement from dock for automatic standoff & orientation calculation
-          const distFromDock = Math.hypot(targetRobotPose.x - liveDockPose.x, targetRobotPose.y - liveDockPose.y);
-          if (!liveHasMovedAway && distFromDock >= 0.20) {
-            const depAngle = Math.atan2(targetRobotPose.y - liveDockPose.y, targetRobotPose.x - liveDockPose.x);
-            liveDockPose.theta = depAngle;
-            liveStandoffPose = {
-              x: liveDockPose.x + 0.70 * Math.cos(depAngle),
-              y: liveDockPose.y + 0.70 * Math.sin(depAngle),
-              theta: depAngle
-            };
-            liveHasMovedAway = true;
-          }
-
-          // Record trajectory point
-          const lastPt = liveTrajectory[liveTrajectory.length - 1];
-          if (!lastPt || Math.hypot(targetRobotPose.x - lastPt.x, targetRobotPose.y - lastPt.y) >= 0.06) {
-            liveTrajectory.push({ x: targetRobotPose.x, y: targetRobotPose.y });
-          }
-        }
-      }
-
-      if (scanRes.status === "fulfilled" && scanRes.value.ok) {
-        const scanData = await scanRes.value.json();
-        if (scanData && scanData.ranges) {
-          liveLaserScan = scanData;
         }
       }
     } catch (_) {}
   };
 
   fetchMapData();
+  connectRosBridge();
   fetchRobotTelemetry();
   liveMapFetchInterval = setInterval(fetchMapData, 1200);
-  liveMapFastPoller = setInterval(fetchRobotTelemetry, 150);
+  liveMapFastPoller = setInterval(fetchRobotTelemetry, 1000);
 
   // 3. Silky-smooth 60 FPS Canvas Render Loop
   const renderFrameLoop = () => {
@@ -1225,6 +1335,15 @@ function stopLiveMapRenderer() {
     cancelAnimationFrame(liveMapAnimId);
     liveMapAnimId = null;
   }
+  if (liveRosWs) {
+    try {
+      liveRosWs.close();
+    } catch (_) {}
+    liveRosWs = null;
+  }
+  clearTimeout(liveRosWsReconnectTimer);
+  liveRosWsReconnectTimer = null;
+  liveMapOdomTf = null;
   clearInterval(liveMapFetchInterval);
   liveMapFetchInterval = null;
   clearInterval(liveMapFastPoller);
@@ -1378,29 +1497,11 @@ window.startSlamMapping = async function() {
   try {
     showToast("Initializing SLAM mapping mode...");
 
-    // Record initial dock pose (at start of mapping robot is placed at dock facing room)
-    try {
-      const stRes = await fetch(`${API_BASE}/api/v1/state`);
-      if (stRes.ok) {
-        const st = await stRes.json();
-        const ix = (st.localization && st.localization.x) || 0;
-        const iy = (st.localization && st.localization.y) || 0;
-        const iyaw = (st.localization && st.localization.yaw) || 0;
-        liveDockPose = { x: ix, y: iy, theta: iyaw };
-        liveStandoffPose = {
-          x: ix + 0.70 * Math.cos(iyaw),
-          y: iy + 0.70 * Math.sin(iyaw),
-          theta: iyaw
-        };
-        liveTrajectory = [{ x: ix, y: iy }];
-        liveHasMovedAway = false;
-      }
-    } catch (_) {
-      liveDockPose = { x: 0, y: 0, theta: 0 };
-      liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
-      liveTrajectory = [{ x: 0, y: 0 }];
-      liveHasMovedAway = false;
-    }
+    // Mapping begins at the charging dock facing room. Map origin (0,0) defines dock position.
+    liveDockPose = { x: 0, y: 0, theta: 0 };
+    liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
+    liveTrajectory = [{ x: 0, y: 0 }];
+    liveHasMovedAway = false;
 
     await fetch(`${API_BASE}/api/v1/mode`, {
       method: "POST",

@@ -2543,6 +2543,113 @@ body, html {
   transform: translateX(20px);
 }
 
+/* Viewer Localization Options Modal (Parity with Desktop Mission Planner) */
+.viewer-localize-card {
+  max-width: 480px;
+  width: 90%;
+  padding: 24px;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+  border: 1.5px solid var(--border);
+}
+
+.viewer-localize-card .modal-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.btn-modal-close {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 800;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-modal-close:active {
+  background: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.localize-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.localize-opt-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  background: var(--surface-sunken);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  color: var(--text-primary);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.localize-opt-btn:active {
+  background: var(--surface);
+  border-color: var(--primary);
+  transform: scale(0.98);
+}
+
+.localize-opt-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.localize-opt-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.localize-opt-info strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.localize-opt-info span {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.localize-opt-arrow {
+  font-size: 22px;
+  color: var(--text-secondary);
+  font-weight: 800;
+}
+
+.map-viewer-editor-bar.mode-localize {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(29, 78, 216, 0.96));
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
+}
+
 /* DOCK INSTRUCTION POPUP MODAL (UNCLIPPED FULL CLARITY) */
 .dock-instruction-modal-card {
   max-width: 680px;

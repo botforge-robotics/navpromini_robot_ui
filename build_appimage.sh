@@ -73,10 +73,15 @@ else
     TOOL="/tmp/appimagetool"
 fi
 
+RUNTIME_ARG=""
+if [ -f "${DIR}/runtime-${ARCH}" ]; then
+    RUNTIME_ARG="--runtime-file ${DIR}/runtime-${ARCH}"
+fi
+
 OUTPUT_NAME="NavProMiniRobotUI-${ARCH}.AppImage"
 echo "[Build] Packaging ${OUTPUT_NAME}..."
-ARCH="${ARCH}" "${TOOL}" --appimage-extract-and-run --no-appstream "${APPDIR}" "${DIR}/${OUTPUT_NAME}" || \
-ARCH="${ARCH}" "${TOOL}" --no-appstream "${APPDIR}" "${DIR}/${OUTPUT_NAME}"
+ARCH="${ARCH}" "${TOOL}" --appimage-extract-and-run --no-appstream ${RUNTIME_ARG} "${APPDIR}" "${DIR}/${OUTPUT_NAME}" || \
+ARCH="${ARCH}" "${TOOL}" --no-appstream ${RUNTIME_ARG} "${APPDIR}" "${DIR}/${OUTPUT_NAME}"
 
 chmod +x "${DIR}/${OUTPUT_NAME}"
 echo "=== Successfully built: ${DIR}/${OUTPUT_NAME} ==="

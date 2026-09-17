@@ -142,7 +142,13 @@ def start_eval_server(win, port=8092):
         def do_POST(self):
             content_len = int(self.headers.get('Content-Length', 0))
             post_body = self.rfile.read(content_len).decode('utf-8')
-            GLib.idle_add(win.webview.run_javascript, post_body, None, None, None)
+            def _exec():
+                try:
+                    win.webview.run_javascript(post_body)
+                except Exception as ex:
+                    print(f"[EvalServer] Error running JS: {ex}", flush=True)
+                return False
+            GLib.idle_add(_exec)
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()

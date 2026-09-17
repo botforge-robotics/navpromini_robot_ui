@@ -354,7 +354,10 @@ function initHubTiles() {
   }));
 }
 
+let currentOpenSubpage = null;
+
 function openSubpage(subpageName) {
+  currentOpenSubpage = subpageName;
   const container = document.getElementById("subpages-viewport");
   if (!container) return;
   container.style.display = "flex";
@@ -371,6 +374,7 @@ function openSubpage(subpageName) {
 }
 
 window.closeSubpage = function() {
+  currentOpenSubpage = null;
   const container = document.getElementById("subpages-viewport");
   if (container) container.style.display = "none";
 };
@@ -399,12 +403,26 @@ function initActionButtons() {
     openSetupScreen();
   });
 
+  // Manual Docking Trigger on Power Subpage
+  document.getElementById("btn-manual-dock-trigger")?.addEventListener("click", async () => {
+    try {
+      showToast("Starting auto-docking to charger...");
+      await fetch(`${API_BASE}/api/v1/dock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ navigate_to_staging: true })
+      });
+    } catch (e) {
+      showToast("Docking failed to start: " + e.message, true);
+    }
+  });
+
   // Charging Undock Button
   document.getElementById("btn-charging-undock")?.addEventListener("click", async () => {
     try {
       showToast("Undocking from charging station...");
-      await fetch(`${API_BASE}/api/v1/undock`, { method: "POST" });
       dismissChargingScreen();
+      await fetch(`${API_BASE}/api/v1/undock`, { method: "POST" });
     } catch (e) {
       showToast("Undock failed: " + e.message, true);
     }
@@ -413,23 +431,26 @@ function initActionButtons() {
   // Cancel Docking
   document.getElementById("btn-cancel-docking")?.addEventListener("click", async () => {
     try {
+      showToast("Canceling dock operation...");
       await fetch(`${API_BASE}/api/v1/dock/goal`, { method: "DELETE" });
-      document.getElementById("screen-docking-progress").style.display = "none";
-      showToast("Docking canceled.");
+      const dockScreen = document.getElementById("screen-docking-progress");
+      if (dockScreen) dockScreen.style.display = "none";
+      showToast("Dock operation canceled.");
     } catch (e) {
-      console.warn(e);
+      console.warn("Cancel dock error:", e);
     }
   });
 
   // Cancel Navigation
   document.getElementById("btn-cancel-navigation")?.addEventListener("click", async () => {
     try {
-      onScreenNavInitiated = false;
+      showToast("Canceling navigation goal...");
       await fetch(`${API_BASE}/api/v1/navigation/goal`, { method: "DELETE" });
-      document.getElementById("screen-nav-progress").style.display = "none";
+      const navScreen = document.getElementById("screen-nav-progress");
+      if (navScreen) navScreen.style.display = "none";
       showToast("Navigation canceled.");
     } catch (e) {
-      console.warn(e);
+      console.warn("Cancel nav error:", e);
     }
   });
 
@@ -486,36 +507,144 @@ function initActionButtons() {
    6. Navigation Progress & Auto-Charging Watcher
    -------------------------------------------------------------------------- */
 let onScreenNavInitiated = false;
+let previousDockOperation = "idle";
 
-function updateNavigationState(navData) {
+function updateNavigationState(navData, isMissionActive = false) {
   if (!navData) return;
   try {
-    const isNav = !!(navData.is_navigating || navData.status === "navigating" || navData.status === "executing");
+    const isNav = !!(navData.state === "active" || navData.is_navigating || navData.status === "navigating" || navData.status === "executing");
+    const wasNav = isNavigating;
     isNavigating = isNav;
+
     const navScreen = document.getElementById("screen-nav-progress");
-    if (navScreen) {
-      if (isNav && onScreenNavInitiated) {
+    if (!navScreen) return;
+
+    // Mission mode guard: if a mission workflow is executing, the mission progress screen is active.
+    // Navigation progress screen MUST NOT collide with mission goto steps!
+    if (isMissionActive) {
+      if (navScreen.style.display === "flex") {
+        navScreen.style.display = "none";
+      }
+      return;
+    }
+
+    if (isNav) {
+      if (navScreen.style.display !== "flex") {
         navScreen.style.display = "flex";
-        const destEl = document.getElementById("nav-screen-destination");
-        if (destEl && navData.target_waypoint) destEl.textContent = navData.target_waypoint;
-        const distEl = document.getElementById("nav-screen-distance");
-        if (distEl && navData.distance_remaining !== undefined) {
+      }
+
+      // Update Destination title
+      const destEl = document.getElementById("nav-screen-destination");
+      if (destEl) {
+        if (navData.target_waypoint) {
+          destEl.textContent = navData.target_waypoint;
+        } else if (navData.target && typeof navData.target === "object") {
+          if (navData.target.name) {
+            destEl.textContent = navData.target.name;
+          } else if (navData.target.x !== undefined && navData.target.y !== undefined) {
+            destEl.textContent = `Target (${navData.target.x.toFixed(2)}, ${navData.target.y.toFixed(2)})`;
+          } else {
+            destEl.textContent = "Autonomous Waypoint";
+          }
+        } else {
+          destEl.textContent = "Autonomous Waypoint";
+        }
+      }
+
+      // Update Distance Remaining
+      const distEl = document.getElementById("nav-screen-distance");
+      if (distEl) {
+        if (navData.distance_remaining !== undefined && navData.distance_remaining !== null) {
           distEl.textContent = `Approaching pose (${navData.distance_remaining.toFixed(1)}m remaining)...`;
+        } else {
+          distEl.textContent = "Approaching target pose...";
         }
-        const barEl = document.getElementById("nav-screen-bar");
-        if (barEl && navData.progress_percent !== undefined) {
-          barEl.style.width = `${Math.min(100, Math.max(0, navData.progress_percent))}%`;
+      }
+
+      // Update Progress Bar
+      const barEl = document.getElementById("nav-screen-bar");
+      if (barEl) {
+        if (navData.progress_percent !== undefined && navData.progress_percent !== null) {
+          barEl.style.width = `${Math.min(100, Math.max(5, navData.progress_percent))}%`;
+        } else {
+          barEl.style.width = "70%";
         }
-      } else {
-        if (!isNav) onScreenNavInitiated = false;
-        if (navScreen.style.display === "flex") {
-          navScreen.style.display = "none";
+      }
+    } else {
+      if (navScreen.style.display === "flex") {
+        navScreen.style.display = "none";
+        if (wasNav && (navData.state === "succeeded" || navData.status === "succeeded")) {
+          showToast("Reached destination successfully!");
+          triggerFaceExpression("happy");
         }
       }
     }
   } catch (err) {
     console.warn("Navigation state update error:", err);
   }
+}
+
+function updateDockingScreen(dockData, stateData, isMissionActive = false) {
+  const dockScreen = document.getElementById("screen-docking-progress");
+  if (!dockScreen) return;
+
+  const dockOp = (dockData && dockData.operation) ||
+                 (stateData && stateData.dock && stateData.dock.operation) ||
+                 "idle";
+
+  // Mission mode guard: during mission execution, mission progress screen displays the dock node
+  if (isMissionActive) {
+    if (dockScreen.style.display === "flex") {
+      dockScreen.style.display = "none";
+    }
+    previousDockOperation = dockOp;
+    return;
+  }
+
+  const titleEl = document.getElementById("dock-progress-title");
+  const subEl = document.getElementById("dock-progress-subtitle");
+  const markerEl = document.getElementById("dock-marker-icon");
+  const cancelBtn = document.getElementById("btn-cancel-docking");
+
+  if (dockOp === "docking") {
+    dockScreen.style.display = "flex";
+    if (titleEl) titleEl.textContent = "Auto-Docking In Progress";
+    if (subEl) subEl.textContent = (dockData && dockData.message) || "Aligning with charger visual marker and engaging contact pads...";
+    if (markerEl) markerEl.textContent = "🎯";
+    if (cancelBtn) cancelBtn.textContent = "Cancel Docking";
+  } else if (dockOp === "undocking") {
+    dockScreen.style.display = "flex";
+    if (titleEl) titleEl.textContent = "Undocking In Progress";
+    if (subEl) subEl.textContent = (dockData && dockData.message) || "Backing away from charging station...";
+    if (markerEl) markerEl.textContent = "⚡";
+    if (cancelBtn) cancelBtn.textContent = "Cancel Undock";
+  } else {
+    // Docking/undocking idle or finished -> auto-hide
+    if (dockScreen.style.display === "flex") {
+      dockScreen.style.display = "none";
+      if (previousDockOperation === "docking") {
+        const isCharging = !!(stateData && (
+          (stateData.dock && (stateData.dock.status === "charging" || stateData.dock.status === "full")) ||
+          (stateData.battery && stateData.battery.charging)
+        ));
+        if (dockOp === "docked" || isCharging) {
+          showToast("Robot successfully docked & charging!");
+          triggerFaceExpression("happy");
+        } else if (dockOp === "failed") {
+          showToast("Docking failed or canceled.", true);
+        }
+      } else if (previousDockOperation === "undocking") {
+        if (dockOp === "undocked" || dockOp === "idle") {
+          showToast("Robot undocked successfully!");
+          triggerFaceExpression("happy");
+        } else if (dockOp === "failed") {
+          showToast("Undock failed or canceled.", true);
+        }
+      }
+    }
+  }
+
+  previousDockOperation = dockOp;
 }
 
 function updatePowerState(pState) {
@@ -2727,6 +2856,7 @@ function makeSwipeable(containerEl) {
         if (el !== content) {
           el.style.transform = "translateX(0)";
           el.classList.remove("swiped-open");
+          el.closest(".swipeable-wrapper")?.classList.remove("has-swipe-open", "is-swiping");
         }
       });
     };
@@ -2753,6 +2883,7 @@ function makeSwipeable(containerEl) {
         }
         if (Math.abs(dx) > 8) {
           isSwiping = true;
+          wrapper.classList.add("is-swiping");
           resetOtherSwipes();
         }
       }
@@ -2771,9 +2902,12 @@ function makeSwipeable(containerEl) {
       if (currentDx < -45) {
         content.style.transform = "translateX(-90px)";
         content.classList.add("swiped-open");
+        wrapper.classList.add("has-swipe-open");
+        wrapper.classList.remove("is-swiping");
       } else {
         content.style.transform = "translateX(0)";
         content.classList.remove("swiped-open");
+        wrapper.classList.remove("has-swipe-open", "is-swiping");
       }
     };
 
@@ -2787,13 +2921,108 @@ document.addEventListener("pointerdown", (e) => {
     document.querySelectorAll(".swipeable-content.swiped-open").forEach(el => {
       el.style.transform = "translateX(0)";
       el.classList.remove("swiped-open");
+      el.closest(".swipeable-wrapper")?.classList.remove("has-swipe-open", "is-swiping");
     });
   }
 });
 
 /* --------------------------------------------------------------------------
-   11. Maps Subpage & Scoping
+   11. Active Map State Syncing & Scoping
    -------------------------------------------------------------------------- */
+function getActiveMapFromState(stateData) {
+  if (!stateData) return "";
+  if (typeof stateData.map === "string") return stateData.map.trim();
+  if (stateData.map && typeof stateData.map === "object") {
+    const name = stateData.map.name || stateData.map.id;
+    if (name) return String(name).trim();
+  }
+  if (stateData.current_map) return String(stateData.current_map).trim();
+  return "";
+}
+
+async function handleActiveMapChanged(newMapName) {
+  if (!newMapName) return;
+  const prevMap = activeMapName;
+  activeMapName = newMapName;
+
+  // Update UI headers & subtitles
+  const hubMapDesc = document.getElementById("hub-active-map-name");
+  if (hubMapDesc) hubMapDesc.textContent = `Active: ${activeMapName}`;
+
+  const locSub = document.getElementById("locations-map-subtitle");
+  if (locSub) locSub.textContent = `Showing stations on "${activeMapName}"`;
+
+  const misSub = document.getElementById("missions-map-subtitle");
+  if (misSub) misSub.textContent = `Showing visual routines on "${activeMapName}"`;
+
+  const schedSub = document.getElementById("schedules-map-subtitle");
+  if (schedSub) schedSub.textContent = `Showing automated timers on "${activeMapName}"`;
+
+  // Enable / update Add Location button
+  const addBtn = document.getElementById("btn-add-location");
+  if (addBtn) {
+    addBtn.disabled = false;
+    addBtn.classList.remove("disabled");
+    addBtn.title = `Save position on ${activeMapName}`;
+  }
+
+  // Refresh current subpage if open
+  if (currentOpenSubpage === "locations") {
+    loadWaypoints();
+  } else if (currentOpenSubpage === "missions") {
+    loadMissions();
+  } else if (currentOpenSubpage === "schedules") {
+    loadSchedules();
+  } else if (currentOpenSubpage === "maps") {
+    loadMaps();
+  }
+
+  // Always refresh dashboard counters for active map
+  refreshHubCounters();
+}
+
+async function refreshHubCounters() {
+  try {
+    const mapParam = activeMapName ? `?map=${encodeURIComponent(activeMapName)}` : "";
+    const [wRes, mRes, sRes, mapsRes] = await Promise.allSettled([
+      fetch(`${API_BASE}/api/v1/waypoints${mapParam}`).then(r => r.ok ? r.json() : null),
+      fetch(`${API_BASE}/api/v1/missions${mapParam}`).then(r => r.ok ? r.json() : null),
+      fetch(`${API_BASE}/api/v1/schedules${mapParam}`).then(r => r.ok ? r.json() : null),
+      fetch(`${API_BASE}/api/v1/maps`).then(r => r.ok ? r.json() : null)
+    ]);
+
+    if (wRes.status === "fulfilled" && wRes.value) {
+      let waypoints = wRes.value.waypoints || [];
+      if (activeMapName) waypoints = waypoints.filter(wp => !wp.map || wp.map === activeMapName);
+      const hubCount = document.getElementById("hub-locations-count");
+      if (hubCount) hubCount.textContent = `${waypoints.length} Stations`;
+    }
+
+    if (mRes.status === "fulfilled" && mRes.value) {
+      let missions = mRes.value.missions || [];
+      if (activeMapName) missions = missions.filter(m => !m.map || m.map === activeMapName);
+      const hubCount = document.getElementById("hub-missions-count");
+      if (hubCount) hubCount.textContent = `${missions.length} Routines`;
+    }
+
+    if (sRes.status === "fulfilled" && sRes.value) {
+      const schedules = sRes.value.schedules || [];
+      const hubCount = document.getElementById("hub-schedules-count");
+      if (hubCount) hubCount.textContent = `${schedules.length} Active`;
+    }
+
+    if (mapsRes.status === "fulfilled" && mapsRes.value) {
+      const maps = mapsRes.value.maps || [];
+      const hubMapDesc = document.getElementById("hub-active-map-name");
+      if (hubMapDesc) {
+        hubMapDesc.textContent = activeMapName ? `Active: ${activeMapName}` : `${maps.length} Maps Saved`;
+      }
+    }
+  } catch (err) {
+    console.warn("refreshHubCounters error:", err);
+  }
+}
+
 async function loadMaps() {
   const list = document.getElementById("maps-list");
   if (!list) return;
@@ -2807,7 +3036,10 @@ async function loadMaps() {
     // Also get active map info
     const curRes = await fetch(`${API_BASE}/api/v1/maps/current`);
     const curData = await curRes.json();
-    activeMapName = curData.name || curData.map_name || curData.current || data.current || (typeof maps[0] === 'string' ? maps[0] : maps[0]?.name) || "";
+    const curMap = curData.name || curData.map_name || curData.current || data.current || (typeof maps[0] === 'string' ? maps[0] : maps[0]?.name) || "";
+    if (curMap && curMap !== activeMapName) {
+      activeMapName = curMap;
+    }
 
     // Update Hub Badge & Card Subtitle
     const hubMapDesc = document.getElementById("hub-active-map-name");
@@ -2815,6 +3047,12 @@ async function loadMaps() {
 
     const locSub = document.getElementById("locations-map-subtitle");
     if (locSub) locSub.textContent = `Showing stations on "${activeMapName || 'all'}"`;
+
+    const misSub = document.getElementById("missions-map-subtitle");
+    if (misSub) misSub.textContent = `Showing visual routines on "${activeMapName || 'all'}"`;
+
+    const schedSub = document.getElementById("schedules-map-subtitle");
+    if (schedSub) schedSub.textContent = `Showing automated timers on "${activeMapName || 'all'}"`;
 
     if (maps.length === 0) {
       list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No saved maps available. Click "+ Create Map" to start SLAM.</p>`;
@@ -2862,11 +3100,8 @@ window.activateMap = async function(mapName) {
     await fetch(`${API_BASE}/api/v1/maps/${encodeURIComponent(mapName)}/activate`, {
       method: "POST"
     });
-    activeMapName = mapName;
     showToast(`Map "${mapName}" activated!`);
-    loadMaps();
-    loadWaypoints();
-    loadSchedules();
+    await handleActiveMapChanged(mapName);
   } catch (e) {
     showToast(`Failed to activate map: ${e.message}`, true);
   }
@@ -2910,7 +3145,7 @@ window.deleteMap = async function(mapName) {
 async function loadWaypoints() {
   const list = document.getElementById("locations-full-list");
   if (!list) return;
-  list.innerHTML = `<div class="loading-spinner">Loading locations for "${activeMapName}"...</div>`;
+  list.innerHTML = `<div class="loading-spinner">Loading locations for "${activeMapName || 'active map'}"...</div>`;
 
   // Enable / disable Save Position button based on active map
   const addBtn = document.getElementById("btn-add-location");
@@ -2926,8 +3161,14 @@ async function loadWaypoints() {
     }
   }
 
+  const locSub = document.getElementById("locations-map-subtitle");
+  if (locSub) locSub.textContent = `Showing stations on "${activeMapName || 'all'}"`;
+
   try {
-    const res = await fetch(`${API_BASE}/api/v1/waypoints`);
+    const url = activeMapName
+      ? `${API_BASE}/api/v1/waypoints?map=${encodeURIComponent(activeMapName)}`
+      : `${API_BASE}/api/v1/waypoints`;
+    const res = await fetch(url);
     const data = await res.json();
     let waypoints = data.waypoints || [];
 
@@ -2941,7 +3182,7 @@ async function loadWaypoints() {
     if (hubCount) hubCount.textContent = `${waypoints.length} Stations`;
 
     if (waypoints.length === 0) {
-      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No saved locations on "${activeMapName}". Tap "+ Save Position" to record a waypoint.</p>`;
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No saved locations on "${activeMapName || 'current map'}". Tap "+ Save Position" to record a waypoint.</p>`;
       return;
     }
 
@@ -3026,19 +3267,29 @@ let loadedMissionsCache = [];
 async function loadMissions() {
   const list = document.getElementById("missions-list");
   if (!list) return;
-  list.innerHTML = `<div class="loading-spinner">Loading missions...</div>`;
+  list.innerHTML = `<div class="loading-spinner">Loading missions for "${activeMapName || 'active map'}"...</div>`;
+
+  const misSub = document.getElementById("missions-map-subtitle");
+  if (misSub) misSub.textContent = `Showing visual routines on "${activeMapName || 'all'}"`;
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/missions`);
+    const url = activeMapName
+      ? `${API_BASE}/api/v1/missions?map=${encodeURIComponent(activeMapName)}`
+      : `${API_BASE}/api/v1/missions`;
+    const res = await fetch(url);
     const data = await res.json();
-    const missions = data.missions || [];
+    let missions = data.missions || [];
+
+    if (activeMapName) {
+      missions = missions.filter(m => !m.map || m.map === activeMapName);
+    }
     loadedMissionsCache = missions;
 
     const hubCount = document.getElementById("hub-missions-count");
     if (hubCount) hubCount.textContent = `${missions.length} Routines`;
 
     if (missions.length === 0) {
-      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No visual missions found. Create missions using the desktop or mobile mission planner.</p>`;
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No visual missions found for "${activeMapName || 'current map'}". Create missions using the desktop or mobile mission planner.</p>`;
       return;
     }
 
@@ -3163,10 +3414,16 @@ let scheduleSelectedDays = new Set([0, 1, 2, 3, 4]);
 async function loadSchedules() {
   const list = document.getElementById("schedules-list");
   if (!list) return;
-  list.innerHTML = `<div class="loading-spinner">Loading automated schedules...</div>`;
+  list.innerHTML = `<div class="loading-spinner">Loading automated schedules for "${activeMapName || 'active map'}"...</div>`;
+
+  const schedSub = document.getElementById("schedules-map-subtitle");
+  if (schedSub) schedSub.textContent = `Showing automated timers on "${activeMapName || 'all'}"`;
 
   try {
-    const res = await fetch(`${API_BASE}/api/v1/schedules`);
+    const url = activeMapName
+      ? `${API_BASE}/api/v1/schedules?map=${encodeURIComponent(activeMapName)}`
+      : `${API_BASE}/api/v1/schedules`;
+    const res = await fetch(url);
     const data = await res.json();
     const schedules = data.schedules || [];
 
@@ -3174,7 +3431,7 @@ async function loadSchedules() {
     if (hubCount) hubCount.textContent = `${schedules.length} Active`;
 
     if (schedules.length === 0) {
-      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No automated schedules configured. Tap "+ Add Schedule" to set automated dispatch.</p>`;
+      list.innerHTML = `<p style="color: var(--text-secondary); padding: 16px;">No automated schedules configured for "${activeMapName || 'current map'}". Tap "+ Add Schedule" to set automated dispatch.</p>`;
       return;
     }
 
@@ -3847,8 +4104,9 @@ function startPolling() {
     try {
       // 1. Robot state
       const stateRes = await fetch(`${API_BASE}/api/v1/state`);
+      let stateData = null;
       if (stateRes.ok) {
-        const stateData = await stateRes.json();
+        stateData = await stateRes.json();
         const stateText = document.getElementById("state-text");
         if (stateText) stateText.textContent = (stateData.mode || stateData.state || "IDLE").toUpperCase();
 
@@ -3863,29 +4121,34 @@ function startPolling() {
         // Check if relocalization popup is required or needs auto-dismissal
         checkRelocalizationRequired(stateData);
 
-        // Navigation state
-        if (stateData.mode === "navigation" || stateData.state === "navigating") {
-          isNavigating = true;
-        } else {
-          isNavigating = false;
-          const navScreen = document.getElementById("screen-nav-progress");
-          if (navScreen && navScreen.style.display === "flex") {
-            navScreen.style.display = "none";
-          }
+        // Auto-sync active map when changed from ANY API or screen
+        const serverMapName = getActiveMapFromState(stateData);
+        if (serverMapName && serverMapName !== activeMapName) {
+          handleActiveMapChanged(serverMapName);
         }
       }
 
       // Parallelize status queries for maximum responsiveness and zero UI stutter
-      const [navResult, batResult, misResult, uiResult] = await Promise.allSettled([
+      const [navResult, batResult, misResult, uiResult, dockResult] = await Promise.allSettled([
         fetch(`${API_BASE}/api/v1/navigation/status`).then(r => r.ok ? r.json() : null),
         fetch(`${API_BASE}/api/v1/state/battery`).then(r => r.ok ? r.json() : null),
         fetch(`${API_BASE}/api/v1/missions/status`).then(r => r.ok ? r.json() : null),
-        fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`).then(r => r.ok ? r.json() : null)
+        fetch(`${API_BASE}/api/v1/missions/active_ui_interaction`).then(r => r.ok ? r.json() : null),
+        fetch(`${API_BASE}/api/v1/dock/status`).then(r => r.ok ? r.json() : null)
       ]);
 
-      // 1. Navigation
+      // Determine if a mission workflow is actively running
+      const isMissionActive = !!(
+        (misResult.status === "fulfilled" && misResult.value && (misResult.value.state === "running" || misResult.value.status === "running")) ||
+        activeMissionState === "running"
+      );
+
+      // 1. Navigation Progress Screen (auto-appears for any nav goal, guarded against mission mode collision)
       if (navResult.status === "fulfilled" && navResult.value) {
-        updateNavigationState(navResult.value);
+        updateNavigationState(navResult.value, isMissionActive);
+      } else if (stateData && stateData.navigation) {
+        const isStateNav = stateData.navigation.status === "active";
+        updateNavigationState({ is_navigating: isStateNav }, isMissionActive);
       }
 
       // 2. Battery & Power
@@ -3906,7 +4169,11 @@ function startPolling() {
         }
       }
 
-      // 5. Wi-Fi & IP (debounced to every 10 seconds)
+      // 5. Docking / Undocking Progress Screen (dynamically appears and auto-hides when done/canceled)
+      const dockData = dockResult.status === "fulfilled" ? dockResult.value : null;
+      updateDockingScreen(dockData, stateData, isMissionActive);
+
+      // 6. Wi-Fi & IP (debounced to every 10 seconds)
       if (!window._lastWifiCheck || Date.now() - window._lastWifiCheck > 10000) {
         window._lastWifiCheck = Date.now();
         fetchWifiStatus();

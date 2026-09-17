@@ -3237,7 +3237,7 @@ select.kiosk-select option,
   overflow: hidden;
   border-radius: var(--radius-md);
   margin-bottom: 12px;
-  background-color: #EF4444;
+  background-color: transparent;
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
@@ -3250,10 +3250,21 @@ select.kiosk-select option,
   right: 0;
   width: 90px;
   background: #EF4444;
+  border-top-right-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.swipeable-wrapper.is-swiping .swipe-delete-action,
+.swipeable-wrapper.has-swipe-open .swipe-delete-action {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .btn-swipe-delete {
@@ -3282,6 +3293,7 @@ select.kiosk-select option,
   z-index: 2;
   background: #FFFFFF;
   margin-bottom: 0 !important;
+  border-radius: var(--radius-md);
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
 }

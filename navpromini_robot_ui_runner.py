@@ -15,6 +15,10 @@ import threading
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
+# Enable hardware compositing for WebKitGTK
+os.environ.setdefault("WEBKIT_FORCE_COMPOSITING_MODE", "1")
+os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "0")
+
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '4.1')
@@ -59,23 +63,42 @@ class RobotKioskWindow(Gtk.Window):
         context = WebKit2.WebContext.new_with_website_data_manager(data_manager)
         context.set_cache_model(WebKit2.CacheModel.DOCUMENT_VIEWER)
 
-        # WebKit Settings
+        # WebKit Settings & GPU Acceleration
         settings = WebKit2.Settings()
         settings.set_enable_webgl(True)
         try:
             settings.set_enable_accelerated_2d_canvas(True)
         except Exception:
             pass
+        try:
+            settings.set_hardware_acceleration_policy(WebKit2.HardwareAccelerationPolicy.ALWAYS)
+        except Exception:
+            pass
         settings.set_enable_smooth_scrolling(True)
         settings.set_javascript_can_open_windows_automatically(False)
         settings.set_media_playback_allows_inline(True)
-        settings.set_enable_developer_extras(True)
+        settings.set_enable_developer_extras(False)
+        settings.set_zoom_text_only(False)
 
         # WebKit WebView with Ephemeral Context
         self.webview = WebKit2.WebView.new_with_context(context)
         self.webview.set_settings(settings)
         # Suppress context menu for clean touch kiosk experience
         self.webview.connect('context-menu', lambda *args: True)
+
+        # Strictly enforce 1.0 zoom level — prevent browser pinch/zoom scaling
+        self.webview.set_zoom_level(1.0)
+        def _lock_zoom(wv, pspec):
+            if wv.get_zoom_level() != 1.0:
+                wv.set_zoom_level(1.0)
+        self.webview.connect('notify::zoom-level', _lock_zoom)
+
+        # Intercept Ctrl+scroll to prevent browser zoom
+        def _on_scroll(widget, event):
+            if event.state & Gdk.ModifierType.CONTROL_MASK:
+                return True
+            return False
+        self.webview.connect('scroll-event', _on_scroll)
 
         try:
             self.webview.override_background_color(Gtk.StateFlags.NORMAL, bg)

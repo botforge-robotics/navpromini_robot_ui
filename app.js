@@ -1,6 +1,36 @@
 // NavPro Mini - Onboard Robot Kiosk UI Controller
 // Connects to local navpromini_sdk server (port 8090)
 
+// 1. Prevent browser-level pinch-to-zoom and gesture zooming across the entire kiosk
+['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => {
+  window.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+});
+
+window.addEventListener('touchstart', (e) => {
+  if (e.touches.length > 1 && !e.target.closest('#map-viewer-canvas') && !e.target.closest('#mapping-live-canvas')) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+window.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 1 && !e.target.closest('#map-viewer-canvas') && !e.target.closest('#mapping-live-canvas')) {
+    e.preventDefault();
+  }
+}, { passive: false });
+
+window.addEventListener('wheel', (e) => {
+  if (e.ctrlKey) e.preventDefault();
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '0')) {
+    e.preventDefault();
+  }
+  if (e.key === 'Escape') {
+    if (typeof closeTouchKeyboard === 'function') closeTouchKeyboard(false);
+  }
+});
+
 const API_BASE = window.location.port === "8090" 
   ? window.location.origin 
   : "http://" + (window.location.hostname || "127.0.0.1") + ":8090";
@@ -824,41 +854,35 @@ function initMappingViewportInteractivity() {
   canvas._interactivityAttached = true;
 
   let isDragging = false;
-  let lastPointerX = 0;
-  let lastPointerY = 0;
+  let lastX = 0;
+  let lastY = 0;
+  let pinchDist = 0;
+  let pinchScale = 1.0;
 
-  canvas.addEventListener("pointerdown", (e) => {
+  // Touch Events (Touchscreen Kiosk)
+  canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
-    canvas.setPointerCapture(e.pointerId);
-    activeTouchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (activeTouchPointers.size === 1) {
+    if (e.touches.length === 1) {
       isDragging = true;
-      lastPointerX = e.clientX;
-      lastPointerY = e.clientY;
-    } else if (activeTouchPointers.size === 2) {
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
+      pinchDist = 0;
+    } else if (e.touches.length === 2) {
       isDragging = false;
-      const pts = Array.from(activeTouchPointers.values());
-      initialPinchDistance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      initialPinchScale = liveMapCamera.scale;
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      pinchDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      pinchScale = liveMapCamera.scale;
     }
-  });
+  }, { passive: false });
 
-  canvas.addEventListener("pointermove", (e) => {
-    if (!activeTouchPointers.has(e.pointerId)) return;
-    activeTouchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (activeTouchPointers.size === 2 && initialPinchDistance) {
-      const pts = Array.from(activeTouchPointers.values());
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      const factor = dist / initialPinchDistance;
-      liveMapCamera.scale = Math.max(0.2, Math.min(6.0, initialPinchScale * factor));
-      liveMapCamera.userControlled = true;
-    } else if (isDragging && activeTouchPointers.size === 1) {
-      const dx = e.clientX - lastPointerX;
-      const dy = e.clientY - lastPointerY;
-      lastPointerX = e.clientX;
-      lastPointerY = e.clientY;
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1 && isDragging) {
+      const dx = e.touches[0].clientX - lastX;
+      const dy = e.touches[0].clientY - lastY;
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
 
       const res = (liveMapMetadata && liveMapMetadata.resolution) ? liveMapMetadata.resolution : 0.05;
       const pxPerMeter = (liveMapCamera.scale / res);
@@ -867,24 +891,56 @@ function initMappingViewportInteractivity() {
         liveMapCamera.worldY += dy / pxPerMeter;
         liveMapCamera.userControlled = true;
       }
+    } else if (e.touches.length === 2 && pinchDist > 0) {
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      const factor = dist / pinchDist;
+      liveMapCamera.scale = Math.max(0.2, Math.min(6.0, pinchScale * factor));
+      liveMapCamera.userControlled = true;
     }
-  });
+  }, { passive: false });
 
-  const endDrag = (e) => {
-    activeTouchPointers.delete(e.pointerId);
-    if (activeTouchPointers.size === 1) {
-      const remaining = Array.from(activeTouchPointers.values())[0];
-      lastPointerX = remaining.x;
-      lastPointerY = remaining.y;
+  const endTouch = (e) => {
+    if (e.touches.length === 1) {
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
       isDragging = true;
-    } else if (activeTouchPointers.size === 0) {
+      pinchDist = 0;
+    } else if (e.touches.length === 0) {
       isDragging = false;
-      initialPinchDistance = null;
+      pinchDist = 0;
     }
   };
+  canvas.addEventListener("touchend", endTouch, { passive: false });
+  canvas.addEventListener("touchcancel", endTouch, { passive: false });
 
-  canvas.addEventListener("pointerup", endDrag);
-  canvas.addEventListener("pointercancel", endDrag);
+  // Mouse fallback
+  let isMouseDown = false;
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    isMouseDown = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!isMouseDown) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    const res = (liveMapMetadata && liveMapMetadata.resolution) ? liveMapMetadata.resolution : 0.05;
+    const pxPerMeter = (liveMapCamera.scale / res);
+    if (pxPerMeter > 0) {
+      liveMapCamera.worldX -= dx / pxPerMeter;
+      liveMapCamera.worldY += dy / pxPerMeter;
+      liveMapCamera.userControlled = true;
+    }
+  });
+  window.addEventListener("mouseup", () => {
+    isMouseDown = false;
+  });
 
   // Mouse wheel zoom
   canvas.addEventListener("wheel", (e) => {
@@ -1578,17 +1634,30 @@ let viewerNewDock = null;
 let viewerNewStandoff = null;
 let viewerPointers = new Map();
 let viewerInitialPinch = null;
-let viewerInitialScale = 1.0;
+let viewerRenderRequested = false;
+function requestViewerRender() {
+  if (!viewerRenderRequested) {
+    viewerRenderRequested = true;
+    requestAnimationFrame(() => {
+      viewerRenderRequested = false;
+      renderViewerCanvas();
+    });
+  }
+}
 
 function initMapViewerInteractivity() {
   const canvas = document.getElementById("map-viewer-canvas");
   if (!canvas || canvas._viewerInteractivity) return;
   canvas._viewerInteractivity = true;
 
-  let isDragging = false;
-  let lastX = 0;
-  let lastY = 0;
-  let pointerStartPos = { x: 0, y: 0 };
+  let isTouchDragging = false;
+  let lastTouchX = 0;
+  let lastTouchY = 0;
+  let touchStartPos = { x: 0, y: 0, time: 0 };
+  let pinchDist = 0;
+  let pinchScale = 1.0;
+  let pinchMid = { x: 0, y: 0 };
+  let pinchPan = { x: 0, y: 0 };
 
   const toWorld = (sx, sy) => {
     if (!viewerMetadata) return { x: 0, y: 0 };
@@ -1599,101 +1668,121 @@ function initMapViewerInteractivity() {
     return { x: wx, y: wy };
   };
 
-  const getCanvasPos = (e) => {
+  const getCanvasPos = (touchOrMouse) => {
     const rect = canvas.getBoundingClientRect();
-    return { sx: e.clientX - rect.left, sy: e.clientY - rect.top };
+    return { sx: touchOrMouse.clientX - rect.left, sy: touchOrMouse.clientY - rect.top };
   };
 
-  canvas.addEventListener("pointerdown", (e) => {
+  // Touch Events (1-finger pan, 2-finger pinch, zero lag)
+  canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
-    canvas.setPointerCapture(e.pointerId);
-    viewerPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    pointerStartPos = { x: e.clientX, y: e.clientY };
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      isTouchDragging = true;
+      lastTouchX = t.clientX;
+      lastTouchY = t.clientY;
+      touchStartPos = { x: t.clientX, y: t.clientY, time: Date.now() };
 
-    const { sx, sy } = getCanvasPos(e);
+      const { sx, sy } = getCanvasPos(t);
 
-    // 1. Check if user tapped on the heading handle of a placed draft location marker
-    if (viewerEditorMode === "save_location" && viewerDraftPose) {
-      const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
-      const hx = dp.x + 45 * Math.cos(-viewerDraftPose.theta);
-      const hy = dp.y + 45 * Math.sin(-viewerDraftPose.theta);
-      if (Math.hypot(sx - hx, sy - hy) < 32) {
-        viewerDraggingHeading = true;
+      // Check if user tapped heading handle of draft location
+      if (viewerEditorMode === "save_location" && viewerDraftPose) {
+        const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+        const hx = dp.x + 45 * Math.cos(-viewerDraftPose.theta);
+        const hy = dp.y + 45 * Math.sin(-viewerDraftPose.theta);
+        if (Math.hypot(sx - hx, sy - hy) < 36) {
+          viewerDraggingHeading = true;
+          return;
+        }
+      }
+
+      // Long press timer for placing marker in save_location mode
+      if (viewerEditorMode === "save_location") {
+        if (viewerLongPressTimer) clearTimeout(viewerLongPressTimer);
+        viewerLongPressTimer = setTimeout(() => {
+          const w = toWorld(sx, sy);
+          viewerDraftPose = { x: w.x, y: w.y, theta: 0 };
+          viewerIsAdjustingAngle = true;
+          if (navigator.vibrate) navigator.vibrate(50);
+          updateViewerEditorBarUI();
+          requestViewerRender();
+          showToast("Marker placed! Drag to adjust orientation.");
+        }, 350);
+      }
+    } else if (e.touches.length === 2) {
+      if (viewerLongPressTimer) {
+        clearTimeout(viewerLongPressTimer);
+        viewerLongPressTimer = null;
+      }
+      isTouchDragging = false;
+      viewerDraggingHeading = false;
+      viewerIsAdjustingAngle = false;
+
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      pinchDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      pinchScale = viewerPan.scale;
+      const rect = canvas.getBoundingClientRect();
+      pinchMid = {
+        x: (t0.clientX + t1.clientX) / 2 - rect.left,
+        y: (t0.clientY + t1.clientY) / 2 - rect.top
+      };
+      pinchPan = { x: viewerPan.x, y: viewerPan.y };
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      const { sx, sy } = getCanvasPos(t);
+
+      // Cancel long press if finger moved
+      if (viewerLongPressTimer && Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y) > 10) {
+        clearTimeout(viewerLongPressTimer);
+        viewerLongPressTimer = null;
+      }
+
+      // Rotating heading handle in save_location mode
+      if (viewerEditorMode === "save_location" && (viewerDraggingHeading || viewerIsAdjustingAngle) && viewerDraftPose) {
+        const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
+        const dx = sx - dp.x;
+        const dy = sy - dp.y;
+        if (Math.hypot(dx, dy) > 12) {
+          viewerDraftPose.theta = -Math.atan2(dy, dx);
+          requestViewerRender();
+        }
         return;
       }
-    }
 
-    // 2. In save_location mode: start long-press timer to place marker and rotate angle
-    if (viewerEditorMode === "save_location" && viewerPointers.size === 1) {
-      if (viewerLongPressTimer) clearTimeout(viewerLongPressTimer);
-      viewerLongPressTimer = setTimeout(() => {
-        const w = toWorld(sx, sy);
-        viewerDraftPose = { x: w.x, y: w.y, theta: 0 };
-        viewerIsAdjustingAngle = true;
-        if (navigator.vibrate) navigator.vibrate(50);
-        updateViewerEditorBarUI();
-        renderViewerCanvas();
-        showToast("Marker placed! Drag around to rotate angle.");
-      }, 350);
-    }
-
-    if (viewerPointers.size === 1) {
-      isDragging = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-    } else if (viewerPointers.size === 2) {
-      if (viewerLongPressTimer) clearTimeout(viewerLongPressTimer);
-      isDragging = false;
-      const pts = Array.from(viewerPointers.values());
-      viewerInitialPinch = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      viewerInitialScale = viewerPan.scale;
-    }
-  });
-
-  canvas.addEventListener("pointermove", (e) => {
-    if (!viewerPointers.has(e.pointerId)) return;
-    viewerPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    const { sx, sy } = getCanvasPos(e);
-
-    // Cancel long press if moved significantly
-    if (viewerLongPressTimer && Math.hypot(e.clientX - pointerStartPos.x, e.clientY - pointerStartPos.y) > 10) {
-      clearTimeout(viewerLongPressTimer);
-      viewerLongPressTimer = null;
-    }
-
-    // Handle interactive heading adjustment for draft location
-    if (viewerEditorMode === "save_location" && (viewerDraggingHeading || viewerIsAdjustingAngle) && viewerDraftPose) {
-      const dp = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
-      const dx = sx - dp.x;
-      const dy = sy - dp.y;
-      if (Math.hypot(dx, dy) > 12) {
-        viewerDraftPose.theta = -Math.atan2(dy, dx);
-        renderViewerCanvas();
+      // Normal single-finger pan: NEVER zooms!
+      if (isTouchDragging) {
+        const dx = t.clientX - lastTouchX;
+        const dy = t.clientY - lastTouchY;
+        lastTouchX = t.clientX;
+        lastTouchY = t.clientY;
+        viewerPan.x += dx;
+        viewerPan.y += dy;
+        viewerPan.userControlled = true;
+        requestViewerRender();
       }
-      return;
-    }
+    } else if (e.touches.length === 2 && pinchDist > 0) {
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+      const factor = dist / pinchDist;
+      const newScale = Math.max(0.2, Math.min(6.0, pinchScale * factor));
+      const ratio = newScale / pinchScale;
 
-    // Pinch-to-zoom
-    if (viewerPointers.size === 2 && viewerInitialPinch) {
-      const pts = Array.from(viewerPointers.values());
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      viewerPan.scale = Math.max(0.2, Math.min(6.0, viewerInitialScale * (dist / viewerInitialPinch)));
+      viewerPan.x = pinchMid.x - (pinchMid.x - pinchPan.x) * ratio;
+      viewerPan.y = pinchMid.y - (pinchMid.y - pinchPan.y) * ratio;
+      viewerPan.scale = newScale;
       viewerPan.userControlled = true;
-      renderViewerCanvas();
-    } else if (isDragging && viewerPointers.size === 1) {
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      viewerPan.x += dx;
-      viewerPan.y += dy;
-      viewerPan.userControlled = true;
-      renderViewerCanvas();
+      requestViewerRender();
     }
-  });
+  }, { passive: false });
 
-  const endDrag = (e) => {
+  const endTouch = (e) => {
     if (viewerLongPressTimer) {
       clearTimeout(viewerLongPressTimer);
       viewerLongPressTimer = null;
@@ -1703,55 +1792,96 @@ function initMapViewerInteractivity() {
       viewerDraggingHeading = false;
       viewerIsAdjustingAngle = false;
       updateViewerEditorBarUI();
-      renderViewerCanvas();
-      viewerPointers.delete(e.pointerId);
-      isDragging = false;
-      return;
+      requestViewerRender();
     }
 
-    // If it was a quick tap without significant dragging, handle editor tap
-    const startPt = pointerStartPos;
-    if (startPt && Math.hypot(e.clientX - startPt.x, e.clientY - startPt.y) < 8) {
-      handleViewerCanvasTap(e.clientX, e.clientY);
-    }
-
-    viewerPointers.delete(e.pointerId);
-    if (viewerPointers.size === 1) {
-      const r = Array.from(viewerPointers.values())[0];
-      lastX = r.x;
-      lastY = r.y;
-      isDragging = true;
-    } else if (viewerPointers.size === 0) {
-      isDragging = false;
-      viewerInitialPinch = null;
+    if (e.touches.length === 0) {
+      // Tap detection (<12px movement, <350ms duration)
+      if (touchStartPos && Math.hypot(lastTouchX - touchStartPos.x, lastTouchY - touchStartPos.y) < 12 && (Date.now() - touchStartPos.time) < 350) {
+        handleViewerCanvasTap(touchStartPos.x, touchStartPos.y);
+      }
+      isTouchDragging = false;
+      pinchDist = 0;
+    } else if (e.touches.length === 1) {
+      // Transition from 2-finger pinch back to 1-finger pan smoothly
+      lastTouchX = e.touches[0].clientX;
+      lastTouchY = e.touches[0].clientY;
+      isTouchDragging = true;
+      pinchDist = 0;
     }
   };
 
-  canvas.addEventListener("pointerup", endDrag);
-  canvas.addEventListener("pointercancel", endDrag);
+  canvas.addEventListener("touchend", endTouch, { passive: false });
+  canvas.addEventListener("touchcancel", endTouch, { passive: false });
 
+  // Mouse fallback (desktop & testing)
+  let isMouseDown = false;
+  let mouseStartX = 0;
+  let mouseStartY = 0;
+  let mouseStartTime = 0;
+
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    isMouseDown = true;
+    lastTouchX = e.clientX;
+    lastTouchY = e.clientY;
+    mouseStartX = e.clientX;
+    mouseStartY = e.clientY;
+    mouseStartTime = Date.now();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!isMouseDown) return;
+    const dx = e.clientX - lastTouchX;
+    const dy = e.clientY - lastTouchY;
+    lastTouchX = e.clientX;
+    lastTouchY = e.clientY;
+    viewerPan.x += dx;
+    viewerPan.y += dy;
+    viewerPan.userControlled = true;
+    requestViewerRender();
+  });
+
+  window.addEventListener("mouseup", (e) => {
+    if (!isMouseDown) return;
+    isMouseDown = false;
+    if (Math.hypot(e.clientX - mouseStartX, e.clientY - mouseStartY) < 8 && (Date.now() - mouseStartTime) < 300) {
+      handleViewerCanvasTap(e.clientX, e.clientY);
+    }
+  });
+
+  // Mouse wheel zoom
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.15 : 0.85;
-    viewerPan.scale = Math.max(0.2, Math.min(6.0, viewerPan.scale * factor));
+    const newScale = Math.max(0.2, Math.min(6.0, viewerPan.scale * factor));
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const ratio = newScale / viewerPan.scale;
+
+    viewerPan.x = mx - (mx - viewerPan.x) * ratio;
+    viewerPan.y = my - (my - viewerPan.y) * ratio;
+    viewerPan.scale = newScale;
     viewerPan.userControlled = true;
-    renderViewerCanvas();
+    requestViewerRender();
   }, { passive: false });
 
+  // Floating controls
   document.getElementById("btn-viewer-zoom-in")?.addEventListener("click", () => {
     viewerPan.scale = Math.min(viewerPan.scale * 1.25, 6.0);
     viewerPan.userControlled = true;
-    renderViewerCanvas();
+    requestViewerRender();
   });
   document.getElementById("btn-viewer-zoom-out")?.addEventListener("click", () => {
     viewerPan.scale = Math.max(viewerPan.scale / 1.25, 0.2);
     viewerPan.userControlled = true;
-    renderViewerCanvas();
+    requestViewerRender();
   });
   document.getElementById("btn-viewer-recenter")?.addEventListener("click", () => {
     viewerPan.userControlled = false;
     centerViewerMap();
-    renderViewerCanvas();
+    requestViewerRender();
   });
 }
 
@@ -1796,7 +1926,7 @@ function handleViewerCanvasTap(clientX, clientY) {
       if (!viewerNewStandoff) {
         viewerNewStandoff = { x: wx + 0.70, y: wy, theta: 0 };
       } else {
-        // Recompute orientation between new dock and existing standoff
+        // Orientation faces toward standoff
         const dx = viewerNewStandoff.x - viewerNewDock.x;
         const dy = viewerNewStandoff.y - viewerNewDock.y;
         const angle = Math.atan2(dy, dx);
@@ -1813,16 +1943,16 @@ function handleViewerCanvasTap(clientX, clientY) {
       const dy = viewerNewStandoff.y - viewerNewDock.y;
       const angle = Math.atan2(dy, dx);
       viewerNewDock.theta = angle;
-      viewerNewStandoff.theta = angle; // Robot faces away from dock (back towards dock)
+      viewerNewStandoff.theta = angle;
     }
     updateViewerEditorBarUI();
-    renderViewerCanvas();
+    requestViewerRender();
   } else if (viewerEditorMode === "save_location") {
     // Tapping repositions the draft marker
     const prevTheta = viewerDraftPose ? viewerDraftPose.theta : 0;
     viewerDraftPose = { x: wx, y: wy, theta: prevTheta };
     updateViewerEditorBarUI();
-    renderViewerCanvas();
+    requestViewerRender();
   }
 }
 
@@ -1837,16 +1967,63 @@ function centerViewerMap() {
   viewerPan.y = (canvas.height - viewerMapImg.height * viewerPan.scale) / 2;
 }
 
+function drawViewerPillLabel(ctx, x, y, text, borderColor) {
+  ctx.save();
+  ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
+  const metrics = ctx.measureText(text);
+  const textWidth = metrics.width;
+  const pillW = textWidth + 16;
+  const pillH = 22;
+  const rx = x - pillW / 2;
+  const ry = y - pillH / 2;
+
+  ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(rx, ry, pillW, pillH, pillH / 2);
+  } else {
+    ctx.rect(rx, ry, pillW, pillH);
+  }
+  ctx.fill();
+
+  if (borderColor) {
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawPinHeadingArrow(ctx, center, headingAngle, color) {
+  ctx.save();
+  ctx.translate(center.x, center.y);
+  ctx.rotate(-headingAngle); // Invert theta for Canvas coordinate system
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(23, 0);
+  ctx.lineTo(13, -7);
+  ctx.lineTo(13, 7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 function renderViewerCanvas() {
   const canvas = document.getElementById("map-viewer-canvas");
   if (!canvas || !viewerMapImg) return;
   const ctx = canvas.getContext("2d");
 
-  ctx.fillStyle = "#0B0F19";
+  // Modern Light Theme Canvas Background
+  ctx.fillStyle = "#F3F4F9";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Background radar grid
-  ctx.strokeStyle = "rgba(30, 41, 59, 0.4)";
+  // Subtle grid lines matching app style
+  ctx.strokeStyle = "rgba(209, 213, 219, 0.5)";
   ctx.lineWidth = 1;
   const gridStep = 40;
   for (let x = 0; x < canvas.width; x += gridStep) {
@@ -1874,31 +2051,43 @@ function renderViewerCanvas() {
     const pt = toCanvasCoords(wp.x, wp.y);
     ctx.save();
     ctx.translate(pt.x, pt.y);
-    ctx.fillStyle = "#3B82F6";
+
+    // Blue pin circle
+    ctx.fillStyle = "#2563EB";
     ctx.beginPath();
-    ctx.arc(0, 0, 10, 0, 2 * Math.PI);
+    ctx.arc(0, 0, 11, 0, 2 * Math.PI);
     ctx.fill();
     ctx.strokeStyle = "#FFFFFF";
     ctx.lineWidth = 2.5;
     ctx.stroke();
-    ctx.font = "bold 12px system-ui, sans-serif";
-    ctx.fillStyle = "#BFDBFE";
-    ctx.textAlign = "center";
-    ctx.fillText(wp.name, 0, 22);
+
+    // Center white dot
+    ctx.fillStyle = "#FFFFFF";
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.5, 0, 2 * Math.PI);
+    ctx.fill();
     ctx.restore();
+
+    // Pill badge label above pin
+    drawViewerPillLabel(ctx, pt.x, pt.y - 20, wp.name, "#2563EB");
   });
 
-  // Draw Dock & Standoff Poses
+  // Draw Dock & Standoff Poses (Exact visual parity with Desktop Mission Planner)
   const dock = viewerNewDock || viewerDockPose;
   const standoff = viewerNewStandoff || viewerStandoffPose;
 
   if (dock && standoff) {
     const dp = toCanvasCoords(dock.x, dock.y);
     const sp = toCanvasCoords(standoff.x, standoff.y);
+    const distMeters = Math.hypot(standoff.x - dock.x, standoff.y - dock.y);
 
-    // Connecting dashed line
+    // Dock heading points towards standoff; standoff heading points towards dock
+    const dockHeading = Math.atan2(standoff.y - dock.y, standoff.x - dock.x);
+    const standoffHeading = Math.atan2(dock.y - standoff.y, dock.x - standoff.x);
+
+    // 1. Connecting guide dashed line
     ctx.save();
-    ctx.strokeStyle = "rgba(16, 185, 129, 0.7)";
+    ctx.strokeStyle = "rgba(16, 185, 129, 0.8)";
     ctx.lineWidth = 2.5;
     ctx.setLineDash([6, 6]);
     ctx.beginPath();
@@ -1907,37 +2096,83 @@ function renderViewerCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    // Distance Label on line
+    // 2. Distance Badge Pill in middle of line
     const midX = (dp.x + sp.x) / 2;
     const midY = (dp.y + sp.y) / 2;
-    const distMeters = Math.hypot(standoff.x - dock.x, standoff.y - dock.y);
-    ctx.save();
-    ctx.font = "bold 11px system-ui, sans-serif";
-    ctx.fillStyle = "#6EE7B7";
-    ctx.textAlign = "center";
-    ctx.fillText(`${distMeters.toFixed(2)}m`, midX, midY - 8);
-    ctx.restore();
+    const distText = `${(distMeters * 100).toFixed(1)} cm (${distMeters.toFixed(2)} m)`;
+    drawViewerPillLabel(ctx, midX, midY - 12, distText, "#10B981");
 
-    // Standoff Marker (🎯)
+    // 3. Standoff Marker (🎯 Standoff Point - #2563EB Blue)
+    if (viewerEditorMode === "edit_dock" && viewerDockEditTarget === "standoff") {
+      // Active editing pulse halo
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 22, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(37, 99, 235, 0.25)";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 18, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(37, 99, 235, 0.40)";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Directional heading arrow pointing along standoffHeading toward dock
+    drawPinHeadingArrow(ctx, sp, standoffHeading, "#2563EB");
+
+    // Standoff Pin Circle
     ctx.save();
     ctx.translate(sp.x, sp.y);
-    ctx.fillStyle = "#06B6D4";
+    ctx.fillStyle = "#2563EB";
     ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, 2 * Math.PI);
+    ctx.arc(0, 0, 14, 0, 2 * Math.PI);
     ctx.fill();
     ctx.strokeStyle = "#FFFFFF";
     ctx.lineWidth = 2.5;
     ctx.stroke();
-    ctx.font = "bold 12px system-ui, sans-serif";
-    ctx.fillStyle = "#A5F3FC";
-    ctx.textAlign = "center";
-    ctx.fillText("Standoff", 0, 24);
+
+    // Target Crosshairs Icon 🎯
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, 2 * Math.PI);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -9); ctx.lineTo(0, -5);
+    ctx.moveTo(0, 5);  ctx.lineTo(0, 9);
+    ctx.moveTo(-9, 0); ctx.lineTo(-5, 0);
+    ctx.moveTo(5, 0);  ctx.lineTo(9, 0);
+    ctx.stroke();
     ctx.restore();
 
-    // Dock Marker (⚡)
+    // Standoff Pill Label
+    drawViewerPillLabel(ctx, sp.x, sp.y - 24, "2. Standoff Point (🎯)", "#2563EB");
+
+    // 4. Charging Dock Marker (⚡ Dock Station - #10B981 Emerald Green)
+    if (viewerEditorMode === "edit_dock" && viewerDockEditTarget === "dock") {
+      // Active editing pulse halo
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(dp.x, dp.y, 22, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(16, 185, 129, 0.25)";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(dp.x, dp.y, 18, 0, 2 * Math.PI);
+      ctx.fillStyle = "rgba(16, 185, 129, 0.40)";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Directional heading arrow pointing along dockHeading toward standoff
+    drawPinHeadingArrow(ctx, dp, dockHeading, "#10B981");
+
+    // Dock Pin Circle
     ctx.save();
     ctx.translate(dp.x, dp.y);
-    ctx.rotate(-dock.theta);
     ctx.fillStyle = "#10B981";
     ctx.beginPath();
     ctx.arc(0, 0, 14, 0, 2 * Math.PI);
@@ -1945,22 +2180,17 @@ function renderViewerCanvas() {
     ctx.strokeStyle = "#FFFFFF";
     ctx.lineWidth = 2.5;
     ctx.stroke();
-    // Heading arrow toward standoff
+
+    // Lightning Bolt / EV Charging Icon ⚡
     ctx.fillStyle = "#FFFFFF";
-    ctx.beginPath();
-    ctx.moveTo(18, 0);
-    ctx.lineTo(8, -6);
-    ctx.lineTo(8, 6);
-    ctx.closePath();
-    ctx.fill();
+    ctx.font = "bold 13px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("⚡", 0, 0);
     ctx.restore();
 
-    ctx.save();
-    ctx.font = "bold 12px system-ui, sans-serif";
-    ctx.fillStyle = "#6EE7B7";
-    ctx.textAlign = "center";
-    ctx.fillText("⚡ Charging Dock", dp.x, dp.y - 20);
-    ctx.restore();
+    // Dock Pill Label
+    drawViewerPillLabel(ctx, dp.x, dp.y - 24, "1. Dock Station (⚡)", "#10B981");
   }
 
   // Draw Live Robot Marker if this map is active
@@ -1969,7 +2199,7 @@ function renderViewerCanvas() {
     ctx.save();
     ctx.translate(rp.x, rp.y);
     ctx.rotate(-liveRobotPose.yaw);
-    ctx.fillStyle = "#F97316";
+    ctx.fillStyle = "#CB3C00";
     ctx.beginPath();
     ctx.arc(0, 0, 14, 0, 2 * Math.PI);
     ctx.fill();
@@ -2037,13 +2267,8 @@ function renderViewerCanvas() {
     ctx.restore();
 
     // Coordinate readout chip
-    ctx.save();
-    ctx.font = "bold 13px system-ui, sans-serif";
-    ctx.fillStyle = "#FFFFFF";
-    ctx.textAlign = "center";
     const deg = Math.round(viewerDraftPose.theta * 180 / Math.PI);
-    ctx.fillText(`📍 X: ${viewerDraftPose.x.toFixed(2)}m, Y: ${viewerDraftPose.y.toFixed(2)}m, θ: ${deg}°`, dp.x, dp.y - 32);
-    ctx.restore();
+    drawViewerPillLabel(ctx, dp.x, dp.y - 32, `📍 X: ${viewerDraftPose.x.toFixed(2)}m, Y: ${viewerDraftPose.y.toFixed(2)}m, θ: ${deg}°`, "#2563EB");
   }
 }
 
@@ -3274,6 +3499,7 @@ window.openTouchKeyboard = function(promptLabel, callback, defaultValue = "", is
   oskActiveInput = null;
 
   const panel = document.getElementById("gnome-osk");
+  const backdrop = document.getElementById("gnome-osk-backdrop");
   const labelEl = document.getElementById("osk-prompt-label");
   const inputEl = document.getElementById("osk-input-display");
 
@@ -3286,6 +3512,7 @@ window.openTouchKeyboard = function(promptLabel, callback, defaultValue = "", is
   currentOskLayer = "lower";
   renderGnomeOsk();
 
+  if (backdrop) backdrop.classList.add("active");
   if (panel) {
     panel.classList.add("osk-visible");
     panel.setAttribute("aria-hidden", "false");
@@ -3294,9 +3521,11 @@ window.openTouchKeyboard = function(promptLabel, callback, defaultValue = "", is
 
 window.closeTouchKeyboard = function(confirmed) {
   const panel = document.getElementById("gnome-osk");
+  const backdrop = document.getElementById("gnome-osk-backdrop");
   const inputEl = document.getElementById("osk-input-display");
   const val = inputEl ? inputEl.value : "";
 
+  if (backdrop) backdrop.classList.remove("active");
   if (panel) {
     panel.classList.remove("osk-visible");
     panel.setAttribute("aria-hidden", "true");

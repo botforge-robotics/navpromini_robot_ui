@@ -17,11 +17,12 @@ cp "${DIR}/app.js" "${APPDIR}/"
 cp "${DIR}/version.json" "${APPDIR}/"
 cp -r "${DIR}/assets" "${APPDIR}/"
 cp -r "${DIR}/vendor" "${APPDIR}/"
+cp -r "${DIR}/js" "${APPDIR}/"
 cp "${DIR}/navpromini_robot_ui_runner.py" "${APPDIR}/"
 
 # Mirror files to standard usr hierarchy as well
 cp "${DIR}/index.html" "${DIR}/style.css" "${DIR}/app.js" "${DIR}/version.json" "${DIR}/navpromini_robot_ui_runner.py" "${APPDIR}/usr/share/navpromini-robot-ui/"
-cp -r "${DIR}/assets" "${DIR}/vendor" "${APPDIR}/usr/share/navpromini-robot-ui/"
+cp -r "${DIR}/assets" "${DIR}/vendor" "${DIR}/js" "${APPDIR}/usr/share/navpromini-robot-ui/"
 
 # 2. Create Desktop File
 cat << 'DESK' > "${APPDIR}/navpromini-robot-ui.desktop"

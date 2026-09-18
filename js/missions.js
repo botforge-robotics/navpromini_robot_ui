@@ -429,7 +429,12 @@ function handleActiveInteraction(interaction) {
   if (titleEl) titleEl.textContent = interaction.title || "Action Required";
   if (msgEl) msgEl.textContent = interaction.message || "";
 
-  if (interaction.subtype === "form") {
+  const isForm = interaction.subtype === "form" ||
+                 interaction.subtype === "dynamic_form" ||
+                 interaction.type === "form" ||
+                 (Array.isArray(interaction.fields) && interaction.fields.length > 0);
+
+  if (isForm) {
     renderInteractionForm(interaction);
     if (formEl) formEl.style.display = "flex";
     if (choicesEl) choicesEl.style.display = "none";
@@ -439,6 +444,33 @@ function handleActiveInteraction(interaction) {
     if (choicesEl) choicesEl.style.display = "flex";
   }
 
+  // Handle countdown timer and progress bar
+  const timeoutSec = Number(interaction.timeout_sec) || 60;
+  const startedAt = interaction.started_at ? (Number(interaction.started_at) * 1000) : Date.now();
+  const timerSecEl = document.getElementById("interaction-timer-sec");
+  const progressFillEl = document.getElementById("timer-progress-fill");
+
+  if (window._interactionTimerInterval) {
+    clearInterval(window._interactionTimerInterval);
+    window._interactionTimerInterval = null;
+  }
+
+  const updateTimer = () => {
+    const elapsedSec = (Date.now() - startedAt) / 1000;
+    const remainingSec = Math.max(0, timeoutSec - elapsedSec);
+    if (timerSecEl) timerSecEl.textContent = remainingSec.toFixed(1) + "s";
+    if (progressFillEl) {
+      const pct = Math.max(0, Math.min(100, (remainingSec / timeoutSec) * 100));
+      progressFillEl.style.width = pct + "%";
+    }
+    if (remainingSec <= 0 && window._interactionTimerInterval) {
+      clearInterval(window._interactionTimerInterval);
+      window._interactionTimerInterval = null;
+    }
+  };
+  updateTimer();
+  window._interactionTimerInterval = setInterval(updateTimer, 100);
+
   overlay.style.display = "flex";
   triggerFaceExpression("thinking");
   if (interaction.sound_alert !== false && window.playAlertTone) {
@@ -447,6 +479,17 @@ function handleActiveInteraction(interaction) {
   if (interaction.speech_text && window.speakText) {
     window.speakText(interaction.speech_text);
   }
+}
+
+function dismissActiveInteraction() {
+  if (window._interactionTimerInterval) {
+    clearInterval(window._interactionTimerInterval);
+    window._interactionTimerInterval = null;
+  }
+  const overlay = document.getElementById("interaction-overlay");
+  if (overlay) overlay.style.display = "none";
+  activeInteractionId = null;
+  triggerFaceExpression("happy");
 }
 
 function renderInteractionForm(interaction) {
@@ -522,20 +565,24 @@ window.submitChoiceResponse = async function(choiceText) {
 async function submitInteractionResponse(data) {
   if (window.playTapBeep) window.playTapBeep();
   try {
+    const payload = {
+      interaction_id: activeInteractionId,
+      action: data.action || data.status || "submit",
+      status: data.status || "submitted",
+      selected: data.selected || data.choice || "",
+      choice: data.choice || "",
+      form_data: data.form_data || {},
+      data: data.form_data || {},
+      response: data
+    };
     await fetch(`${API_BASE}/api/v1/missions/ui_response`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        interaction_id: activeInteractionId,
-        response: data
-      })
+      body: JSON.stringify(payload)
     });
   } catch (e) {
     console.warn("Failed to post UI interaction response:", e);
   }
-  const overlay = document.getElementById("interaction-overlay");
-  if (overlay) overlay.style.display = "none";
-  activeInteractionId = null;
-  triggerFaceExpression("happy");
+  dismissActiveInteraction();
 }
 

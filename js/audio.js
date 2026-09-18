@@ -17,7 +17,7 @@ window.playAudioTone = function(freq = 587, type = 'sine', duration = 0.2) {
     const gain = ctx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, ctx.currentTime);
-    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.setValueAtTime(0.85, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -29,30 +29,39 @@ window.playAudioTone = function(freq = 587, type = 'sine', duration = 0.2) {
 };
 
 window.playSuccessChime = function() {
-  window.playAudioTone(587.33, 'sine', 0.18); // D5
-  setTimeout(() => window.playAudioTone(880.00, 'sine', 0.3), 180); // A5
+  window.playAudioTone(587.33, 'sine', 0.20); // D5
+  setTimeout(() => window.playAudioTone(880.00, 'sine', 0.35), 180); // A5
 };
 
 window.playAlertTone = function() {
-  window.playAudioTone(440.0, 'triangle', 0.15);
-  setTimeout(() => window.playAudioTone(440.0, 'triangle', 0.25), 180);
+  window.playAudioTone(493.88, 'triangle', 0.18); // B4
+  setTimeout(() => window.playAudioTone(659.25, 'triangle', 0.28), 200); // E5
 };
 
 window.playTapBeep = function() {
-  window.playAudioTone(800.0, 'sine', 0.04);
+  window.playAudioTone(880.0, 'sine', 0.05);
 };
 
 window.speakText = function(text) {
   if (!text) return;
-  try {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.0;
-      u.pitch = 1.05;
-      window.speechSynthesis.speak(u);
+
+  // Primary: Trigger Piper cute neural voice on robot companion hardware speaker
+  fetch(`${API_BASE}/api/v1/system/speak`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: text })
+  }).catch((err) => {
+    // Fallback: Browser Web Speech API with cute pitch
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.pitch = 1.35; // Cute pitch
+        u.rate = 1.05;
+        window.speechSynthesis.speak(u);
+      }
+    } catch (e) {
+      console.warn("speechSynthesis error:", e);
     }
-  } catch (e) {
-    console.warn("speechSynthesis error:", e);
-  }
+  });
 };

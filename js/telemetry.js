@@ -445,10 +445,17 @@ function startPolling() {
 
       // 4. Interactive UI Node
       if (uiResult.status === "fulfilled" && uiResult.value) {
-        const uiData = uiResult.value;
-        if (uiData && uiData.interaction_id && uiData.interaction_id !== activeInteractionId) {
-          handleActiveInteraction(uiData);
+        const rawUi = uiResult.value;
+        const interaction = rawUi.interaction || rawUi.active_interaction || (rawUi.interaction_id ? rawUi : null);
+        if (interaction && interaction.interaction_id) {
+          if (interaction.interaction_id !== activeInteractionId) {
+            handleActiveInteraction(interaction);
+          }
+        } else if (activeInteractionId) {
+          dismissActiveInteraction();
         }
+      } else if (activeInteractionId) {
+        dismissActiveInteraction();
       }
 
       // 5. Docking / Undocking Progress Screen (dynamically appears and auto-hides when done/canceled)

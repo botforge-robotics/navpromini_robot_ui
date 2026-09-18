@@ -37,20 +37,26 @@ class MissionStatus {
   MissionStatus({
     required this.state, // 'idle', 'running', 'waiting_for_user', 'paused', 'completed', 'failed'
     this.missionId,
+    this.missionName,
     this.activeNodeId,
+    this.activeNodeLabel,
     this.activeNodeType,
     this.stepIndex,
     this.message,
     this.elapsedSec = 0.0,
+    this.progressPct = 0,
   });
 
   final String state;
   final String? missionId;
+  final String? missionName;
   final String? activeNodeId;
+  final String? activeNodeLabel;
   final String? activeNodeType;
   final int? stepIndex;
   final String? message;
   final double elapsedSec;
+  final int progressPct;
 
   bool get isRunning => state == 'running' || state == 'paused' || state == 'waiting_for_user';
   bool get isWaitingForUser => state == 'waiting_for_user';
@@ -59,11 +65,15 @@ class MissionStatus {
     return MissionStatus(
       state: json['state']?.toString() ?? 'idle',
       missionId: json['mission_id']?.toString(),
+      missionName: json['mission_name']?.toString(),
       activeNodeId: json['active_node_id']?.toString(),
+      activeNodeLabel: json['active_node_label']?.toString(),
       activeNodeType: json['active_node_type']?.toString(),
       stepIndex: json['step_index'] as int?,
       message: json['message']?.toString(),
       elapsedSec: (json['elapsed_sec'] as num?)?.toDouble() ?? 0.0,
+      progressPct: (json['progress_pct'] as int?) ?? 0,
     );
   }
 }
+

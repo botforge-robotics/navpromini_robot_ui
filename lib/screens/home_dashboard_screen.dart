@@ -201,6 +201,24 @@ class HomeDashboardScreen extends StatelessWidget {
   Widget _buildActiveMissionBanner(BuildContext context) {
     final isWaiting = missionStatus.isWaitingForUser;
 
+    // Human-readable action label: prefer active_node_label from SDK,
+    // fall back to message, then a generic fallback.
+    final actionLabel = missionStatus.activeNodeLabel?.isNotEmpty == true
+        ? missionStatus.activeNodeLabel!
+        : (missionStatus.message?.isNotEmpty == true
+            ? missionStatus.message!
+            : (isWaiting ? 'Waiting for your response…' : 'Running mission…'));
+
+    final missionTitle = missionStatus.missionName?.isNotEmpty == true
+        ? missionStatus.missionName!
+        : (missionStatus.missionId ?? 'Active Task');
+
+    final progressPct = missionStatus.progressPct.clamp(0, 100);
+    final elapsedSec = missionStatus.elapsedSec.round();
+    final elapsedLabel = elapsedSec >= 60
+        ? '${(elapsedSec ~/ 60)}m ${elapsedSec % 60}s'
+        : '${elapsedSec}s';
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -213,60 +231,158 @@ class HomeDashboardScreen extends StatelessWidget {
           width: 1.5,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isWaiting ? RobotTheme.warning : RobotTheme.primary,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isWaiting ? Icons.touch_app_rounded : Icons.play_arrow_rounded,
-              color: Colors.black,
-              size: 28,
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isWaiting ? RobotTheme.warning : RobotTheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isWaiting ? Icons.touch_app_rounded : Icons.play_arrow_rounded,
+                  color: Colors.black,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isWaiting ? 'OPERATOR SIGN-OFF REQUIRED' : 'MISSION EXECUTING',
+                      style: TextStyle(
+                        color: isWaiting ? RobotTheme.warning : RobotTheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      missionTitle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: RobotTheme.danger,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                ),
+                onPressed: () async {
+                  if (missionStatus.missionId != null) {
+                    await api.cancelMission(missionStatus.missionId!);
+                    onRefresh();
+                  }
+                },
+                child: const Text('Abort Mission'),
+              ),
+            ],
           ),
-          const SizedBox(width: 18),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isWaiting ? 'OPERATOR SIGN-OFF REQUIRED' : 'MISSION EXECUTING',
+          const SizedBox(height: 14),
+          // Current action label
+          Row(
+            children: [
+              Icon(
+                _nodeTypeIcon(missionStatus.activeNodeType),
+                color: isWaiting ? RobotTheme.warning : RobotTheme.primary,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  actionLabel,
                   style: TextStyle(
-                    color: isWaiting ? RobotTheme.warning : RobotTheme.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    letterSpacing: 1.1,
+                    color: isWaiting
+                        ? RobotTheme.warning
+                        : Colors.white.withValues(alpha: 0.92),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Mission ID: ${missionStatus.missionId ?? "Active Task"} · Active Node: ${missionStatus.activeNodeId ?? "running"}',
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                elapsedLabel,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 13,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: RobotTheme.danger,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          if (progressPct > 0) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progressPct / 100.0,
+                backgroundColor: Colors.white.withValues(alpha: 0.12),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isWaiting ? RobotTheme.warning : RobotTheme.primary,
+                ),
+                minHeight: 6,
+              ),
             ),
-            onPressed: () async {
-              if (missionStatus.missionId != null) {
-                await api.cancelMission(missionStatus.missionId!);
-                onRefresh();
-              }
-            },
-            child: const Text('Abort Mission'),
-          ),
+            const SizedBox(height: 4),
+            Text(
+              '$progressPct% complete',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.45),
+                fontSize: 11,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+
+  IconData _nodeTypeIcon(String? nodeType) {
+    switch (nodeType) {
+      case 'navigate_waypoint':
+      case 'navigate_coordinates':
+        return Icons.navigation_rounded;
+      case 'dock':
+      case 'undock':
+        return Icons.electrical_services_rounded;
+      case 'ui_speech':
+      case 'speech':
+        return Icons.record_voice_over_rounded;
+      case 'ui_notification':
+        return Icons.notifications_rounded;
+      case 'ui_choice':
+      case 'ui_form':
+      case 'ui_input':
+        return Icons.touch_app_rounded;
+      case 'condition':
+        return Icons.alt_route_rounded;
+      case 'delay':
+      case 'wait':
+        return Icons.timer_rounded;
+      case 'api_call':
+      case 'http_request':
+        return Icons.cloud_rounded;
+      default:
+        return Icons.radio_button_checked_rounded;
+    }
+  }
+
+
 
   Widget _buildActionCard(
     BuildContext context, {

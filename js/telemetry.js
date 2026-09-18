@@ -251,10 +251,10 @@ function updatePowerState(pState) {
       const chargingPct = document.getElementById("charging-screen-pct");
       if (chargingPct) chargingPct.textContent = `${displayPct}%`;
 
-      // Truly full only when >= 99.95% or hardware reports full and not charging current
-      const isFull = (val >= 99.95 && (!isCharging || (b.current !== undefined && b.current < 0.1))) ||
-                     b.status === "Full" || b.status === "full" || b.status === "completed" ||
-                     b.power_supply_status === "Full" || b.power_supply_status === 4;
+      // Truly full when hardware reports full/completed OR SOC >= 99.5% with float/saturation current (<= 0.25A)
+      const isFull = b.status === "Full" || b.status === "full" || b.status === "completed" ||
+                     b.power_supply_status === "Full" || b.power_supply_status === 4 ||
+                     (val >= 99.5 && (b.current === undefined || b.current === null || b.current <= 0.25));
 
       const chargingStateText = document.getElementById("charging-state-text");
       const chargingInfoDesc = document.getElementById("charging-info-desc");

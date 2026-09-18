@@ -577,14 +577,42 @@ function renderInteractionForm(interaction) {
 
   container.innerHTML = fields.map(f => {
     if (f.type === "select") {
-      return `
-        <div class="kiosk-field-group">
-          <label>${escapeHtml(f.label)}</label>
-          <select class="kiosk-input kiosk-select" name="${escapeHtml(f.key)}">
-            ${(f.options || []).map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join("")}
-          </select>
-        </div>
-      `;
+      const options = f.options || [];
+      const defaultVal = f.default_value || (options.length > 0 ? options[0] : "");
+
+      if (options.length <= 4) {
+        // High-touch segmented chips (min 56px height, single-tap select)
+        return `
+          <div class="kiosk-field-group">
+            <label>${escapeHtml(f.label)}</label>
+            <div class="kiosk-touch-options-grid" id="touch-chips-${escapeHtml(f.key)}">
+              ${options.map(opt => {
+                const isSel = (opt === defaultVal);
+                return `
+                  <button type="button" class="touch-option-chip ${isSel ? 'selected' : ''}"
+                          onclick="selectTouchChip('${escapeQuotes(f.key)}', '${escapeQuotes(opt)}', this)">
+                    <span class="chip-check">✓</span>
+                    <span>${escapeHtml(opt)}</span>
+                  </button>
+                `;
+              }).join("")}
+            </div>
+            <input type="hidden" name="${escapeHtml(f.key)}" id="hidden-input-${escapeHtml(f.key)}" value="${escapeHtml(defaultVal)}">
+          </div>
+        `;
+      } else {
+        // High-touch select box that opens a dedicated touch picker sheet
+        return `
+          <div class="kiosk-field-group">
+            <label>${escapeHtml(f.label)}</label>
+            <div class="touch-select-box" onclick="openTouchSelectPicker('${escapeQuotes(f.key)}', '${escapeQuotes(f.label)}', ${escapeQuotes(JSON.stringify(options))})">
+              <span id="touch-select-label-${escapeHtml(f.key)}">${escapeHtml(defaultVal || "Tap to Select Option")}</span>
+              <span class="touch-select-box-arrow">▼</span>
+            </div>
+            <input type="hidden" name="${escapeHtml(f.key)}" id="hidden-input-${escapeHtml(f.key)}" value="${escapeHtml(defaultVal)}">
+          </div>
+        `;
+      }
     } else if (f.type === "checkbox") {
       return `
         <div class="kiosk-field-group kiosk-checkbox-group">
@@ -623,6 +651,64 @@ function renderInteractionForm(interaction) {
     await submitInteractionResponse({ status: "canceled" });
   };
 }
+
+window.selectTouchChip = function(key, val, el) {
+  if (window.playTapBeep) window.playTapBeep();
+  const container = document.getElementById(`touch-chips-${key}`);
+  if (container) {
+    container.querySelectorAll('.touch-option-chip').forEach(chip => chip.classList.remove('selected'));
+  }
+  if (el) el.classList.add('selected');
+  const input = document.getElementById(`hidden-input-${key}`);
+  if (input) input.value = val;
+};
+
+window.openTouchSelectPicker = function(key, label, options) {
+  if (window.playTapBeep) window.playTapBeep();
+  const currentVal = document.getElementById(`hidden-input-${key}`) ? document.getElementById(`hidden-input-${key}`).value : "";
+
+  let modal = document.getElementById("modal-touch-picker");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "modal-touch-picker";
+    modal.className = "touch-picker-overlay";
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="touch-picker-sheet">
+      <div class="touch-picker-header">
+        <div class="touch-picker-title">${escapeHtml(label || "Select Option")}</div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeTouchSelectPicker()">✕</button>
+      </div>
+      <div class="touch-picker-list">
+        ${options.map(opt => `
+          <div class="touch-picker-item ${opt === currentVal ? 'active' : ''}"
+               onclick="confirmTouchSelectOption('${escapeQuotes(key)}', '${escapeQuotes(opt)}')">
+            <span>${escapeHtml(opt)}</span>
+            ${opt === currentVal ? '<span style="font-size:20px; font-weight:bold;">✓</span>' : ''}
+          </div>
+        `).join("")}
+      </div>
+      <button type="button" class="btn btn-secondary btn-lg" style="width: 100%; min-height: 56px; margin-top: 8px;" onclick="closeTouchSelectPicker()">Cancel</button>
+    </div>
+  `;
+  modal.style.display = "flex";
+};
+
+window.confirmTouchSelectOption = function(key, val) {
+  if (window.playTapBeep) window.playTapBeep();
+  const labelEl = document.getElementById(`touch-select-label-${key}`);
+  const inputEl = document.getElementById(`hidden-input-${key}`);
+  if (labelEl) labelEl.textContent = val;
+  if (inputEl) inputEl.value = val;
+  closeTouchSelectPicker();
+};
+
+window.closeTouchSelectPicker = function() {
+  const modal = document.getElementById("modal-touch-picker");
+  if (modal) modal.style.display = "none";
+};
 
 function renderInteractionChoices(interaction) {
   const grid = document.getElementById("choices-buttons-grid");

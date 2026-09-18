@@ -123,7 +123,9 @@ function updateMissionExecutionScreen(mStatus) {
   const missionScreen = document.getElementById("screen-mission-progress");
   const floatingBanner = document.getElementById("mission-floating-banner");
 
-  if (!mStatus || mStatus.state !== "running") {
+  const isMissionActive = mStatus && ["running", "waiting_for_user", "paused", "charging_paused"].includes(mStatus.state);
+
+  if (!isMissionActive) {
     if (missionScreen) missionScreen.style.display = "none";
     if (floatingBanner) floatingBanner.style.display = "none";
     if (lastObservedMissionState === "running" && mStatus && mStatus.state === "completed") {
@@ -134,10 +136,13 @@ function updateMissionExecutionScreen(mStatus) {
     return;
   }
 
-  lastObservedMissionState = "running";
-  activeMissionState = "running";
+  lastObservedMissionState = mStatus.state;
+  activeMissionState = mStatus.state;
   const title = mStatus.mission_name || mStatus.mission_id || "Active Mission";
-  const activeNode = mStatus.active_node || mStatus.current_node || "In Progress";
+  let activeNode = mStatus.active_node || mStatus.current_node || "In Progress";
+  if (mStatus.state === "waiting_for_user") {
+    activeNode = "Waiting for User Input...";
+  }
   const progressPct = mStatus.progress_pct || 0;
 
   if (missionScreen && missionScreen.style.display !== "flex") {
@@ -584,5 +589,8 @@ async function submitInteractionResponse(data) {
     console.warn("Failed to post UI interaction response:", e);
   }
   dismissActiveInteraction();
+  if (window.triggerFastTelemetryPoll) {
+    window.triggerFastTelemetryPoll();
+  }
 }
 

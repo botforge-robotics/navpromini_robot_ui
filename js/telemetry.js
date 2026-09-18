@@ -421,8 +421,9 @@ function startPolling() {
 
       // Determine if a mission workflow is actively running
       const isMissionActive = !!(
-        (misResult.status === "fulfilled" && misResult.value && (misResult.value.state === "running" || misResult.value.status === "running")) ||
-        activeMissionState === "running"
+        (misResult.status === "fulfilled" && misResult.value && 
+         ["running", "waiting_for_user", "paused", "charging_paused"].includes(misResult.value.state)) ||
+        ["running", "waiting_for_user"].includes(activeMissionState)
       );
 
       // 1. Navigation Progress Screen (auto-appears for any nav goal, guarded against mission mode collision)
@@ -473,10 +474,89 @@ function startPolling() {
     }
   };
 
+  window.triggerFastTelemetryPoll = () => {
+    poll();
+  };
+
   poll();
-  setInterval(poll, 2000);
+  // Poll faster (800ms) for snappy UI updates
+  setInterval(poll, 800);
+
+  // Connect WebSocket for instant zero-latency event reactivity
+  initSdkEventsWebSocket();
 
   // Check for app software updates 5 seconds after boot
   setTimeout(() => checkAppUpdates(true), 5000);
 }
+
+function initSdkEventsWebSocket() {
+  let ws = null;
+  let reconnectTimer = null;
+
+  const connect = () => {
+    try {
+      const host = window.location.hostname || "127.0.0.1";
+      ws = new WebSocket(`ws://${host}:8090/api/v1/events`);
+
+      ws.onopen = () => {
+        try {
+          ws.send(JSON.stringify({
+            action: "subscribe",
+            streams: ["events"]
+          }));
+        } catch (e) {}
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.stream === "events" && msg.data) {
+            const ev = msg.data.event;
+            const data = msg.data.data;
+
+            if (ev === "mission.started") {
+              const missionScreen = document.getElementById("screen-mission-progress");
+              if (missionScreen) missionScreen.style.display = "flex";
+              activeMissionState = "running";
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "mission.ui_interaction" && data) {
+              handleActiveInteraction(data);
+            } else if (ev === "mission.ui_interaction_dismissed") {
+              dismissActiveInteraction();
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "mission.completed" || ev === "mission.canceled" || ev === "mission.failed") {
+              activeMissionState = "idle";
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev && (ev.startsWith("dock.") || ev.startsWith("navigation."))) {
+              window.triggerFastTelemetryPoll?.();
+            }
+          }
+        } catch (err) {}
+      };
+
+      ws.onclose = () => {
+        if (!reconnectTimer) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+          }, 3000);
+        }
+      };
+
+      ws.onerror = () => {
+        try { ws.close(); } catch (e) {}
+      };
+    } catch (err) {
+      if (!reconnectTimer) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, 3000);
+      }
+    }
+  };
+
+  connect();
+}
+
 

@@ -2093,44 +2093,94 @@ body, html {
   pointer-events: none;
 }
 
-/* Floating Zoom & Recenter Controls */
+/* Floating Action & Zoom Controls on Right Side */
 .map-floating-controls {
   position: absolute;
-  right: 24px;
+  right: 20px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   gap: 12px;
   z-index: 25;
+  align-items: flex-end;
+}
+
+.map-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
 }
 
 .map-ctrl-btn {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  height: 46px;
+  min-width: 46px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1.5px solid var(--border);
   color: var(--text-primary);
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   box-shadow: var(--shadow-card);
-  transition: transform 0.12s, background-color 0.12s;
+  transition: transform 0.12s, background-color 0.12s, border-color 0.12s, color 0.12s;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .map-ctrl-btn:active {
-  transform: scale(0.92);
+  transform: scale(0.94);
   background: var(--primary);
-  border-color: var(--primary-light);
+  border-color: var(--primary-dark);
   color: #FFFFFF;
+}
+
+.map-ctrl-group-zoom .map-ctrl-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  padding: 0;
+}
+
+/* Map Action Buttons (Pill-shaped with icon + label) */
+.map-action-btn {
+  width: auto;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.map-action-btn .map-action-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.map-action-btn svg {
+  flex-shrink: 0;
+}
+
+.map-action-btn.active {
+  background: var(--primary) !important;
+  border-color: var(--primary-dark) !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 6px 18px rgba(203, 60, 0, 0.35);
+}
+
+.map-action-btn.active svg {
+  stroke: #FFFFFF !important;
 }
 
 /* Floating Top Header on Map */
@@ -2267,16 +2317,14 @@ body, html {
 
 .map-viewer-header {
   position: absolute;
-  top: 20px;
+  top: 16px;
   left: 20px;
-  right: 20px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 12px 20px;
+  padding: 8px 16px;
   border-radius: var(--radius-lg);
   border: 1.5px solid var(--border);
   box-shadow: var(--shadow-card);
@@ -2293,7 +2341,7 @@ body, html {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
+  padding: 8px 14px;
   background: var(--surface-sunken);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
@@ -2314,48 +2362,21 @@ body, html {
 }
 
 .map-viewer-title-box h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--text-primary);
   margin: 0;
 }
 
-.map-viewer-mode-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.map-viewer-mode-actions .btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.15s ease;
-}
-
-.map-viewer-mode-actions .btn:active,
-.map-viewer-mode-actions .btn.active {
-  background: var(--primary);
-  border-color: var(--primary-dark);
-  color: #FFFFFF;
-}
-
 .map-viewer-editor-bar {
   position: absolute;
-  top: 88px;
+  top: 76px;
   left: 20px;
-  right: 20px;
+  max-width: calc(100% - 240px);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   background: linear-gradient(135deg, rgba(203, 60, 0, 0.95), rgba(152, 45, 0, 0.95));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -2416,8 +2437,8 @@ body, html {
 /* Floating Map Layers Popover — Premium Light Frosted Glass (Mission Planner Parity) */
 .viewer-layers-popover {
   position: absolute;
-  top: 86px;
-  right: 20px;
+  top: 76px;
+  right: 84px;
   width: 320px;
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(24px);

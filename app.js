@@ -469,15 +469,55 @@ function initActionButtons() {
     }
   });
 
+  // Shared Localize at Dock Helper (matches Desktop Mission Planner localizeAtDock)
+  async function localizeAtDock() {
+    let dock = null;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/dock/pose`);
+      if (res.ok) {
+        const d = await res.json();
+        if (d && d.data && typeof d.data.x === "number") {
+          dock = d.data;
+        }
+      }
+    } catch (e) {
+      console.warn("Error fetching dock pose:", e);
+    }
+
+    if (!dock && (typeof viewerDockPose !== "undefined" && viewerDockPose)) {
+      dock = viewerDockPose;
+    }
+    if (!dock && (typeof viewerNewDock !== "undefined" && viewerNewDock)) {
+      dock = viewerNewDock;
+    }
+
+    if (!dock || typeof dock.x !== "number" || typeof dock.y !== "number") {
+      throw new Error("No saved dock position found for this map");
+    }
+
+    const res = await fetch(`${API_BASE}/api/v1/navigation/localize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        x: Number(dock.x),
+        y: Number(dock.y),
+        theta: Number(dock.theta || 0)
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || (err.error && err.error.message) || "Failed to set dock pose");
+    }
+    return dock;
+  }
+  window.localizeAtDock = localizeAtDock;
+
   // Relocalization Buttons
   document.getElementById("btn-relocalize-dock")?.addEventListener("click", async () => {
     try {
-      // Localize at dock position
-      await fetch(`${API_BASE}/api/v1/navigation/localize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pose_name: "dock" })
-      });
+      showToast("Setting robot pose to charging dock...");
+      await localizeAtDock();
       dismissRelocalizationModal();
       showToast("Initial pose set to charging dock.");
       triggerFaceExpression("happy");
@@ -1896,6 +1936,8 @@ window.toggleViewerLayersPopover = function(e, forceState) {
   const isShown = popover.style.display !== "none";
   const shouldShow = forceState !== undefined ? forceState : !isShown;
   popover.style.display = shouldShow ? "block" : "none";
+  const btnLayers = document.getElementById("btn-viewer-layers");
+  if (btnLayers) btnLayers.classList.toggle("active", shouldShow);
 };
 
 window.handleViewerLayerChange = function(layer, enabled) {
@@ -2098,36 +2140,9 @@ window.closeViewerLocalizeModal = function() {
 
 window.triggerViewerLocalizeDock = async function() {
   closeViewerLocalizeModal();
-  let dock = viewerDockPose || viewerNewDock;
-  if (!dock) {
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/dock/pose`);
-      if (res.ok) {
-        const d = await res.json();
-        if (d && d.data) dock = d.data;
-      }
-    } catch (e) {}
-  }
-  if (!dock) {
-    showToast("No dock pose configured yet for this map", true);
-    return;
-  }
   try {
     showToast("Setting robot pose to Charging Dock...");
-    const res = await fetch(`${API_BASE}/api/v1/navigation/localize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        x: dock.x,
-        y: dock.y,
-        theta: dock.theta || 0,
-        frame: "map"
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || (err.error && err.error.message) || "Failed to set dock pose");
-    }
+    await (window.localizeAtDock ? window.localizeAtDock() : localizeAtDock());
     showToast("Initial pose set to charging dock!");
     triggerFaceExpression("happy");
     setTimeout(pollViewerLidarScan, 200);
@@ -2256,13 +2271,24 @@ function initMapViewerInteractivity() {
       touchMovedDist = 0;
       isTouchPanning = false;
 
-      // In save_location or localize mode: check rotation handle (44px from marker)
+      // In save_location or localize mode: check rotation handle (56px from marker)
       if ((viewerEditorMode === "save_location" || viewerEditorMode === "localize") && viewerDraftPose) {
         const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
-        const handleDist = 44;
+        const handleDist = 56;
         const hx = center.x + handleDist * Math.cos(-viewerDraftPose.theta);
         const hy = center.y + handleDist * Math.sin(-viewerDraftPose.theta);
-        if (Math.hypot(sx - hx, sy - hy) < 38) {
+        const distToHandle = Math.hypot(sx - hx, sy - hy);
+        const distToCenter = Math.hypot(sx - center.x, sy - center.y);
+
+        let isHandleTouch = distToHandle <= 48;
+        if (!isHandleTouch && distToCenter >= 16 && distToCenter <= handleDist + 36) {
+          const touchAngle = -Math.atan2(sy - center.y, sx - center.x);
+          let diff = Math.abs(touchAngle - viewerDraftPose.theta);
+          while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
+          if (diff < 0.85) isHandleTouch = true;
+        }
+
+        if (isHandleTouch) {
           viewerDraggingHeading = true;
           isTouchPanning = false;
           return;
@@ -2389,10 +2415,21 @@ function initMapViewerInteractivity() {
     const { sx, sy } = getCanvasPos(e);
     if ((viewerEditorMode === "save_location" || viewerEditorMode === "localize") && viewerDraftPose) {
       const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
-      const handleDist = 44;
+      const handleDist = 56;
       const hx = center.x + handleDist * Math.cos(-viewerDraftPose.theta);
       const hy = center.y + handleDist * Math.sin(-viewerDraftPose.theta);
-      if (Math.hypot(sx - hx, sy - hy) < 38) {
+      const distToHandle = Math.hypot(sx - hx, sy - hy);
+      const distToCenter = Math.hypot(sx - center.x, sy - center.y);
+
+      let isHandleTouch = distToHandle <= 48;
+      if (!isHandleTouch && distToCenter >= 16 && distToCenter <= handleDist + 36) {
+        const touchAngle = -Math.atan2(sy - center.y, sx - center.x);
+        let diff = Math.abs(touchAngle - viewerDraftPose.theta);
+        while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
+        if (diff < 0.85) isHandleTouch = true;
+      }
+
+      if (isHandleTouch) {
         viewerDraggingHeading = true;
         return;
       }
@@ -2697,15 +2734,7 @@ function renderViewerCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    // 2. Distance Badge Pill in middle of line (if labels layer enabled)
-    if (viewerLayers.labels) {
-      const midX = (dp.x + sp.x) / 2;
-      const midY = (dp.y + sp.y) / 2;
-      const distText = `${(distMeters * 100).toFixed(1)} cm (${distMeters.toFixed(2)} m)`;
-      drawViewerPillLabel(ctx, midX, midY - 12, distText, "#10B981");
-    }
-
-    // 3. Standoff Marker (🎯 Standoff Point - #2563EB Blue)
+    // 2. Standoff Marker (🎯 Standoff Point - #2563EB Blue)
     if (viewerEditorMode === "edit_dock" && viewerDockEditTarget === "standoff") {
       ctx.save();
       ctx.beginPath();
@@ -2749,11 +2778,7 @@ function renderViewerCanvas() {
     ctx.stroke();
     ctx.restore();
 
-    if (viewerLayers.labels) {
-      drawViewerPillLabel(ctx, sp.x, sp.y - 24, "2. Standoff Point (🎯)", "#2563EB");
-    }
-
-    // 4. Charging Dock Marker (⚡ Dock Station - #10B981 Emerald Green)
+    // 3. Charging Dock Marker (⚡ Dock Station - #10B981 Emerald Green)
     if (viewerEditorMode === "edit_dock" && viewerDockEditTarget === "dock") {
       ctx.save();
       ctx.beginPath();
@@ -2786,10 +2811,6 @@ function renderViewerCanvas() {
     ctx.textBaseline = "middle";
     ctx.fillText("⚡", 0, 0);
     ctx.restore();
-
-    if (viewerLayers.labels) {
-      drawViewerPillLabel(ctx, dp.x, dp.y - 24, "1. Dock Station (⚡)", "#10B981");
-    }
   }
 
   // Draw Live 2D Lidar Scan Points if layer enabled and map is active
@@ -2908,7 +2929,7 @@ function renderViewerCanvas() {
     const isLocalize = viewerEditorMode === "localize";
     const color = isLocalize ? "#2563EB" : "#14B8A6"; // Blue for localize, Teal for save station
     const r = 14;
-    const handleDist = 44;
+    const handleDist = 56;
     const handlePos = {
       x: center.x + handleDist * Math.cos(-yaw),
       y: center.y + handleDist * Math.sin(-yaw)
@@ -2916,37 +2937,37 @@ function renderViewerCanvas() {
 
     // 1. Anchor tether line to rotation handle node
     ctx.save();
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
     ctx.moveTo(center.x, center.y);
     ctx.lineTo(handlePos.x, handlePos.y);
     ctx.stroke();
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(center.x, center.y);
     ctx.lineTo(handlePos.x, handlePos.y);
     ctx.stroke();
 
-    // Rotation handle node at tip
+    // Large rotation handle node at tip for reliable touch grabbing
     ctx.beginPath();
-    ctx.arc(handlePos.x, handlePos.y, 12, 0, 2 * Math.PI);
-    ctx.fillStyle = isLocalize ? "rgba(37, 99, 235, 0.25)" : "rgba(20, 184, 166, 0.25)";
+    ctx.arc(handlePos.x, handlePos.y, 22, 0, 2 * Math.PI);
+    ctx.fillStyle = isLocalize ? "rgba(37, 99, 235, 0.30)" : "rgba(20, 184, 166, 0.30)";
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(handlePos.x, handlePos.y, 8, 0, 2 * Math.PI);
+    ctx.arc(handlePos.x, handlePos.y, 14, 0, 2 * Math.PI);
     ctx.fillStyle = color;
     ctx.fill();
     ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
     // Circular rotation arrow in handle
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 11px system-ui, sans-serif";
+    ctx.font = "bold 14px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("⟳", handlePos.x, handlePos.y);
@@ -3005,10 +3026,11 @@ function renderViewerCanvas() {
     ctx.fill();
     ctx.restore();
 
-    // 4. Live Coordinate & Heading Pill Readout above marker
-    const deg = Math.round(yaw * 180 / Math.PI);
-    const labelPrefix = isLocalize ? "🎯 Initial Pose:" : "📍 Station:";
-    drawViewerPillLabel(ctx, center.x, center.y - 30, `${labelPrefix} X: ${viewerDraftPose.x.toFixed(2)}m, Y: ${viewerDraftPose.y.toFixed(2)}m, θ: ${deg}°`, color);
+    // 4. In location picker mode, do not show position label. Only show heading in localize mode.
+    if (isLocalize) {
+      const deg = Math.round(yaw * 180 / Math.PI);
+      drawViewerPillLabel(ctx, center.x, center.y - 30, `🎯 Initial Pose: ${deg}°`, color);
+    }
   }
 }
 
@@ -3029,6 +3051,8 @@ window.openMapViewer = async function(mapName, options = {}) {
   const legendRobot = document.getElementById("legend-robot-item");
   const popover = document.getElementById("viewer-layers-popover");
   if (popover) popover.style.display = "none";
+  const btnLayers = document.getElementById("btn-viewer-layers");
+  if (btnLayers) btnLayers.classList.remove("active");
 
   if (screen) screen.style.display = "flex";
   if (nameEl) nameEl.textContent = mapName;
@@ -3138,6 +3162,8 @@ window.closeMapViewer = function() {
   if (screen) screen.style.display = "none";
   const popover = document.getElementById("viewer-layers-popover");
   if (popover) popover.style.display = "none";
+  const btnLayers = document.getElementById("btn-viewer-layers");
+  if (btnLayers) btnLayers.classList.remove("active");
   stopViewerLidarPolling();
   viewerEditorMode = null;
   viewerNewDock = null;
@@ -3251,7 +3277,7 @@ function updateViewerEditorBarUI() {
         <button type="button" class="editor-segmented-btn ${viewerDockEditTarget === 'dock' ? 'active' : ''}" onclick="setDockEditTarget('dock')">⚡ Dock</button>
         <button type="button" class="editor-segmented-btn ${viewerDockEditTarget === 'standoff' ? 'active' : ''}" onclick="setDockEditTarget('standoff')">🎯 Standoff</button>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" ${!canUndo ? 'disabled' : ''} onclick="undoViewerDock()" title="Undo last change">↩ Undo</button>
+      <button type="button" class="btn btn-secondary btn-sm" ${!canUndo ? 'disabled' : ''} onclick="undoViewerDock()">↩ Undo</button>
       <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
       <button type="button" class="btn btn-primary btn-sm" onclick="saveViewerEditMode()">Save Changes</button>
     `;
@@ -3618,7 +3644,6 @@ async function handleActiveMapChanged(newMapName) {
   if (addBtn) {
     addBtn.disabled = false;
     addBtn.classList.remove("disabled");
-    addBtn.title = `Save position on ${activeMapName}`;
   }
 
   // Refresh current subpage if open
@@ -3819,11 +3844,9 @@ async function loadWaypoints() {
     if (!activeMapName) {
       addBtn.disabled = true;
       addBtn.classList.add("disabled");
-      addBtn.title = "No active map loaded";
     } else {
       addBtn.disabled = false;
       addBtn.classList.remove("disabled");
-      addBtn.title = `Save position on ${activeMapName}`;
     }
   }
 

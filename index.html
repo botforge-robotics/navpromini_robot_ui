@@ -53,7 +53,7 @@
         </div>
 
         <!-- Wi-Fi & Setup Quick Button -->
-        <button class="setup-quick-btn" id="btn-open-setup" onclick="openSetupScreen()" title="Open Setup & Wi-Fi">
+        <button class="setup-quick-btn" id="btn-open-setup" onclick="openSetupScreen()">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px;">
             <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
             <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
@@ -64,7 +64,7 @@
         </button>
 
         <!-- Emergency Stop Button -->
-        <button class="estop-btn" id="btn-estop" title="Emergency Stop">
+        <button class="estop-btn" id="btn-estop">
           <span>E-STOP</span>
         </button>
       </div>
@@ -103,22 +103,22 @@
               <!-- Floating Quick Expression / Interaction Bar -->
               <div class="face-bottom-bar">
                 <div class="face-reactions-strip">
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('happy')" title="Happy">
+                  <button class="face-reaction-btn" onclick="triggerFaceExpression('happy')">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/></svg>
                   </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('curios')" title="Curious">
+                  <button class="face-reaction-btn" onclick="triggerFaceExpression('curios')">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="9.5" r="1" fill="currentColor"/><circle cx="15.5" cy="9.5" r="2.2" fill="currentColor"/><path d="M9 15h6"/></svg>
                   </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('blush')" title="Blush">
+                  <button class="face-reaction-btn" onclick="triggerFaceExpression('blush')">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M9.5 14.5a3 3 0 0 0 5 0"/><circle cx="6.5" cy="12" r="1.5" fill="#FE6829"/><circle cx="17.5" cy="12" r="1.5" fill="#FE6829"/></svg>
                   </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('thinking')" title="Thinking">
+                  <button class="face-reaction-btn" onclick="triggerFaceExpression('thinking')">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 9h2"/><path d="M14 9h2"/><path d="M10 14h4"/></svg>
                   </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('surprise')" title="Surprise">
+                  <button class="face-reaction-btn" onclick="triggerFaceExpression('surprise')">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="12" cy="15" r="2.5"/></svg>
                   </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('sleep')" title="Sleep">
+                  <button class="face-reaction-btn" onclick="triggerFaceExpression('sleep')">
                     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 10h3l-3 4h3"/><path d="M14 8h2l-2 3h2"/></svg>
                   </button>
                 </div>
@@ -253,11 +253,11 @@
                   </button>
 
                   <div class="dashboard-dock-actions">
-                    <button type="button" class="btn-dock-quick btn-quick-dock" id="btn-quick-dock" onclick="triggerAutoDock()" title="Auto-Dock to Charger">
+                    <button type="button" class="btn-dock-quick btn-quick-dock" id="btn-quick-dock" onclick="triggerAutoDock()">
                       <span class="dock-quick-icon">⚡</span>
                       <span class="dock-quick-label">Auto-Dock</span>
                     </button>
-                    <button type="button" class="btn-dock-quick btn-quick-undock" id="btn-quick-undock" onclick="triggerUndock()" title="Undock from Charger">
+                    <button type="button" class="btn-dock-quick btn-quick-undock" id="btn-quick-undock" onclick="triggerUndock()">
                       <span class="dock-quick-icon">🚀</span>
                       <span class="dock-quick-label">Undock</span>
                     </button>
@@ -652,13 +652,13 @@
 
       <!-- Floating Map Zoom & Recenter Controls -->
       <div class="map-floating-controls">
-        <button type="button" class="map-ctrl-btn" id="btn-mapping-zoom-in" title="Zoom In">
+        <button type="button" class="map-ctrl-btn" id="btn-mapping-zoom-in">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         </button>
-        <button type="button" class="map-ctrl-btn" id="btn-mapping-zoom-out" title="Zoom Out">
+        <button type="button" class="map-ctrl-btn" id="btn-mapping-zoom-out">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         </button>
-        <button type="button" class="map-ctrl-btn" id="btn-mapping-recenter" title="Recenter on Robot">
+        <button type="button" class="map-ctrl-btn" id="btn-mapping-recenter">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2" fill="currentColor"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>
         </button>
       </div>
@@ -691,17 +691,38 @@
         <span>Loading map...</span>
       </div>
 
-      <!-- Floating Map Zoom & Recenter Controls -->
+      <!-- Floating Action & Zoom Controls on Right Side -->
       <div class="map-floating-controls">
-        <button type="button" class="map-ctrl-btn" id="btn-viewer-zoom-in" title="Zoom In">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        </button>
-        <button type="button" class="map-ctrl-btn" id="btn-viewer-zoom-out" title="Zoom Out">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        </button>
-        <button type="button" class="map-ctrl-btn" id="btn-viewer-recenter" title="Fit & Center Map">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2" fill="currentColor"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>
-        </button>
+        <div class="map-ctrl-group map-ctrl-group-actions">
+          <button type="button" class="map-ctrl-btn map-action-btn" id="btn-viewer-layers" onclick="toggleViewerLayersPopover(event)">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            <span class="map-action-label">Layers</span>
+          </button>
+          <button type="button" class="map-ctrl-btn map-action-btn" id="btn-viewer-localize" onclick="openViewerLocalizeModal()">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2" fill="currentColor"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>
+            <span class="map-action-label">Localize</span>
+          </button>
+          <button type="button" class="map-ctrl-btn map-action-btn" id="btn-viewer-add-location" onclick="toggleViewerSaveLocation()">
+            <span class="map-action-icon">📍</span>
+            <span class="map-action-label">Save Location</span>
+          </button>
+          <button type="button" class="map-ctrl-btn map-action-btn" id="btn-viewer-edit-dock" onclick="toggleViewerEditDock()">
+            <span class="map-action-icon">⚡</span>
+            <span class="map-action-label">Edit Dock</span>
+          </button>
+        </div>
+
+        <div class="map-ctrl-group map-ctrl-group-zoom">
+          <button type="button" class="map-ctrl-btn" id="btn-viewer-zoom-in">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <button type="button" class="map-ctrl-btn" id="btn-viewer-zoom-out">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <button type="button" class="map-ctrl-btn" id="btn-viewer-recenter">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2" fill="currentColor"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>
+          </button>
+        </div>
       </div>
 
       <!-- Floating Top Navigation & Toolbar -->
@@ -715,22 +736,6 @@
             <h2 id="map-viewer-name">Map Name</h2>
             <span class="badge badge-ok" id="map-viewer-active-badge" style="display: none;">ACTIVE</span>
           </div>
-        </div>
-        <div class="map-viewer-mode-actions">
-          <button class="btn btn-secondary btn-sm" id="btn-viewer-layers" onclick="toggleViewerLayersPopover(event)" title="Map Layers">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-            <span>Layers</span>
-          </button>
-          <button class="btn btn-secondary btn-sm" id="btn-viewer-localize" onclick="openViewerLocalizeModal()" title="Localize Robot">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"></circle><circle cx="12" cy="12" r="2" fill="currentColor"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>
-            <span>Localize</span>
-          </button>
-          <button class="btn btn-secondary btn-sm" id="btn-viewer-add-location" onclick="toggleViewerSaveLocation()">
-            <span>📍 Save Location</span>
-          </button>
-          <button class="btn btn-secondary btn-sm" id="btn-viewer-edit-dock" onclick="toggleViewerEditDock()">
-            <span>⚡ Edit Dock</span>
-          </button>
         </div>
       </div>
 
@@ -877,13 +882,13 @@
           <span class="gnome-osk-prompt" id="osk-prompt-label">Enter Value</span>
           <div class="gnome-osk-input-wrap">
             <input type="text" id="osk-input-display" class="gnome-osk-input" readonly>
-            <button type="button" class="gnome-osk-clear-btn" id="osk-btn-clear" title="Clear Text">✕</button>
+            <button type="button" class="gnome-osk-clear-btn" id="osk-btn-clear">✕</button>
           </div>
         </div>
         <div class="gnome-osk-actions">
           <button type="button" class="gnome-osk-btn-cancel" onclick="closeTouchKeyboard(false)">Cancel</button>
           <button type="button" class="gnome-osk-btn-done" onclick="closeTouchKeyboard(true)">Done ✓</button>
-          <button type="button" class="gnome-osk-btn-hide" onclick="closeTouchKeyboard(false)" title="Hide Keyboard">
+          <button type="button" class="gnome-osk-btn-hide" onclick="closeTouchKeyboard(false)">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
         </div>

@@ -2502,6 +2502,13 @@ body, html {
   transform: scale(0.96);
 }
 
+.editor-tool-btn.active {
+  background: #EAB308;
+  border-color: #FDE047;
+  color: #0F172A;
+  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.4);
+}
+
 /* Segmented group in Editor Bar */
 .map-viewer-editor-bar .editor-segmented-group {
   display: flex;

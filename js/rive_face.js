@@ -47,6 +47,9 @@ function initRiveFace() {
 
     // Touch / click on face gives random cute reaction
     canvas.addEventListener("click", () => {
+      if (window.playTapBeep) {
+        window.playTapBeep();
+      }
       const reactions = ["happy", "curios", "blush", "surprise", "thinking"];
       const pick = reactions[Math.floor(Math.random() * reactions.length)];
       triggerFaceExpression(pick);
@@ -89,9 +92,6 @@ function showSpeechBubble(text, durationMs = 4000) {
   bubble._timer = setTimeout(() => {
     bubble.style.display = "none";
   }, durationMs);
-  if (window.speakText) {
-    window.speakText(text);
-  }
 }
 
 function getRandomReactionQuote(type) {

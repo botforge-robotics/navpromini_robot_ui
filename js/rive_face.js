@@ -89,6 +89,9 @@ function showSpeechBubble(text, durationMs = 4000) {
   bubble._timer = setTimeout(() => {
     bubble.style.display = "none";
   }, durationMs);
+  if (window.speakText) {
+    window.speakText(text);
+  }
 }
 
 function getRandomReactionQuote(type) {

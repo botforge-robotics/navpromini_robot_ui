@@ -77,6 +77,14 @@ class RobotKioskWindow(Gtk.Window):
         settings.set_enable_smooth_scrolling(True)
         settings.set_javascript_can_open_windows_automatically(False)
         settings.set_media_playback_allows_inline(True)
+        try:
+            settings.set_media_playback_requires_user_gesture(False)
+        except Exception:
+            pass
+        try:
+            settings.set_enable_webaudio(True)
+        except Exception:
+            pass
         settings.set_enable_developer_extras(True)
         try:
             settings.set_enable_write_console_messages_to_stdout(True)

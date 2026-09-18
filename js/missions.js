@@ -117,6 +117,8 @@ window.deleteMission = async function(missionId, missionName) {
   }
 };
 
+let lastObservedMissionState = "idle";
+
 function updateMissionExecutionScreen(mStatus) {
   const missionScreen = document.getElementById("screen-mission-progress");
   const floatingBanner = document.getElementById("mission-floating-banner");
@@ -124,10 +126,15 @@ function updateMissionExecutionScreen(mStatus) {
   if (!mStatus || mStatus.state !== "running") {
     if (missionScreen) missionScreen.style.display = "none";
     if (floatingBanner) floatingBanner.style.display = "none";
+    if (lastObservedMissionState === "running" && mStatus && mStatus.state === "completed") {
+      if (window.playSuccessChime) window.playSuccessChime();
+    }
+    lastObservedMissionState = (mStatus && mStatus.state) || "idle";
     activeMissionState = "idle";
     return;
   }
 
+  lastObservedMissionState = "running";
   activeMissionState = "running";
   const title = mStatus.mission_name || mStatus.mission_id || "Active Mission";
   const activeNode = mStatus.active_node || mStatus.current_node || "In Progress";
@@ -434,6 +441,12 @@ function handleActiveInteraction(interaction) {
 
   overlay.style.display = "flex";
   triggerFaceExpression("thinking");
+  if (interaction.sound_alert !== false && window.playAlertTone) {
+    window.playAlertTone();
+  }
+  if (interaction.speech_text && window.speakText) {
+    window.speakText(interaction.speech_text);
+  }
 }
 
 function renderInteractionForm(interaction) {
@@ -507,6 +520,7 @@ window.submitChoiceResponse = async function(choiceText) {
 };
 
 async function submitInteractionResponse(data) {
+  if (window.playTapBeep) window.playTapBeep();
   try {
     await fetch(`${API_BASE}/api/v1/missions/ui_response`, {
       method: "POST",

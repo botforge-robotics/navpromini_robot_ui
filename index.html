@@ -775,8 +775,20 @@
 
       <!-- Floating Editor Bar when in Edit Dock or Save Location mode -->
       <div class="map-viewer-editor-bar" id="map-viewer-editor-bar" style="display: none;">
-        <div class="editor-bar-prompt" id="editor-bar-prompt"></div>
-        <div class="editor-bar-actions"></div>
+        <div class="editor-bar-row editor-bar-row-top">
+          <div class="editor-bar-title-block">
+            <span class="editor-bar-icon-badge" id="editor-bar-icon">📍</span>
+            <div class="editor-bar-heading-group">
+              <span class="editor-bar-title" id="editor-bar-title">Save Station Location</span>
+              <span class="editor-bar-meta-pill" id="editor-bar-meta" style="display: none;"></span>
+            </div>
+          </div>
+          <div class="editor-bar-tools" id="editor-bar-tools"></div>
+        </div>
+        <div class="editor-bar-row editor-bar-row-bottom">
+          <div class="editor-bar-prompt" id="editor-bar-prompt"></div>
+          <div class="editor-bar-actions" id="editor-bar-actions"></div>
+        </div>
       </div>
 
       <!-- Floating Bottom Legend -->

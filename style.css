@@ -2370,39 +2370,248 @@ body, html {
 
 .map-viewer-editor-bar {
   position: absolute;
-  top: 76px;
+  top: 72px;
   left: 20px;
-  max-width: calc(100% - 240px);
+  right: 20px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  background: linear-gradient(135deg, rgba(203, 60, 0, 0.95), rgba(152, 45, 0, 0.95));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  padding: 12px 22px;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  padding: 14px 20px;
   border-radius: var(--radius-lg);
-  color: #FFFFFF;
-  font-weight: 800;
-  font-size: 15px;
-  box-shadow: 0 8px 24px rgba(203, 60, 0, 0.35);
-  z-index: 22;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 24;
+  animation: editorBarSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+@keyframes editorBarSlideIn {
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .map-viewer-editor-bar.mode-save-location {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(29, 78, 216, 0.96));
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.35);
+  background: linear-gradient(135deg, rgba(15, 28, 60, 0.96) 0%, rgba(20, 36, 80, 0.96) 60%, rgba(12, 20, 48, 0.98) 100%);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 16px 40px rgba(10, 20, 50, 0.5), 0 0 0 1px rgba(59, 130, 246, 0.2) inset;
 }
 
 .map-viewer-editor-bar.mode-edit-dock {
-  background: linear-gradient(135deg, rgba(203, 60, 0, 0.96), rgba(152, 45, 0, 0.96));
-  box-shadow: 0 8px 24px rgba(203, 60, 0, 0.35);
+  background: linear-gradient(135deg, rgba(38, 16, 8, 0.96) 0%, rgba(55, 22, 10, 0.96) 60%, rgba(28, 12, 6, 0.98) 100%);
+  border-color: rgba(254, 104, 41, 0.45);
+  box-shadow: 0 16px 40px rgba(40, 15, 5, 0.5), 0 0 0 1px rgba(254, 104, 41, 0.2) inset;
 }
 
+.map-viewer-editor-bar.mode-localize {
+  background: linear-gradient(135deg, rgba(6, 32, 26, 0.96) 0%, rgba(10, 48, 38, 0.96) 60%, rgba(5, 24, 20, 0.98) 100%);
+  border-color: rgba(16, 185, 129, 0.4);
+  box-shadow: 0 16px 40px rgba(5, 30, 20, 0.5), 0 0 0 1px rgba(16, 185, 129, 0.2) inset;
+}
+
+/* Rows inside the editor bar */
+.editor-bar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+}
+
+.editor-bar-row-top {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.editor-bar-row-bottom {
+  padding-top: 10px;
+}
+
+/* Title block in top row */
+.editor-bar-title-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor-bar-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.editor-bar-heading-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.editor-bar-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: 0.2px;
+}
+
+.editor-bar-meta-pill {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.14);
+  color: #F1F5F9;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  line-height: 1.2;
+}
+
+/* Tools in top row (Segmented switcher or Snap button) */
+.editor-bar-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.editor-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-md);
+  color: #FFFFFF;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.editor-tool-btn:active {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0.96);
+}
+
+/* Segmented group in Editor Bar */
+.map-viewer-editor-bar .editor-segmented-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  gap: 4px;
+}
+
+.map-viewer-editor-bar .editor-segmented-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.map-viewer-editor-bar .editor-segmented-btn.active {
+  background: var(--primary);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(203, 60, 0, 0.4);
+}
+
+/* Prompt in bottom row */
+.editor-bar-prompt {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-bar-prompt .prompt-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Action buttons in bottom row */
 .editor-bar-actions {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.btn-editor-cancel {
+  padding: 8px 18px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-editor-cancel:active {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0.96);
+}
+
+.btn-editor-undo {
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-editor-undo.disabled,
+.btn-editor-undo:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.btn-editor-undo:not(:disabled):active {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(0.96);
+}
+
+.btn-editor-save {
+  padding: 8px 22px;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  border: 1.5px solid var(--primary-light);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 4px 16px rgba(203, 60, 0, 0.4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-editor-save:active {
+  background: var(--primary-dark);
+  transform: scale(0.96);
 }
 
 .map-viewer-legend {

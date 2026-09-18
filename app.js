@@ -3175,6 +3175,10 @@ window.closeMapViewer = function() {
 
 function updateViewerEditorBarUI() {
   const editorBar = document.getElementById("map-viewer-editor-bar");
+  const iconEl = document.getElementById("editor-bar-icon");
+  const titleEl = document.getElementById("editor-bar-title");
+  const metaEl = document.getElementById("editor-bar-meta");
+  const toolsEl = document.getElementById("editor-bar-tools");
   const promptEl = document.getElementById("editor-bar-prompt");
   const actionsEl = document.getElementById("map-viewer-editor-bar")?.querySelector(".editor-bar-actions");
   const btnAddLoc = document.getElementById("btn-viewer-add-location");
@@ -3184,45 +3188,26 @@ function updateViewerEditorBarUI() {
   if (btnAddLoc) {
     const isSave = viewerEditorMode === "save_location";
     btnAddLoc.classList.toggle("active", isSave);
-    if (isSave) {
-      btnAddLoc.classList.remove("btn-secondary");
-      btnAddLoc.classList.add("btn-primary");
-    } else {
-      btnAddLoc.classList.remove("btn-primary");
-      btnAddLoc.classList.add("btn-secondary");
-    }
   }
 
   if (btnEditDock) {
     const isDock = viewerEditorMode === "edit_dock";
     btnEditDock.classList.toggle("active", isDock);
-    if (isDock) {
-      btnEditDock.classList.remove("btn-secondary");
-      btnEditDock.classList.add("btn-primary");
-    } else {
-      btnEditDock.classList.remove("btn-primary");
-      btnEditDock.classList.add("btn-secondary");
-    }
   }
 
   if (btnLocalize) {
     const isLocalize = viewerEditorMode === "localize";
     btnLocalize.classList.toggle("active", isLocalize);
-    if (isLocalize) {
-      btnLocalize.classList.remove("btn-secondary");
-      btnLocalize.classList.add("btn-primary");
-    } else {
-      btnLocalize.classList.remove("btn-primary");
-      btnLocalize.classList.add("btn-secondary");
-    }
   }
 
   if (!editorBar || !promptEl || !actionsEl) return;
 
   if (!viewerEditorMode) {
     editorBar.style.display = "none";
-    promptEl.innerHTML = "";
-    actionsEl.innerHTML = "";
+    if (promptEl) promptEl.innerHTML = "";
+    if (actionsEl) actionsEl.innerHTML = "";
+    if (toolsEl) toolsEl.innerHTML = "";
+    if (metaEl) metaEl.style.display = "none";
     return;
   }
 
@@ -3230,56 +3215,94 @@ function updateViewerEditorBarUI() {
 
   if (viewerEditorMode === "save_location") {
     editorBar.className = "map-viewer-editor-bar mode-save-location";
-    const snapBtn = liveRobotPose
-      ? `<button type="button" class="btn btn-secondary btn-sm" onclick="snapDraftToRobot()" style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/></svg>Snap to Robot</button>`
-      : "";
+    if (iconEl) iconEl.textContent = "📍";
+    if (titleEl) titleEl.textContent = "Save Station Location";
+
+    if (toolsEl) {
+      toolsEl.innerHTML = liveRobotPose
+        ? `<button type="button" class="editor-tool-btn" onclick="snapDraftToRobot()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/></svg><span>Snap to Robot</span></button>`
+        : "";
+    }
+
     if (!viewerDraftPose) {
-      promptEl.innerHTML = `📍 <strong>Save Location:</strong> Tap map to place location marker`;
+      if (metaEl) metaEl.style.display = "none";
+      promptEl.innerHTML = `<span class="prompt-hint">Tap anywhere on the map to place location pin</span>`;
     } else {
       const deg = Math.round((viewerDraftPose.theta || 0) * 180 / Math.PI);
-      promptEl.innerHTML = `📍 <strong>Location Pose Set (${deg}°):</strong> Tap to move, drag ⟳ handle to rotate, then Save`;
+      if (metaEl) {
+        metaEl.style.display = "inline-flex";
+        metaEl.textContent = `Heading: ${deg}°`;
+      }
+      promptEl.innerHTML = `<span class="prompt-hint">Tap map to reposition • Drag ⟳ handle to adjust heading</span>`;
     }
+
     actionsEl.innerHTML = `
-      ${snapBtn}
-      <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
-      <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerSaveLocation()">✓ Save Location</button>
+      <button type="button" class="btn-editor-cancel" onclick="cancelViewerEditMode()">Cancel</button>
+      <button type="button" class="btn-editor-save" onclick="confirmViewerSaveLocation()">✓ Save Location</button>
     `;
   } else if (viewerEditorMode === "localize") {
     editorBar.className = "map-viewer-editor-bar mode-localize";
-    const snapBtn = liveRobotPose
-      ? `<button type="button" class="btn btn-secondary btn-sm" onclick="snapDraftToRobot()" style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/></svg>Snap to Current</button>`
-      : "";
+    if (iconEl) iconEl.textContent = "🎯";
+    if (titleEl) titleEl.textContent = "Set Robot Initial Pose";
+
+    if (toolsEl) {
+      toolsEl.innerHTML = liveRobotPose
+        ? `<button type="button" class="editor-tool-btn" onclick="snapDraftToRobot()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/></svg><span>Snap to Current</span></button>`
+        : "";
+    }
+
     if (!viewerDraftPose) {
-      promptEl.innerHTML = `🎯 <strong>Select on Map:</strong> Tap map to place estimated robot pose`;
+      if (metaEl) metaEl.style.display = "none";
+      promptEl.innerHTML = `<span class="prompt-hint">Tap on map where robot is currently positioned</span>`;
     } else {
       const deg = Math.round((viewerDraftPose.theta || 0) * 180 / Math.PI);
-      promptEl.innerHTML = `🎯 <strong>Estimate Set (${deg}°):</strong> Drag ⟳ handle to adjust heading, then Set Pose`;
+      if (metaEl) {
+        metaEl.style.display = "inline-flex";
+        metaEl.textContent = `Heading: ${deg}°`;
+      }
+      promptEl.innerHTML = `<span class="prompt-hint">Tap map to move • Drag ⟳ handle to align direction</span>`;
     }
+
     actionsEl.innerHTML = `
-      ${snapBtn}
-      <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
-      <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerLocalize()">✓ Set Initial Pose</button>
+      <button type="button" class="btn-editor-cancel" onclick="cancelViewerEditMode()">Cancel</button>
+      <button type="button" class="btn-editor-save" onclick="confirmViewerLocalize()">✓ Set Initial Pose</button>
     `;
   } else if (viewerEditorMode === "edit_dock") {
     editorBar.className = "map-viewer-editor-bar mode-edit-dock";
+    if (iconEl) iconEl.textContent = "⚡";
+    if (titleEl) titleEl.textContent = "Edit Charging Station & Standoff";
+
+    if (toolsEl) {
+      toolsEl.innerHTML = `
+        <div class="editor-segmented-group">
+          <button type="button" class="editor-segmented-btn ${viewerDockEditTarget === 'dock' ? 'active' : ''}" onclick="setDockEditTarget('dock')">⚡ Dock Station</button>
+          <button type="button" class="editor-segmented-btn ${viewerDockEditTarget === 'standoff' ? 'active' : ''}" onclick="setDockEditTarget('standoff')">🎯 Standoff Pose</button>
+        </div>
+      `;
+    }
+
     if (viewerDockEditTarget === "dock") {
-      promptEl.innerHTML = `⚡ <strong>Edit Dock:</strong> Tap map to place Charging Dock position`;
+      if (metaEl) {
+        metaEl.style.display = "inline-flex";
+        metaEl.textContent = "Target: Dock Station";
+      }
+      promptEl.innerHTML = `<span class="prompt-hint">Tap map to place charger • Drag ⟳ handle pointing out into room</span>`;
     } else {
       const dist = (viewerNewDock && viewerNewStandoff)
-        ? ` (${Math.hypot(viewerNewStandoff.x - viewerNewDock.x, viewerNewStandoff.y - viewerNewDock.y).toFixed(2)}m)`
-        : "";
-      promptEl.innerHTML = `🎯 <strong>Edit Standoff:</strong> Tap map to place Standoff staging pose${dist}`;
+        ? Math.hypot(viewerNewStandoff.x - viewerNewDock.x, viewerNewStandoff.y - viewerNewDock.y).toFixed(2)
+        : null;
+      if (metaEl) {
+        metaEl.style.display = "inline-flex";
+        metaEl.textContent = dist ? `Standoff: ${dist}m` : "Target: Standoff Pose";
+      }
+      promptEl.innerHTML = `<span class="prompt-hint">Tap map to place approach point (~0.7m facing dock)</span>`;
     }
 
     const canUndo = viewerDockUndoStack.length > 0;
     actionsEl.innerHTML = `
-      <div class="editor-segmented-group">
-        <button type="button" class="editor-segmented-btn ${viewerDockEditTarget === 'dock' ? 'active' : ''}" onclick="setDockEditTarget('dock')">⚡ Dock</button>
-        <button type="button" class="editor-segmented-btn ${viewerDockEditTarget === 'standoff' ? 'active' : ''}" onclick="setDockEditTarget('standoff')">🎯 Standoff</button>
-      </div>
-      <button type="button" class="btn btn-secondary btn-sm" ${!canUndo ? 'disabled' : ''} onclick="undoViewerDock()">↩ Undo</button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
-      <button type="button" class="btn btn-primary btn-sm" onclick="saveViewerEditMode()">Save Changes</button>
+      <button type="button" class="btn-editor-undo ${!canUndo ? 'disabled' : ''}" ${!canUndo ? 'disabled' : ''} onclick="undoViewerDock()">↩ Undo</button>
+      <button type="button" class="btn-editor-cancel" onclick="cancelViewerEditMode()">Cancel</button>
+      <button type="button" class="btn-editor-save" onclick="saveViewerEditMode()">✓ Save Changes</button>
     `;
   }
 }

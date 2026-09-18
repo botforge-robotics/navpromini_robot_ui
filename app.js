@@ -446,6 +446,7 @@ function initActionButtons() {
   document.getElementById("btn-cancel-docking")?.addEventListener("click", async () => {
     try {
       showToast("Canceling dock operation...");
+      stopDockCamStream();
       await fetch(`${API_BASE}/api/v1/dock/goal`, { method: "DELETE" });
       const dockScreen = document.getElementById("screen-docking-progress");
       if (dockScreen) dockScreen.style.display = "none";
@@ -603,6 +604,46 @@ function updateNavigationState(navData, isMissionActive = false) {
   }
 }
 
+let dockCamPollActive = false;
+let dockCamPollTimer = null;
+
+function startDockCamStream() {
+  if (dockCamPollActive) return;
+  dockCamPollActive = true;
+  pollNextDockFrame();
+}
+
+function pollNextDockFrame() {
+  if (!dockCamPollActive) return;
+  const cameraImg = document.getElementById("dock-camera-preview-img");
+  if (!cameraImg) return;
+
+  const img = new Image();
+  const startTime = Date.now();
+  img.onload = () => {
+    if (!dockCamPollActive) return;
+    cameraImg.src = img.src;
+    const elapsed = Date.now() - startTime;
+    const delay = Math.max(10, 35 - elapsed);
+    dockCamPollTimer = setTimeout(pollNextDockFrame, delay);
+  };
+  img.onerror = () => {
+    if (!dockCamPollActive) return;
+    dockCamPollTimer = setTimeout(pollNextDockFrame, 200);
+  };
+  img.src = `${API_BASE}/api/v1/dock/debug_image?t=${Date.now()}`;
+}
+
+function stopDockCamStream() {
+  dockCamPollActive = false;
+  if (dockCamPollTimer) {
+    clearTimeout(dockCamPollTimer);
+    dockCamPollTimer = null;
+  }
+  const cameraImg = document.getElementById("dock-camera-preview-img");
+  if (cameraImg) cameraImg.src = "";
+}
+
 function updateDockingScreen(dockData, stateData, isMissionActive = false) {
   const dockScreen = document.getElementById("screen-docking-progress");
   if (!dockScreen) return;
@@ -616,6 +657,7 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
     if (dockScreen.style.display === "flex") {
       dockScreen.style.display = "none";
     }
+    stopDockCamStream();
     previousDockOperation = dockOp;
     return;
   }
@@ -634,13 +676,8 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
     if (cameraCard) cameraCard.style.display = "flex";
     if (radarAnim) radarAnim.style.display = "none";
 
-    // Connect MJPEG stream if not active
-    if (cameraImg && (!cameraImg.src || !cameraImg.src.includes("/api/v1/dock/stream.mjpg"))) {
-      cameraImg.src = `${API_BASE}/api/v1/dock/stream.mjpg?t=${Date.now()}`;
-      cameraImg.onerror = () => {
-        cameraImg.src = `${API_BASE}/api/v1/dock/debug_image?t=${Date.now()}`;
-      };
-    }
+    // Start zero-latency double-buffered camera preview
+    startDockCamStream();
 
     const tagVisible = !!((dockData && dockData.tag_visible) || (stateData && stateData.dock && stateData.dock.tag_visible));
     if (tagStatusEl) {
@@ -662,7 +699,7 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
     dockScreen.style.display = "flex";
     if (cameraCard) cameraCard.style.display = "none";
     if (radarAnim) radarAnim.style.display = "flex";
-    if (cameraImg && cameraImg.src) cameraImg.src = "";
+    stopDockCamStream();
 
     if (titleEl) titleEl.textContent = "Disengaging from Charger";
     if (subEl) subEl.textContent = "Backing away smoothly from charging dock to staging area...";
@@ -670,7 +707,7 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
     if (cancelBtn) cancelBtn.textContent = "Cancel Undock";
   } else {
     // Docking/undocking idle or finished -> disconnect camera and auto-hide
-    if (cameraImg && cameraImg.src) cameraImg.src = "";
+    stopDockCamStream();
     if (dockScreen.style.display === "flex") {
       dockScreen.style.display = "none";
       if (previousDockOperation === "docking") {
@@ -1967,9 +2004,9 @@ function handleViewerMarkerTap(sx, sy) {
         return;
       }
       showDangerConfirmation({
-        title: "Send Robot to Station",
+        title: `Send Robot to "${wp.name}"`,
         message: `Dispatch NavPro Mini to "${wp.name}"? The robot will navigate smoothly to this destination.`,
-        confirmText: "Dispatch Robot",
+        confirmText: `Dispatch to ${wp.name}`,
         isDanger: false,
         icon: "📍",
         onConfirm: () => {
@@ -2572,12 +2609,12 @@ function renderViewerCanvas() {
     canvas.height = canvas.clientHeight;
   }
 
-  // Deep radar dark canvas background (matches map image)
-  ctx.fillStyle = "#0B0F19";
+  // High-contrast clean dark viewport background (matches CAD / robotics viewports)
+  ctx.fillStyle = "#0F172A";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Subtle radar grid lines
-  ctx.strokeStyle = "rgba(30, 41, 59, 0.45)";
+  // Subtle clean grid lines
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
   ctx.lineWidth = 1;
   const gridStep = 40;
   for (let x = 0; x < canvas.width; x += gridStep) {
@@ -2783,26 +2820,84 @@ function renderViewerCanvas() {
     ctx.restore();
   }
 
-  // Draw Live Robot Marker if this map is active
+  // Draw Live Robot Marker if this map is active (exact 1:1 parity with Desktop Mission Planner _drawRobotMarker)
   if (isViewerMapActive() && liveRobotPose) {
     const rp = toCanvasCoords(liveRobotPose.x, liveRobotPose.y);
+    const r = 13.0; // Chassis disc radius
+    const coneR = 40.0; // Headlight cone radius
+    const coneHalfAngle = 0.52; // ~30° spread
+    const segments = 16;
+
     ctx.save();
     ctx.translate(rp.x, rp.y);
     ctx.rotate(-liveRobotPose.yaw);
-    ctx.fillStyle = "#CB3C00";
+
+    // 1. Soft wide orientation field / headlight cone
     ctx.beginPath();
-    ctx.arc(0, 0, 14, 0, 2 * Math.PI);
+    ctx.moveTo(0, 0);
+    for (let i = 0; i <= segments; i++) {
+      const t = -coneHalfAngle + (2 * coneHalfAngle) * (i / segments);
+      ctx.lineTo(coneR * Math.cos(t), coneR * Math.sin(t));
+    }
+    ctx.closePath();
+    ctx.fillStyle = "rgba(203, 60, 0, 0.22)";
+    ctx.fill();
+
+    // 2. Chassis outer shadow ring
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 2.5, 0, 2 * Math.PI);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+    ctx.fill();
+
+    // 3. Chassis outer shock / glow ring
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 2.0, 0, 2 * Math.PI);
+    ctx.strokeStyle = "rgba(203, 60, 0, 0.40)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 4. Robot chassis body disc
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, 2 * Math.PI);
+    ctx.fillStyle = "#CB3C00";
     ctx.fill();
     ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2.5;
     ctx.stroke();
-    ctx.fillStyle = "#FFFFFF";
+
+    // 5. Prominent high-contrast forward chevron arrow
+    const arrowTipDist = r + 8.5;
+    const arrowBaseDist = r * 0.15;
+    const arrowWingDist = r * 0.95;
+    const arrowWingAngle = 0.70;
+
+    const tip = { x: arrowTipDist, y: 0 };
+    const leftWing = { x: arrowWingDist * Math.cos(-arrowWingAngle), y: arrowWingDist * Math.sin(-arrowWingAngle) };
+    const rightWing = { x: arrowWingDist * Math.cos(arrowWingAngle), y: arrowWingDist * Math.sin(arrowWingAngle) };
+    const base = { x: arrowBaseDist, y: 0 };
+
     ctx.beginPath();
-    ctx.moveTo(20, 0);
-    ctx.lineTo(10, -6);
-    ctx.lineTo(10, 6);
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(leftWing.x, leftWing.y);
+    ctx.lineTo(base.x, base.y);
+    ctx.lineTo(rightWing.x, rightWing.y);
     ctx.closePath();
+
+    // Dark stroke outline around arrow for maximum contrast against any background
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.lineWidth = 2.0;
+    ctx.stroke();
+
+    // Solid bright white pointer arrow
+    ctx.fillStyle = "#FFFFFF";
     ctx.fill();
+
+    // 6. Center pivot core
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.5, 0, 2 * Math.PI);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fill();
+
     ctx.restore();
   }
 
@@ -3113,15 +3208,15 @@ function updateViewerEditorBarUI() {
       ? `<button type="button" class="btn btn-secondary btn-sm" onclick="snapDraftToRobot()" style="display:inline-flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/></svg>Snap to Robot</button>`
       : "";
     if (!viewerDraftPose) {
-      promptEl.innerHTML = `📍 <strong>Save Station:</strong> Tap map to place location marker`;
+      promptEl.innerHTML = `📍 <strong>Save Location:</strong> Tap map to place location marker`;
     } else {
       const deg = Math.round((viewerDraftPose.theta || 0) * 180 / Math.PI);
-      promptEl.innerHTML = `📍 <strong>Station Pose Set (${deg}°):</strong> Tap to move, drag ⟳ handle to rotate, then Save`;
+      promptEl.innerHTML = `📍 <strong>Location Pose Set (${deg}°):</strong> Tap to move, drag ⟳ handle to rotate, then Save`;
     }
     actionsEl.innerHTML = `
       ${snapBtn}
       <button type="button" class="btn btn-secondary btn-sm" onclick="cancelViewerEditMode()">Cancel</button>
-      <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerSaveLocation()">✓ Save Station</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="confirmViewerSaveLocation()">✓ Save Location</button>
     `;
   } else if (viewerEditorMode === "localize") {
     editorBar.className = "map-viewer-editor-bar mode-localize";
@@ -3204,7 +3299,7 @@ window.undoViewerDock = function() {
 window.toggleViewerSaveLocation = function() {
   if (viewerEditorMode === "save_location") {
     cancelViewerEditMode();
-    showToast("Exited station placement mode");
+    showToast("Exited location placement mode");
     return;
   }
   // Clear any dock edit state
@@ -3218,7 +3313,7 @@ window.toggleViewerSaveLocation = function() {
   viewerDraggingHeading = false;
   updateViewerEditorBarUI();
   renderViewerCanvas();
-  showToast("📍 Save Station: Tap map to place location marker");
+  showToast("📍 Save Location: Tap map to place location marker");
 };
 
 window.promptViewerAddLocation = function() {
@@ -3230,11 +3325,11 @@ window.confirmViewerSaveLocation = function() {
     showToast("Tap on map to place a location marker first", true);
     return;
   }
-  openTouchKeyboard("Station Name:", async (name) => {
+  openTouchKeyboard("Location Name:", async (name) => {
     if (!name || !name.trim()) return;
     const wpName = name.trim();
     try {
-      showToast(`Saving station "${wpName}"...`);
+      showToast(`Saving location "${wpName}"...`);
       await fetch(`${API_BASE}/api/v1/waypoints`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3247,12 +3342,12 @@ window.confirmViewerSaveLocation = function() {
           map: viewerMapName
         })
       });
-      showToast(`Station "${wpName}" saved!`);
+      showToast(`Location "${wpName}" saved!`);
       cancelViewerEditMode();
       openMapViewer(viewerMapName);
       loadWaypoints();
     } catch (e) {
-      showToast(`Failed to save station: ${e.message}`, true);
+      showToast(`Failed to save location: ${e.message}`, true);
     }
   });
 };

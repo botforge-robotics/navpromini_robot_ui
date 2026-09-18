@@ -142,11 +142,22 @@ def start_eval_server(win, port=8092):
         def do_POST(self):
             content_len = int(self.headers.get('Content-Length', 0))
             post_body = self.rfile.read(content_len).decode('utf-8')
+            def _callback(wv, res, user_data):
+                try:
+                    js_res = wv.run_javascript_finish(res)
+                    val = js_res.get_js_value()
+                    with open('/tmp/eval_result.txt', 'w') as f:
+                        f.write(val.to_string() if val else 'null')
+                except Exception as ex:
+                    with open('/tmp/eval_result.txt', 'w') as f:
+                        f.write(f'ERROR_CALLBACK: {ex}')
+
             def _exec():
                 try:
-                    win.webview.run_javascript(post_body)
+                    win.webview.run_javascript(post_body, None, _callback, None)
                 except Exception as ex:
-                    print(f"[EvalServer] Error running JS: {ex}", flush=True)
+                    with open('/tmp/eval_result.txt', 'w') as f:
+                        f.write(f'ERROR_EXEC: {ex}')
                 return False
             GLib.idle_add(_exec)
             self.send_response(200)

@@ -281,21 +281,15 @@ function updatePowerState(pState) {
         triggerFaceExpression("wakeup");
       }
 
-      // Update quick dock / undock buttons on dashboard bottom bar
+      // Keep static text Dock and Undock on dashboard bottom bar
       const quickDockBtn = document.getElementById("btn-quick-dock");
       const quickUndockBtn = document.getElementById("btn-quick-undock");
       if (quickDockBtn) {
         const isChargingOrFull = isCharging || isFull;
         if (isChargingOrFull) {
           quickDockBtn.classList.add("is-charging");
-          const label = quickDockBtn.querySelector(".dock-quick-label");
-          if (label) label.textContent = isFull ? "Docked (Full)" : "Docked";
-          if (quickUndockBtn) quickUndockBtn.style.opacity = "1";
         } else {
           quickDockBtn.classList.remove("is-charging");
-          const label = quickDockBtn.querySelector(".dock-quick-label");
-          if (label) label.textContent = "Auto-Dock";
-          if (quickUndockBtn) quickUndockBtn.style.opacity = "0.75";
         }
       }
 

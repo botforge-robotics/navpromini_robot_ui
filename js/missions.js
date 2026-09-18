@@ -507,12 +507,20 @@ function handleActiveInteraction(interaction) {
   if (titleEl) titleEl.textContent = interaction.title || "Action Required";
   if (msgEl) msgEl.textContent = interaction.message || "";
 
-  const isForm = interaction.subtype === "form" ||
+  const isNotification = interaction.subtype === "notification" ||
+                         interaction.type === "notification";
+
+  const isForm = !isNotification && (
+                 interaction.subtype === "form" ||
                  interaction.subtype === "dynamic_form" ||
                  interaction.type === "form" ||
-                 (Array.isArray(interaction.fields) && interaction.fields.length > 0);
+                 (Array.isArray(interaction.fields) && interaction.fields.length > 0));
 
-  if (isForm) {
+  if (isNotification) {
+    renderInteractionNotification(interaction);
+    if (formEl) formEl.style.display = "none";
+    if (choicesEl) choicesEl.style.display = "flex";
+  } else if (isForm) {
     renderInteractionForm(interaction);
     if (formEl) formEl.style.display = "flex";
     if (choicesEl) choicesEl.style.display = "none";
@@ -709,6 +717,18 @@ window.closeTouchSelectPicker = function() {
   const modal = document.getElementById("modal-touch-picker");
   if (modal) modal.style.display = "none";
 };
+
+function renderInteractionNotification(interaction) {
+  const grid = document.getElementById("choices-buttons-grid");
+  if (!grid) return;
+  const btnText = interaction.button_text || interaction.confirm_text || "OK";
+
+  grid.innerHTML = `
+    <button class="kiosk-choice-btn kiosk-choice-btn-primary" style="grid-column: 1 / -1; min-height: 64px; font-size: 1.25rem; font-weight: 700; background: var(--primary, #2563eb); color: #fff; border-radius: 14px;" onclick="submitChoiceResponse('${escapeQuotes(btnText)}')">
+      <span>${escapeHtml(btnText)}</span>
+    </button>
+  `;
+}
 
 function renderInteractionChoices(interaction) {
   const grid = document.getElementById("choices-buttons-grid");

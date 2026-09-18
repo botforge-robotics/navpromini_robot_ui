@@ -859,7 +859,8 @@ body, html {
   height: 100%;
   padding: 24px;
   margin: 0 auto;
-  overflow-y: auto;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .subpage-header {
@@ -956,8 +957,14 @@ body, html {
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  overflow-y: auto;
-  padding-bottom: 24px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y !important;
+  overscroll-behavior-y: contain;
+  padding-bottom: 32px;
 }
 
 .location-item, .mission-item-card, .schedule-item-card, .map-item-card {
@@ -1004,6 +1011,12 @@ body, html {
   max-width: 720px;
   margin: 0 auto;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y !important;
+  overscroll-behavior-y: contain;
+  padding-bottom: 32px;
 }
 
 .power-gauge-card, .system-health-card {
@@ -4115,6 +4128,7 @@ select.kiosk-select option,
   border-radius: var(--radius-md);
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
+  touch-action: pan-y !important;
 }
 
 .swipeable-content.swiped-open {

@@ -512,14 +512,62 @@ function initSdkEventsWebSocket() {
               const missionScreen = document.getElementById("screen-mission-progress");
               if (missionScreen) missionScreen.style.display = "flex";
               activeMissionState = "running";
+              if (window.updateMissionExecutionScreen && data) {
+                window.updateMissionExecutionScreen({
+                  mission_id: data.mission_id,
+                  mission_name: data.mission_name,
+                  active_node_label: "Initializing routine...",
+                  progress_pct: 0,
+                  state: "running"
+                });
+              }
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "mission.node_started" || ev === "mission.node_completed") {
+              activeMissionState = "running";
+              if (window.updateMissionExecutionScreen && data) {
+                window.updateMissionExecutionScreen({
+                  mission_id: data.mission_id,
+                  mission_name: data.mission_name,
+                  active_node_label: data.label,
+                  active_node_type: data.node_type,
+                  active_node: data.label || data.node_id,
+                  progress_pct: data.progress_pct,
+                  state: "running"
+                });
+              }
               window.triggerFastTelemetryPoll?.();
             } else if (ev === "mission.ui_interaction" && data) {
               handleActiveInteraction(data);
             } else if (ev === "mission.ui_interaction_dismissed") {
               dismissActiveInteraction();
               window.triggerFastTelemetryPoll?.();
+            } else if (ev === "mission.paused") {
+              activeMissionState = "paused";
+              if (window.updateMissionExecutionScreen) {
+                window.updateMissionExecutionScreen({
+                  mission_id: data?.mission_id,
+                  state: "paused"
+                });
+              }
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "mission.resumed") {
+              activeMissionState = "running";
+              if (window.updateMissionExecutionScreen) {
+                window.updateMissionExecutionScreen({
+                  mission_id: data?.mission_id,
+                  state: "running"
+                });
+              }
+              window.triggerFastTelemetryPoll?.();
             } else if (ev === "mission.completed" || ev === "mission.canceled" || ev === "mission.failed") {
               activeMissionState = "idle";
+              if (window.updateMissionExecutionScreen) {
+                window.updateMissionExecutionScreen({
+                  mission_id: data?.mission_id,
+                  progress_pct: ev === "mission.completed" ? 100 : 0,
+                  state: ev === "mission.completed" ? "completed" : "idle"
+                });
+              }
               window.triggerFastTelemetryPoll?.();
             } else if (ev && (ev.startsWith("dock.") || ev.startsWith("navigation."))) {
               window.triggerFastTelemetryPoll?.();

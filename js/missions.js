@@ -142,11 +142,20 @@ function updateMissionExecutionScreen(mStatus) {
     activeMissionId = mStatus.mission_id;
   }
   const title = mStatus.mission_name || mStatus.mission_id || "Active Mission";
-  let activeNode = mStatus.active_node || mStatus.current_node || "In Progress";
+  let activeNode = mStatus.active_node_label || mStatus.label || mStatus.active_node || mStatus.current_node || mStatus.active_node_id || "In Progress";
+  let stepDesc = "";
   if (mStatus.state === "waiting_for_user") {
     activeNode = "Waiting for User Input...";
+    stepDesc = "Interactive form or prompt is displayed on screen.";
+  } else if (mStatus.state === "paused") {
+    stepDesc = "Mission routine is currently paused.";
+  } else if (mStatus.active_node_type) {
+    stepDesc = `Executing step: ${mStatus.active_node_type}`;
+  } else {
+    stepDesc = "Executing autonomous routine action...";
   }
-  const progressPct = mStatus.progress_pct || 0;
+
+  const progressPct = (mStatus.progress_pct !== undefined && mStatus.progress_pct !== null) ? mStatus.progress_pct : 0;
 
   if (missionScreen && missionScreen.style.display !== "flex") {
     missionScreen.style.display = "flex";
@@ -154,75 +163,100 @@ function updateMissionExecutionScreen(mStatus) {
 
   const titleEl = document.getElementById("mission-screen-title");
   const nodeEl = document.getElementById("mission-screen-node");
+  const descEl = document.getElementById("mission-screen-step-desc");
   const fillEl = document.getElementById("mission-screen-fill");
+  const timeEl = document.getElementById("mission-screen-time");
   const pauseBtn = document.getElementById("btn-mission-pause-screen");
 
   if (titleEl) titleEl.textContent = title;
   if (nodeEl) nodeEl.textContent = activeNode;
+  if (descEl) descEl.textContent = stepDesc;
   if (fillEl) fillEl.style.width = `${progressPct}%`;
+  if (timeEl && mStatus.elapsed_sec != null) {
+    const totalSec = Math.floor(mStatus.elapsed_sec);
+    const mins = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const secs = String(totalSec % 60).padStart(2, '0');
+    timeEl.textContent = `${mins}:${secs}`;
+  }
   if (pauseBtn) {
     pauseBtn.textContent = (mStatus.state === "paused") ? "Resume Routine" : "Pause Routine";
   }
+
+  // Update floating banner on dashboard as well
+  if (floatingBanner) {
+    const bannerTitle = document.getElementById("active-mission-title");
+    const bannerNode = document.getElementById("mission-node-label");
+    const bannerBar = document.getElementById("mission-progress-bar");
+    const bannerPause = document.getElementById("btn-mission-pause");
+    if (bannerTitle) bannerTitle.textContent = title;
+    if (bannerNode) bannerNode.textContent = `Task: ${activeNode}`;
+    if (bannerBar) bannerBar.style.width = `${progressPct}%`;
+    if (bannerPause) bannerPause.textContent = (mStatus.state === "paused") ? "Resume" : "Pause";
+  }
 }
+window.updateMissionExecutionScreen = updateMissionExecutionScreen;
 
 function initMissionExecutionControls() {
-  const pauseBtn = document.getElementById("btn-mission-pause-screen");
-  const abortBtn = document.getElementById("btn-mission-abort-screen");
+  const pauseScreenBtn = document.getElementById("btn-mission-pause-screen");
+  const abortScreenBtn = document.getElementById("btn-mission-abort-screen");
+  const pauseBannerBtn = document.getElementById("btn-mission-pause");
+  const abortBannerBtn = document.getElementById("btn-mission-cancel");
 
-  if (pauseBtn) {
-    pauseBtn.onclick = async () => {
-      if (window.playTapBeep) window.playTapBeep();
-      if (!activeMissionId) {
-        try {
-          const res = await fetch(`${API_BASE}/api/v1/missions/status`);
-          const data = await res.json();
-          if (data && data.mission_id) activeMissionId = data.mission_id;
-        } catch (_) {}
-      }
-      if (!activeMissionId) return;
-
-      const isPaused = activeMissionState === "paused";
-      const action = isPaused ? "resume" : "pause";
+  const handlePauseToggle = async () => {
+    if (window.playTapBeep) window.playTapBeep();
+    if (!activeMissionId) {
       try {
-        await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(activeMissionId)}/${action}`, { method: "POST" });
-        showToast(isPaused ? "Routine resumed." : "Routine paused.");
-        if (window.triggerFastTelemetryPoll) window.triggerFastTelemetryPoll();
-      } catch (e) {
-        showToast(`Action failed: ${e.message}`, true);
-      }
-    };
-  }
+        const res = await fetch(`${API_BASE}/api/v1/missions/status`);
+        const data = await res.json();
+        if (data && data.mission_id) activeMissionId = data.mission_id;
+      } catch (_) {}
+    }
+    if (!activeMissionId) return;
 
-  if (abortBtn) {
-    abortBtn.onclick = () => {
-      if (window.playTapBeep) window.playTapBeep();
-      showDangerConfirmation({
-        title: "Stop Routine",
-        message: "Are you sure you want to stop and cancel the active routine?",
-        confirmText: "Stop Routine",
-        isDanger: true,
-        icon: "🛑",
-        onConfirm: async () => {
-          if (!activeMissionId) {
-            try {
-              const res = await fetch(`${API_BASE}/api/v1/missions/status`);
-              const data = await res.json();
-              if (data && data.mission_id) activeMissionId = data.mission_id;
-            } catch (_) {}
-          }
-          if (!activeMissionId) return;
+    const isPaused = activeMissionState === "paused";
+    const action = isPaused ? "resume" : "pause";
+    try {
+      await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(activeMissionId)}/${action}`, { method: "POST" });
+      showToast(isPaused ? "Routine resumed." : "Routine paused.");
+      if (window.triggerFastTelemetryPoll) window.triggerFastTelemetryPoll();
+    } catch (e) {
+      showToast(`Action failed: ${e.message}`, true);
+    }
+  };
+
+  const handleAbort = () => {
+    if (window.playTapBeep) window.playTapBeep();
+    showDangerConfirmation({
+      title: "Stop Routine",
+      message: "Are you sure you want to stop and cancel the active routine?",
+      confirmText: "Stop Routine",
+      isDanger: true,
+      icon: "🛑",
+      onConfirm: async () => {
+        if (!activeMissionId) {
           try {
-            await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(activeMissionId)}/cancel`, { method: "POST" });
-            dismissActiveInteraction();
-            showToast("Routine cancelled.");
-            if (window.triggerFastTelemetryPoll) window.triggerFastTelemetryPoll();
-          } catch (e) {
-            showToast(`Failed to stop: ${e.message}`, true);
-          }
+            const res = await fetch(`${API_BASE}/api/v1/missions/status`);
+            const data = await res.json();
+            if (data && data.mission_id) activeMissionId = data.mission_id;
+          } catch (_) {}
         }
-      });
-    };
-  }
+        if (!activeMissionId) return;
+        try {
+          await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(activeMissionId)}/cancel`, { method: "POST" });
+          dismissActiveInteraction();
+          showToast("Routine cancelled.");
+          if (window.triggerFastTelemetryPoll) window.triggerFastTelemetryPoll();
+        } catch (e) {
+          showToast(`Failed to stop: ${e.message}`, true);
+        }
+      }
+    });
+  };
+
+  if (pauseScreenBtn) pauseScreenBtn.onclick = handlePauseToggle;
+  if (abortScreenBtn) abortScreenBtn.onclick = handleAbort;
+  if (pauseBannerBtn) pauseBannerBtn.onclick = handlePauseToggle;
+  if (abortBannerBtn) abortBannerBtn.onclick = handleAbort;
 }
 
 if (document.readyState === "loading") {

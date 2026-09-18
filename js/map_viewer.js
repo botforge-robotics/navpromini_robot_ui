@@ -413,7 +413,7 @@ function initMapViewerInteractivity() {
       // In save_location or localize mode: check rotation handle, marker body, or adjustment orbit
       if ((viewerEditorMode === "save_location" || viewerEditorMode === "localize") && viewerDraftPose) {
         const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
-        const handleDist = 56;
+        const handleDist = 68;
         const hx = center.x + handleDist * Math.cos(-viewerDraftPose.theta);
         const hy = center.y + handleDist * Math.sin(-viewerDraftPose.theta);
         const distToHandle = Math.hypot(sx - hx, sy - hy);
@@ -429,8 +429,8 @@ function initMapViewerInteractivity() {
         }
 
         // 2. Touch on or near the rotation handle OR anywhere in the outer rotation ring
-        // Dedicated rotation zone: anywhere from 38px to 180px from marker center, or within 65px of handle
-        if (distToHandle <= 65 || (distToCenter > 38 && distToCenter <= 180)) {
+        // Dedicated rotation zone: anywhere from 38px to 180px from marker center, or within 45px of handle
+        if (distToHandle <= 45 || (distToCenter > 38 && distToCenter <= 180)) {
           viewerDraggingHeading = true;
           viewerDraggingMarker = false;
           touchSuppressPan = true;
@@ -634,7 +634,7 @@ function initMapViewerInteractivity() {
 
     if ((viewerEditorMode === "save_location" || viewerEditorMode === "localize") && viewerDraftPose) {
       const center = toCanvasCoords(viewerDraftPose.x, viewerDraftPose.y);
-      const handleDist = 56;
+      const handleDist = 68;
       const hx = center.x + handleDist * Math.cos(-viewerDraftPose.theta);
       const hy = center.y + handleDist * Math.sin(-viewerDraftPose.theta);
       const distToHandle = Math.hypot(sx - hx, sy - hy);
@@ -647,7 +647,7 @@ function initMapViewerInteractivity() {
         return;
       }
 
-      if (distToHandle <= 65 || (distToCenter > 38 && distToCenter <= 180)) {
+      if (distToHandle <= 45 || (distToCenter > 38 && distToCenter <= 180)) {
         viewerDraggingHeading = true;
         viewerDraggingMarker = false;
         mouseSuppressPan = true;
@@ -1211,7 +1211,7 @@ function renderViewerCanvas() {
     const isLocalize = viewerEditorMode === "localize";
     const color = isLocalize ? "#2563EB" : "#14B8A6"; // Blue for localize, Teal for save station
     const r = 14;
-    const handleDist = 56;
+    const handleDist = 68;
     const handlePos = {
       x: center.x + handleDist * Math.cos(-yaw),
       y: center.y + handleDist * Math.sin(-yaw)
@@ -1243,23 +1243,23 @@ function renderViewerCanvas() {
     ctx.lineTo(handlePos.x, handlePos.y);
     ctx.stroke();
 
-    // Large rotation handle node at tip for reliable touch grabbing
+    // Sleek, compact rotation handle node at tip
     ctx.beginPath();
-    ctx.arc(handlePos.x, handlePos.y, 22, 0, 2 * Math.PI);
+    ctx.arc(handlePos.x, handlePos.y, 13, 0, 2 * Math.PI);
     ctx.fillStyle = isLocalize ? "rgba(37, 99, 235, 0.30)" : "rgba(20, 184, 166, 0.30)";
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(handlePos.x, handlePos.y, 14, 0, 2 * Math.PI);
+    ctx.arc(handlePos.x, handlePos.y, 8, 0, 2 * Math.PI);
     ctx.fillStyle = color;
     ctx.fill();
     ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
     // Circular rotation arrow in handle
     ctx.fillStyle = "#FFFFFF";
-    ctx.font = "bold 14px system-ui, sans-serif";
+    ctx.font = "bold 8px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("⟳", handlePos.x, handlePos.y);

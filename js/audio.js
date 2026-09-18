@@ -56,8 +56,8 @@ window.speakText = function(text) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        u.pitch = 1.35; // Cute pitch
-        u.rate = 1.05;
+        u.pitch = 1.45; // Cute robotic pitch
+        u.rate = 0.88; // Reduced speed for clear, cute robot pronunciation
         window.speechSynthesis.speak(u);
       }
     } catch (e) {

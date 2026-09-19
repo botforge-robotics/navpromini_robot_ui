@@ -145,15 +145,39 @@ function updateMissionExecutionScreen(mStatus) {
   let activeNode = mStatus.active_node_label || mStatus.label || mStatus.active_node || mStatus.current_node || mStatus.active_node_id || "In Progress";
   let stepDesc = "";
   if (mStatus.state === "waiting_for_user") {
-    activeNode = "Waiting for User Input...";
-    stepDesc = "Interactive form or prompt is displayed on screen.";
+    activeNode = mStatus.active_node_label || "Waiting for Your Input…";
+    stepDesc = "Interactive form or choice prompt is active on screen.";
   } else if (mStatus.state === "paused") {
     stepDesc = "Mission routine is currently paused.";
   } else if (mStatus.active_node_type) {
-    stepDesc = `Executing step: ${mStatus.active_node_type}`;
+    const nodeTypeDescMap = {
+      navigate_waypoint:   "🧭 Navigating to destination",
+      navigate_coordinates:"🧭 Driving to coordinates",
+      dock:                "🔌 Docking to charging station",
+      undock:              "🔌 Undocking from charger",
+      ui_speech:           "🔊 Speaking announcement",
+      speech:              "🔊 Speaking announcement",
+      ui_notification:     "🔔 Sending notification",
+      ui_choice:           "👆 Awaiting user choice",
+      ui_form:             "📝 Showing interactive form",
+      ui_input:            "📝 Awaiting input",
+      condition:           "🔀 Evaluating condition",
+      delay:               "⏱ Waiting / delay",
+      wait:                "⏱ Waiting",
+      set_variable:        "📌 Setting variable",
+      call_api:            "☁️ Calling external API",
+      http_request:        "☁️ Sending HTTP request",
+      start:               "▶️ Mission starting",
+      end:                 "⏹ Mission finishing",
+      battery_guard:       "🔋 Checking battery level",
+      patrol_loop:         "🔄 Patrolling route",
+      relocalize:          "📍 Relocalizing on map",
+    };
+    stepDesc = nodeTypeDescMap[mStatus.active_node_type] || `Step: ${mStatus.active_node_type}`;
   } else {
-    stepDesc = "Executing autonomous routine action...";
+    stepDesc = "Executing autonomous routine action…";
   }
+
 
   const progressPct = (mStatus.progress_pct !== undefined && mStatus.progress_pct !== null) ? mStatus.progress_pct : 0;
 

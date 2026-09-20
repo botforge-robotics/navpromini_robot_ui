@@ -21,11 +21,10 @@
 
   async function fetchActiveMap() {
     try {
-      const res = await fetch("/api/v1/maps/active");
+      const res = await fetch("/api/v1/maps/current");
       if (res.ok) {
         const data = await res.json();
-        const map = data.map || {};
-        const newMapName = map.name || "default";
+        const newMapName = data.current || (data.map && data.map.name) || "default";
         if (newMapName !== activeMapName) {
           activeMapName = newMapName;
           updateMapBadge();

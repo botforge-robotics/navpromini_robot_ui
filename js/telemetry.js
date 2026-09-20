@@ -354,7 +354,7 @@ function checkRelocalizationRequired(stateData) {
 window.dismissRelocalizationModal = function() {
   const modal = document.getElementById("modal-relocalization");
   if (modal) modal.style.display = "none";
-  relocalizeDismissedUntil = Date.now() + 60000; // Dismiss for 1 minute
+  relocalizeDismissedUntil = Date.now() + 15 * 60 * 1000; // Dismiss for 15 minutes (or until map switch)
 };
 
 

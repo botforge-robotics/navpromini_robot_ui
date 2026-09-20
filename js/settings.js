@@ -204,22 +204,32 @@ async function loadPowerHealth() {
    14. SOFTWARE UPDATE SYSTEM (GitHub Releases + SDK Updater)
    -------------------------------------------------------------------------- */
 const APP_CURRENT_VERSION = "1.0.0";
+let updateChannel = localStorage.getItem("navpro_ui_update_channel") || "main";
 let latestReleaseData = null;
 let updatePollingTimer = null;
 
-async function checkAppUpdates(silent = true) {
+async function checkAppUpdates(silent = true, branchOverride = null) {
+  // Session dismissal check: if user dismissed during THIS session, do not prompt on silent boot checks.
+  // On next reboot / kiosk restart, sessionStorage is fresh, so it will prompt again.
+  if (silent && sessionStorage.getItem("navpro_ui_update_dismissed") === "true") {
+    return;
+  }
+
+  const branch = branchOverride || updateChannel;
   try {
     let updateInfo = null;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/system/app/update/check`, { signal: AbortSignal.timeout(4000) });
+      const res = await fetch(`${API_BASE}/api/v1/system/app/update/check?branch=${encodeURIComponent(branch)}`, {
+        signal: AbortSignal.timeout(6000)
+      });
       if (res.ok) {
         updateInfo = await res.json();
       }
     } catch (e) {
-      // Fallback directly to GitHub Releases API
+      console.warn("Backend update check unreachable:", e);
     }
 
-    // Direct GitHub API fallback
+    // Direct GitHub fallback if backend check failed
     if (!updateInfo) {
       try {
         const ghRes = await fetch("https://api.github.com/repos/botforge-robotics/navpromini_robot_ui/releases/latest", {
@@ -246,7 +256,8 @@ async function checkAppUpdates(silent = true) {
             release_name: ghData.name || `v${tag}`,
             release_notes: ghData.body || "Performance and stability updates.",
             download_url: assetUrl,
-            asset_size: assetSize
+            asset_size: assetSize,
+            branch: branch
           };
         }
       } catch (err) {
@@ -255,7 +266,7 @@ async function checkAppUpdates(silent = true) {
     }
 
     if (!updateInfo) {
-      if (!silent) showToast("No update info available right now.");
+      if (!silent) showToast("No update information available right now.");
       return;
     }
 
@@ -264,11 +275,12 @@ async function checkAppUpdates(silent = true) {
     if (updateInfo.update_available) {
       showUpdateAvailableModal(updateInfo);
     } else if (!silent) {
-      showToast(`NavPro Mini is up to date (v${APP_CURRENT_VERSION})`);
+      showToast(`NavPro Mini Robot UI is up to date (${branch})`);
     }
 
   } catch (err) {
     console.error("Failed to check app updates:", err);
+    if (!silent) showToast("Failed to check updates: " + err.message, true);
   }
 }
 
@@ -287,23 +299,86 @@ function compareSemVer(v1, v2) {
 function showUpdateAvailableModal(info) {
   const modal = document.getElementById("modal-app-update");
   if (!modal) return;
-  document.getElementById("update-modal-cur-ver").textContent = `v${info.current_version || APP_CURRENT_VERSION}`;
-  document.getElementById("update-modal-new-ver").textContent = `v${info.latest_version || "1.0.1"}`;
-  
+
+  const curBranch = info.branch || updateChannel || "main";
+
+  // Synchronize channel selection chips
+  const mainChip = document.getElementById("channel-chip-main");
+  const devChip = document.getElementById("channel-chip-dev");
+  if (mainChip && devChip) {
+    if (curBranch === "dev") {
+      devChip.classList.add("active");
+      mainChip.classList.remove("active");
+    } else {
+      mainChip.classList.add("active");
+      devChip.classList.remove("active");
+    }
+  }
+
+  // Current and target version chips
+  const curEl = document.getElementById("update-modal-cur-ver");
+  const newEl = document.getElementById("update-modal-new-ver");
+  if (curEl) {
+    const curShort = info.current_commit_short || (info.current_version ? `v${info.current_version}` : "current");
+    curEl.textContent = `${info.current_branch || curBranch}: ${curShort}`;
+  }
+  if (newEl) {
+    const behind = info.commits_behind;
+    if (behind && behind > 0) {
+      newEl.textContent = `${behind} new commit${behind > 1 ? "s" : ""}`;
+    } else if (info.latest_commit_short) {
+      newEl.textContent = `${curBranch}: ${info.latest_commit_short}`;
+    } else {
+      newEl.textContent = `v${info.latest_version || "1.0.1"}`;
+    }
+  }
+
+  // Changelog & notes
   const notesEl = document.getElementById("update-modal-notes");
   if (notesEl) {
-    notesEl.textContent = info.release_notes || "Performance enhancements, smoother animations, and navigation bug fixes.";
+    if (info.changelog && info.changelog.length > 0) {
+      notesEl.innerHTML = info.changelog.map(line => `• ${escapeHtml(line)}`).join("<br>");
+    } else if (info.release_notes) {
+      notesEl.textContent = info.release_notes;
+    } else {
+      notesEl.textContent = "Autonomous navigation, touchscreen responsiveness, and system optimizations.";
+    }
   }
-  
-  document.getElementById("update-progress-wrap").style.display = "none";
-  document.getElementById("update-actions-row").style.display = "grid";
+
+  const progressWrap = document.getElementById("update-progress-wrap");
+  const actionsRow = document.getElementById("update-actions-row");
+  if (progressWrap) progressWrap.style.display = "none";
+  if (actionsRow) actionsRow.style.display = "grid";
+
   modal.style.display = "flex";
 }
+
+window.switchUpdateBranch = function(branch) {
+  updateChannel = branch;
+  localStorage.setItem("navpro_ui_update_channel", branch);
+
+  const mainChip = document.getElementById("channel-chip-main");
+  const devChip = document.getElementById("channel-chip-dev");
+  if (mainChip && devChip) {
+    if (branch === "dev") {
+      devChip.classList.add("active");
+      mainChip.classList.remove("active");
+    } else {
+      mainChip.classList.add("active");
+      devChip.classList.remove("active");
+    }
+  }
+
+  showToast(`Checking ${branch} channel for updates...`);
+  checkAppUpdates(false, branch);
+};
 
 window.dismissUpdateModal = function() {
   const modal = document.getElementById("modal-app-update");
   if (modal) modal.style.display = "none";
   if (updatePollingTimer) clearInterval(updatePollingTimer);
+  // Dismiss for this session only — will prompt again after robot or kiosk restart
+  sessionStorage.setItem("navpro_ui_update_dismissed", "true");
 };
 
 window.triggerAppUpdate = async function() {
@@ -311,22 +386,30 @@ window.triggerAppUpdate = async function() {
   const actionsRow = document.getElementById("update-actions-row");
   const progressBar = document.getElementById("update-progress-bar");
   const progressLabel = document.getElementById("update-progress-label");
-  
+
   if (actionsRow) actionsRow.style.display = "none";
   if (progressWrap) progressWrap.style.display = "flex";
-  
-  if (progressBar) progressBar.style.width = "10%";
-  if (progressLabel) progressLabel.textContent = "Initiating update download...";
+
+  if (progressBar) progressBar.style.width = "15%";
+  if (progressLabel) progressLabel.textContent = "Initiating update...";
 
   try {
-    await fetch(`${API_BASE}/api/v1/system/app/update/apply`, {
+    const targetBranch = updateChannel || "main";
+    const res = await fetch(`${API_BASE}/api/v1/system/app/update/apply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        branch: targetBranch,
+        update_type: latestReleaseData ? latestReleaseData.update_type : "git",
         download_url: latestReleaseData ? latestReleaseData.download_url : null,
         target_version: latestReleaseData ? latestReleaseData.latest_version : "latest"
       })
     });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to initiate update");
+    }
 
     let elapsed = 0;
     updatePollingTimer = setInterval(async () => {
@@ -335,17 +418,20 @@ window.triggerAppUpdate = async function() {
         const statRes = await fetch(`${API_BASE}/api/v1/system/app/update/status`);
         if (statRes.ok) {
           const status = await statRes.json();
-          const pct = Math.max(10, Math.min(100, status.progress || 10));
+          const pct = Math.max(15, Math.min(100, status.progress || 15));
           if (progressBar) progressBar.style.width = `${pct}%`;
-          if (progressLabel) progressLabel.textContent = `${status.message || "Downloading..."} (${pct}%)`;
+          if (progressLabel) progressLabel.textContent = `${status.message || "Updating..."} (${pct}%)`;
 
-          if (status.state === "restarting" || status.state === "completed") {
+          if (status.state === "completed" || status.state === "restarting") {
             clearInterval(updatePollingTimer);
             if (progressBar) progressBar.style.width = "100%";
-            if (progressLabel) progressLabel.textContent = "Update complete! Restarting UI...";
+            if (progressLabel) progressLabel.textContent = "Update complete! Reloading UI...";
+            try {
+              if (window.speakText) speakText("Robot UI updated successfully!");
+            } catch (_) {}
             setTimeout(() => {
               window.location.reload();
-            }, 2500);
+            }, 2000);
           } else if (status.state === "failed") {
             clearInterval(updatePollingTimer);
             if (progressLabel) progressLabel.textContent = `Update failed: ${status.error || "Unknown error"}`;
@@ -353,18 +439,20 @@ window.triggerAppUpdate = async function() {
           }
         }
       } catch (err) {
-        if (elapsed > 10) {
-          if (progressLabel) progressLabel.textContent = "Restarting UI...";
-          setTimeout(() => window.location.reload(), 2500);
+        if (elapsed > 12) {
+          clearInterval(updatePollingTimer);
+          if (progressLabel) progressLabel.textContent = "Reloading UI...";
+          setTimeout(() => window.location.reload(), 2000);
         }
       }
-    }, 800);
+    }, 1000);
 
   } catch (err) {
-    if (progressLabel) progressLabel.textContent = "Connection error. Retrying...";
+    if (progressLabel) progressLabel.textContent = `Update error: ${err.message}`;
     setTimeout(() => {
       if (actionsRow) actionsRow.style.display = "grid";
-    }, 2000);
+    }, 2500);
   }
 };
+
 

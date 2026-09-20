@@ -1000,12 +1000,21 @@
     </div>
 
     <!-- 10. SOFTWARE UPDATE AVAILABLE MODAL -->
-    <div class="modal-dialog" id="modal-app-update" style="display: none;">
+    <div class="modal-dialog" id="modal-app-update" style="display: none; z-index: 99999;">
       <div class="modal-card update-modal-card">
         <div class="update-pulse-icon">🚀</div>
         <h2>Software Update Available!</h2>
         <p class="update-subtitle">A new release of NavPro Mini Robot UI is ready to install.</p>
         
+        <!-- Release Channel Selector -->
+        <div class="update-channel-row">
+          <span class="channel-title">Channel:</span>
+          <div class="channel-chips">
+            <button type="button" class="channel-chip active" id="channel-chip-main" onclick="switchUpdateBranch('main')">main (stable)</button>
+            <button type="button" class="channel-chip" id="channel-chip-dev" onclick="switchUpdateBranch('dev')">dev</button>
+          </div>
+        </div>
+
         <div class="update-versions-badge">
           <span class="ver-chip ver-old" id="update-modal-cur-ver">v1.0.0</span>
           <span class="ver-arrow">➔</span>
@@ -1030,7 +1039,7 @@
 
         <div class="update-actions-row" id="update-actions-row">
           <button class="btn btn-secondary btn-lg" id="btn-update-dismiss" onclick="dismissUpdateModal()">Later</button>
-          <button class="btn btn-primary btn-lg" id="btn-update-confirm" onclick="triggerAppUpdate()">Update & Restart Now</button>
+          <button class="btn btn-primary btn-lg" id="btn-update-confirm" onclick="triggerAppUpdate()">Update Now</button>
         </div>
       </div>
     </div>

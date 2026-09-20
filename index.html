@@ -262,7 +262,58 @@
                       <span class="dock-quick-label">Undock</span>
                     </button>
                   </div>
+
+                  <button class="dashboard-swipe-prompt" id="dash-swipe-to-shortcuts" onclick="setSwipeIndex(2)">
+                    <span>Shortcuts ➔</span>
+                  </button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================================================= -->
+          <!-- SLIDE 2: MISSION SHORTCUTS (ACTIVE MAP SCOPED)               -->
+          <!-- ============================================================= -->
+          <div class="swipe-slide" id="slide-shortcuts">
+            <div class="shortcuts-slide-content">
+              <!-- Top Header / Bar -->
+              <div class="shortcuts-header-bar">
+                <div class="shortcuts-title-group">
+                  <h2 class="shortcuts-slide-title">Mission Shortcuts</h2>
+                  <span class="shortcuts-map-badge" id="shortcuts-active-map-badge">
+                    <span class="map-dot"></span>
+                    <span id="shortcuts-map-name">Active Map</span>
+                  </span>
+                </div>
+                <div class="shortcuts-header-actions">
+                  <span class="shortcuts-hint">Tap to run • Long press to delete</span>
+                </div>
+              </div>
+
+              <!-- Scrollable 4x4 Grid Container -->
+              <div class="shortcuts-grid-scroll-view">
+                <div class="shortcuts-grid" id="shortcuts-grid">
+                  <!-- Dynamically populated shortcut cards -->
+                  <div class="shortcut-card shortcut-add-card" id="btn-add-shortcut" onclick="openAddShortcutModal()">
+                    <div class="shortcut-add-icon">
+                      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                    </div>
+                    <span class="shortcut-add-label">Add Shortcut</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bottom Bar with Navigation Back to Dashboard / Face -->
+              <div class="shortcuts-bottom-bar">
+                <button class="shortcuts-nav-btn" onclick="setSwipeIndex(1)">
+                  <span>➔ Dashboard</span>
+                </button>
+                <button class="shortcuts-nav-btn" onclick="setSwipeIndex(0)">
+                  <span>➔ Robot Face</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1105,6 +1156,63 @@
 
     <!-- 14. Toast Notification -->
     <div class="kiosk-toast" id="kiosk-toast" style="display: none;"></div>
+
+    <!-- 15. Modal: Add Mission Shortcut -->
+    <div class="modal-backdrop" id="modal-add-shortcut" style="display: none;">
+      <div class="modal-card shortcuts-modal-card">
+        <div class="modal-header">
+          <h3>Add Mission Shortcut</h3>
+          <button class="btn-close-modal" onclick="closeAddShortcutModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <!-- Step 1: Select Mission -->
+          <div id="shortcut-step-select">
+            <p class="modal-step-description">Select a mission for this map to trigger from the shortcuts screen:</p>
+            <div class="shortcut-modal-list" id="shortcut-modal-mission-list">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Step 2: Configure Shortcut -->
+          <div id="shortcut-step-config" style="display: none;">
+            <div class="form-group">
+              <label>Shortcut Display Name</label>
+              <input type="text" id="shortcut-input-title" class="form-input" placeholder="e.g. Dinner Route">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Icon</label>
+                <select id="shortcut-select-icon" class="form-select">
+                  <option value="▶">▶ Play</option>
+                  <option value="⚡">⚡ Quick</option>
+                  <option value="🍽️">🍽️ Dinner</option>
+                  <option value="📦">📦 Delivery</option>
+                  <option value="🤖">🤖 Patrol</option>
+                  <option value="📍">📍 Waypoint</option>
+                  <option value="🎯">🎯 Target</option>
+                  <option value="🔔">🔔 Alert</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Tile Color</label>
+                <select id="shortcut-select-color" class="form-select">
+                  <option value="#2563EB">Blue</option>
+                  <option value="#10B981">Green</option>
+                  <option value="#8B5CF6">Purple</option>
+                  <option value="#F59E0B">Amber</option>
+                  <option value="#EF4444">Red</option>
+                  <option value="#EC4899">Pink</option>
+                </select>
+              </div>
+            </div>
+            <div class="modal-footer-actions">
+              <button type="button" class="btn btn-secondary" onclick="closeAddShortcutModal()">Cancel</button>
+              <button type="button" class="btn btn-primary" onclick="saveNewShortcut()">Save Shortcut</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="js/state.js?v=218"></script>
@@ -1117,6 +1225,7 @@
   <script src="js/mapping.js?v=218"></script>
   <script src="js/missions.js?v=218"></script>
   <script src="js/settings.js?v=218"></script>
+  <script src="js/shortcuts.js?v=218"></script>
   <script src="app.js?v=218"></script>
 </body>
 </html>

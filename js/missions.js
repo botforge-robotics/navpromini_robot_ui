@@ -621,7 +621,10 @@ function handleActiveInteraction(interaction) {
     window.playAlertTone();
   }
   if (interaction.speech_text && window.speakText) {
-    window.speakText(interaction.speech_text);
+    // Delay speech so it starts cleanly after the alert chime completes
+    setTimeout(() => {
+      window.speakText(interaction.speech_text);
+    }, interaction.sound_alert !== false ? 500 : 80);
   }
 }
 

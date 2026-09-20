@@ -172,13 +172,26 @@
     }
   }
 
+  let selectedIcon = "▶";
+  let selectedColor = "#2563EB";
+
   window.openAddShortcutModal = async function() {
     const modal = document.getElementById("modal-add-shortcut");
     if (!modal) return;
 
+    const heading = document.getElementById("shortcut-modal-heading");
+    const sub = document.getElementById("shortcut-modal-subheading");
+    if (heading) heading.textContent = "Add Mission Shortcut";
+    if (sub) sub.textContent = "Select a mission to add as a quick-launch tile";
+
+    const step1 = document.getElementById("shortcut-step-select");
+    const step2 = document.getElementById("shortcut-step-config");
+    if (step1) step1.style.display = "block";
+    if (step2) step2.style.display = "none";
+
     const listEl = document.getElementById("shortcut-modal-mission-list");
     if (listEl) {
-      listEl.innerHTML = '<div class="modal-loading">Loading missions for this map...</div>';
+      listEl.innerHTML = '<div class="modal-loading" style="padding: 24px; text-align: center; color: var(--text-secondary);">Loading available missions...</div>';
     }
 
     modal.style.display = "flex";
@@ -190,10 +203,10 @@
         availableMissions = data.missions || [];
         renderMissionSelectionList(availableMissions);
       } else {
-        if (listEl) listEl.innerHTML = '<div class="modal-empty">Failed to load missions.</div>';
+        if (listEl) listEl.innerHTML = '<div class="modal-empty" style="padding: 24px; text-align: center; color: var(--text-secondary);">Failed to load missions.</div>';
       }
     } catch (e) {
-      if (listEl) listEl.innerHTML = '<div class="modal-empty">Error connecting to robot.</div>';
+      if (listEl) listEl.innerHTML = '<div class="modal-empty" style="padding: 24px; text-align: center; color: var(--text-secondary);">Error connecting to robot.</div>';
     }
   };
 
@@ -202,23 +215,33 @@
     if (!listEl) return;
 
     if (!missions || missions.length === 0) {
-      listEl.innerHTML = '<div class="modal-empty">No missions found. Create a mission first.</div>';
+      listEl.innerHTML = '<div class="modal-empty" style="padding: 28px 16px; text-align: center; color: var(--text-secondary); font-size: 14px;">No missions found on robot. Create a mission first in Mission Planner.</div>';
       return;
     }
 
+    // Sort active map missions first
+    const sorted = [...missions].sort((a, b) => {
+      const aCur = (!a.map || a.map.toLowerCase() === activeMapName.toLowerCase()) ? 1 : 0;
+      const bCur = (!b.map || b.map.toLowerCase() === activeMapName.toLowerCase()) ? 1 : 0;
+      return bCur - aCur;
+    });
+
     listEl.innerHTML = "";
-    missions.forEach(m => {
+    sorted.forEach(m => {
       const item = document.createElement("div");
       item.className = "shortcut-modal-item";
       const isCurrentMap = !m.map || m.map.toLowerCase() === activeMapName.toLowerCase();
-      
+      const stepCount = (m.nodes ? m.nodes.length : (m.steps ? m.steps.length : null));
+      const stepText = stepCount ? `${stepCount} steps` : (m.type || 'Mission');
+
       item.innerHTML = `
         <div class="modal-item-icon">⚡</div>
         <div class="modal-item-info">
           <div class="modal-item-title">${escapeHtml(m.name || m.id)}</div>
-          <div class="modal-item-sub">Map: ${escapeHtml(m.map || "Universal")} • ${m.type || 'standard'}</div>
+          <div class="modal-item-sub">Map: ${escapeHtml(m.map || "Universal")} • ${stepText}</div>
         </div>
         ${isCurrentMap ? '<span class="modal-item-badge">Active Map</span>' : ''}
+        <div style="color: var(--text-secondary); font-size: 16px; font-weight: 700; margin-left: 6px;">➔</div>
       `;
 
       item.onclick = () => {
@@ -229,11 +252,33 @@
     });
   }
 
+  window.backToMissionSelect = function() {
+    const step1 = document.getElementById("shortcut-step-select");
+    const step2 = document.getElementById("shortcut-step-config");
+    const heading = document.getElementById("shortcut-modal-heading");
+    const sub = document.getElementById("shortcut-modal-subheading");
+    if (heading) heading.textContent = "Add Mission Shortcut";
+    if (sub) sub.textContent = "Select a mission to add as a quick-launch tile";
+    if (step1) step1.style.display = "block";
+    if (step2) step2.style.display = "none";
+  };
+
   function selectMissionForShortcut(mission) {
     const titleInput = document.getElementById("shortcut-input-title");
+    const heading = document.getElementById("shortcut-modal-heading");
+    const sub = document.getElementById("shortcut-modal-subheading");
+
+    if (heading) heading.textContent = "Customize Shortcut";
+    if (sub) sub.textContent = "Set label, icon, and color for this tile";
+
     if (titleInput) {
       titleInput.value = mission.name || mission.id;
     }
+
+    selectedIcon = "▶";
+    selectedColor = "#2563EB";
+    pickShortcutIcon("▶");
+    pickShortcutColor("#2563EB");
 
     // Step 2: Show configuration form
     const step1 = document.getElementById("shortcut-step-select");
@@ -244,21 +289,63 @@
       step2.dataset.missionId = mission.id;
       step2.dataset.missionName = mission.name || mission.id;
     }
+
+    updateShortcutLivePreview();
   }
+
+  window.pickShortcutIcon = function(icon) {
+    selectedIcon = icon;
+    document.querySelectorAll("#shortcut-icon-picker .picker-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.icon === icon);
+    });
+    updateShortcutLivePreview();
+  };
+
+  window.pickShortcutColor = function(color) {
+    selectedColor = color;
+    document.querySelectorAll("#shortcut-color-picker .color-swatch-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.color === color);
+    });
+    updateShortcutLivePreview();
+  };
+
+  window.updateShortcutLivePreview = function() {
+    const titleInput = document.getElementById("shortcut-input-title");
+    const previewTitle = document.getElementById("preview-title");
+    const previewIcon = document.getElementById("preview-icon");
+    const previewWrapper = document.getElementById("preview-icon-wrapper");
+    const previewSub = document.getElementById("preview-mission-sub");
+    const step2 = document.getElementById("shortcut-step-config");
+
+    const titleVal = titleInput ? titleInput.value.trim() : "";
+    const fallbackName = step2 ? (step2.dataset.missionName || "Mission") : "Mission";
+
+    if (previewTitle) {
+      previewTitle.textContent = titleVal || fallbackName;
+    }
+    if (previewIcon) {
+      previewIcon.textContent = selectedIcon;
+    }
+    if (previewWrapper) {
+      previewWrapper.style.background = `${selectedColor}20`;
+      previewWrapper.style.color = selectedColor;
+    }
+    if (previewSub) {
+      previewSub.textContent = `Map: ${activeMapName}`;
+    }
+  };
 
   window.saveNewShortcut = function() {
     const step2 = document.getElementById("shortcut-step-config");
     const titleInput = document.getElementById("shortcut-input-title");
-    const iconSelect = document.getElementById("shortcut-select-icon");
-    const colorSelect = document.getElementById("shortcut-select-color");
 
     if (!step2 || !titleInput) return;
 
     const missionId = step2.dataset.missionId;
     const missionName = step2.dataset.missionName;
     const title = titleInput.value.trim() || missionName;
-    const icon = iconSelect ? iconSelect.value : "▶";
-    const color = colorSelect ? colorSelect.value : "#2563EB";
+    const icon = selectedIcon || "▶";
+    const color = selectedColor || "#2563EB";
 
     const newShortcut = {
       id: "sc_" + Date.now(),

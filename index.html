@@ -276,20 +276,6 @@
           <!-- ============================================================= -->
           <div class="swipe-slide" id="slide-shortcuts">
             <div class="shortcuts-slide-content">
-              <!-- Top Header / Bar -->
-              <div class="shortcuts-header-bar">
-                <div class="shortcuts-title-group">
-                  <h2 class="shortcuts-slide-title">Mission Shortcuts</h2>
-                  <span class="shortcuts-map-badge" id="shortcuts-active-map-badge">
-                    <span class="map-dot"></span>
-                    <span id="shortcuts-map-name">Active Map</span>
-                  </span>
-                </div>
-                <div class="shortcuts-header-actions">
-                  <span class="shortcuts-hint">Tap to run • Long press to delete</span>
-                </div>
-              </div>
-
               <!-- Scrollable 4x4 Grid Container -->
               <div class="shortcuts-grid-scroll-view">
                 <div class="shortcuts-grid" id="shortcuts-grid">
@@ -1157,54 +1143,87 @@
     <!-- 14. Toast Notification -->
     <div class="kiosk-toast" id="kiosk-toast" style="display: none;"></div>
 
-    <!-- 15. Modal: Add Mission Shortcut -->
-    <div class="modal-backdrop" id="modal-add-shortcut" style="display: none;">
+    <!-- 15. Modal: Add Mission Shortcut (Centered Touch Popup) -->
+    <div class="modal-dialog" id="modal-add-shortcut" style="display: none;">
       <div class="modal-card shortcuts-modal-card">
-        <div class="modal-header">
-          <h3>Add Mission Shortcut</h3>
-          <button class="btn-close-modal" onclick="closeAddShortcutModal()">✕</button>
+        <div class="shortcuts-modal-header">
+          <div class="shortcuts-modal-titles">
+            <h3 id="shortcut-modal-heading">Add Mission Shortcut</h3>
+            <p class="shortcuts-modal-subheading" id="shortcut-modal-subheading">Select a mission to add as a quick-launch tile</p>
+          </div>
+          <button type="button" class="btn-close-modal" onclick="closeAddShortcutModal()">✕</button>
         </div>
-        <div class="modal-body">
+
+        <div class="modal-body shortcuts-modal-body">
           <!-- Step 1: Select Mission -->
           <div id="shortcut-step-select">
-            <p class="modal-step-description">Select a mission for this map to trigger from the shortcuts screen:</p>
             <div class="shortcut-modal-list" id="shortcut-modal-mission-list">
-              <!-- Populated dynamically -->
+              <!-- Dynamically populated mission cards -->
             </div>
           </div>
 
           <!-- Step 2: Configure Shortcut -->
           <div id="shortcut-step-config" style="display: none;">
-            <div class="form-group">
-              <label>Shortcut Display Name</label>
-              <input type="text" id="shortcut-input-title" class="form-input" placeholder="e.g. Dinner Route">
+            <div class="shortcut-step-back-row">
+              <button type="button" class="btn-step-back" onclick="backToMissionSelect()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+                <span>Back to Missions</span>
+              </button>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Icon</label>
-                <select id="shortcut-select-icon" class="form-select">
-                  <option value="▶">▶ Play</option>
-                  <option value="⚡">⚡ Quick</option>
-                  <option value="🍽️">🍽️ Dinner</option>
-                  <option value="📦">📦 Delivery</option>
-                  <option value="🤖">🤖 Patrol</option>
-                  <option value="📍">📍 Waypoint</option>
-                  <option value="🎯">🎯 Target</option>
-                  <option value="🔔">🔔 Alert</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Tile Color</label>
-                <select id="shortcut-select-color" class="form-select">
-                  <option value="#2563EB">Blue</option>
-                  <option value="#10B981">Green</option>
-                  <option value="#8B5CF6">Purple</option>
-                  <option value="#F59E0B">Amber</option>
-                  <option value="#EF4444">Red</option>
-                  <option value="#EC4899">Pink</option>
-                </select>
+
+            <!-- Live Card Preview -->
+            <div class="shortcut-preview-section">
+              <div class="shortcut-preview-label">Live Tile Preview</div>
+              <div class="shortcut-preview-stage">
+                <div class="shortcut-card shortcut-preview-card" id="shortcut-live-preview">
+                  <div class="shortcut-icon-wrapper" id="preview-icon-wrapper" style="background: rgba(37,99,235,0.15); color: #2563EB;">
+                    <span class="shortcut-icon" id="preview-icon">▶</span>
+                  </div>
+                  <div class="shortcut-info">
+                    <div class="shortcut-title" id="preview-title">Mission Title</div>
+                    <div class="shortcut-mission-name" id="preview-mission-sub">Active Map Routine</div>
+                  </div>
+                  <div class="shortcut-play-indicator">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  </div>
+                </div>
               </div>
             </div>
+
+            <!-- Shortcut Title Input -->
+            <div class="form-group shortcut-form-group">
+              <label class="form-label">Shortcut Tile Label</label>
+              <input type="text" id="shortcut-input-title" class="form-input shortcut-title-input" placeholder="e.g. Deliver Dinner" oninput="updateShortcutLivePreview()">
+            </div>
+
+            <!-- Icon Picker Grid -->
+            <div class="form-group shortcut-form-group">
+              <label class="form-label">Select Icon</label>
+              <div class="shortcut-picker-grid" id="shortcut-icon-picker">
+                <button type="button" class="picker-btn active" data-icon="▶" onclick="pickShortcutIcon('▶')">▶ Play</button>
+                <button type="button" class="picker-btn" data-icon="⚡" onclick="pickShortcutIcon('⚡')">⚡ Quick</button>
+                <button type="button" class="picker-btn" data-icon="🍽️" onclick="pickShortcutIcon('🍽️')">🍽️ Dinner</button>
+                <button type="button" class="picker-btn" data-icon="📦" onclick="pickShortcutIcon('📦')">📦 Deliver</button>
+                <button type="button" class="picker-btn" data-icon="🤖" onclick="pickShortcutIcon('🤖')">🤖 Patrol</button>
+                <button type="button" class="picker-btn" data-icon="📍" onclick="pickShortcutIcon('📍')">📍 Waypoint</button>
+                <button type="button" class="picker-btn" data-icon="☕" onclick="pickShortcutIcon('☕')">☕ Coffee</button>
+                <button type="button" class="picker-btn" data-icon="🔔" onclick="pickShortcutIcon('🔔')">🔔 Alert</button>
+              </div>
+            </div>
+
+            <!-- Color Palette Swatches -->
+            <div class="form-group shortcut-form-group">
+              <label class="form-label">Tile Theme Color</label>
+              <div class="shortcut-color-picker" id="shortcut-color-picker">
+                <button type="button" class="color-swatch-btn active" data-color="#2563EB" style="background: #2563EB;" onclick="pickShortcutColor('#2563EB')"></button>
+                <button type="button" class="color-swatch-btn" data-color="#10B981" style="background: #10B981;" onclick="pickShortcutColor('#10B981')"></button>
+                <button type="button" class="color-swatch-btn" data-color="#8B5CF6" style="background: #8B5CF6;" onclick="pickShortcutColor('#8B5CF6')"></button>
+                <button type="button" class="color-swatch-btn" data-color="#F59E0B" style="background: #F59E0B;" onclick="pickShortcutColor('#F59E0B')"></button>
+                <button type="button" class="color-swatch-btn" data-color="#EF4444" style="background: #EF4444;" onclick="pickShortcutColor('#EF4444')"></button>
+                <button type="button" class="color-swatch-btn" data-color="#06B6D4" style="background: #06B6D4;" onclick="pickShortcutColor('#06B6D4')"></button>
+              </div>
+            </div>
+
             <div class="modal-footer-actions">
               <button type="button" class="btn btn-secondary" onclick="closeAddShortcutModal()">Cancel</button>
               <button type="button" class="btn btn-primary" onclick="saveNewShortcut()">Save Shortcut</button>

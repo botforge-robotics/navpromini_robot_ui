@@ -79,16 +79,15 @@
       card.dataset.id = shortcut.id;
 
       card.innerHTML = `
-        <div class="shortcut-icon-wrapper" style="background: ${shortcut.color || '#3B82F6'}20; color: ${shortcut.color || '#3B82F6'}">
-          <span class="shortcut-icon">${shortcut.icon || '▶'}</span>
+        <div class="shortcut-card-top">
+          <div class="shortcut-icon-wrapper" style="background: ${shortcut.color || '#3B82F6'}20; color: ${shortcut.color || '#3B82F6'}">
+            <span class="shortcut-icon">${shortcut.icon || '▶'}</span>
+          </div>
+          <div class="shortcut-play-indicator">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </div>
         </div>
-        <div class="shortcut-info">
-          <div class="shortcut-title">${escapeHtml(shortcut.title)}</div>
-          <div class="shortcut-mission-name">${escapeHtml(shortcut.missionName || shortcut.missionId)}</div>
-        </div>
-        <div class="shortcut-play-indicator">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        </div>
+        <div class="shortcut-title">${escapeHtml(shortcut.title)}</div>
       `;
 
       // Long press detection for deletion
@@ -126,7 +125,7 @@
     addCard.id = "btn-add-shortcut";
     addCard.innerHTML = `
       <div class="shortcut-add-icon">
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5">
+        <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
@@ -329,9 +328,6 @@
     if (previewWrapper) {
       previewWrapper.style.background = `${selectedColor}20`;
       previewWrapper.style.color = selectedColor;
-    }
-    if (previewSub) {
-      previewSub.textContent = `Map: ${activeMapName}`;
     }
   };
 

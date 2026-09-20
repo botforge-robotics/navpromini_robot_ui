@@ -4336,21 +4336,21 @@ select.kiosk-select option,
 
 .shortcuts-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   width: 100%;
 }
 
 .shortcut-card {
   background: #FFFFFF;
-  border-radius: 18px;
+  border-radius: 22px;
   border: 1.5px solid var(--border);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
   aspect-ratio: 1 / 1;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 16px;
+  padding: 18px;
   position: relative;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -4365,63 +4365,57 @@ select.kiosk-select option,
 }
 
 .shortcut-card:active {
-  transform: scale(0.95);
+  transform: scale(0.96);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
+.shortcut-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+}
+
 .shortcut-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-}
-
-.shortcut-info {
-  margin-top: 8px;
+  font-size: 28px;
+  flex-shrink: 0;
 }
 
 .shortcut-title {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: var(--text-primary);
-  line-height: 1.3;
+  line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.shortcut-mission-name {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-top: 3px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: -0.3px;
+  margin-top: auto;
 }
 
 .shortcut-play-indicator {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--bg);
+  background: #F1F5F9;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  opacity: 0.7;
+  opacity: 0.8;
+  flex-shrink: 0;
 }
 
 /* Always Last: Dotted Add Shortcut Card */
 .shortcut-add-card {
-  border: 2px dashed #94A3B8;
+  border: 2.5px dashed #94A3B8;
   background: rgba(248, 250, 252, 0.7);
   display: flex;
   flex-direction: column;
@@ -4437,8 +4431,8 @@ select.kiosk-select option,
 }
 
 .shortcut-add-icon {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: #EFF6FF;
   color: #2563EB;
@@ -4455,8 +4449,8 @@ select.kiosk-select option,
 }
 
 .shortcut-add-label {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   color: #2563EB;
 }
 
@@ -4700,6 +4694,10 @@ select.kiosk-select option,
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 2px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .picker-btn {

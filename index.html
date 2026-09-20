@@ -1176,16 +1176,15 @@
               <div class="shortcut-preview-label">Live Tile Preview</div>
               <div class="shortcut-preview-stage">
                 <div class="shortcut-card shortcut-preview-card" id="shortcut-live-preview">
-                  <div class="shortcut-icon-wrapper" id="preview-icon-wrapper" style="background: rgba(37,99,235,0.15); color: #2563EB;">
-                    <span class="shortcut-icon" id="preview-icon">▶</span>
+                  <div class="shortcut-card-top">
+                    <div class="shortcut-icon-wrapper" id="preview-icon-wrapper" style="background: rgba(37,99,235,0.15); color: #2563EB;">
+                      <span class="shortcut-icon" id="preview-icon">▶</span>
+                    </div>
+                    <div class="shortcut-play-indicator">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    </div>
                   </div>
-                  <div class="shortcut-info">
-                    <div class="shortcut-title" id="preview-title">Mission Title</div>
-                    <div class="shortcut-mission-name" id="preview-mission-sub">Active Map Routine</div>
-                  </div>
-                  <div class="shortcut-play-indicator">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                  </div>
+                  <div class="shortcut-title" id="preview-title">Mission Title</div>
                 </div>
               </div>
             </div>
@@ -1196,18 +1195,45 @@
               <input type="text" id="shortcut-input-title" class="form-input shortcut-title-input" placeholder="e.g. Deliver Dinner" oninput="updateShortcutLivePreview()">
             </div>
 
-            <!-- Icon Picker Grid -->
+            <!-- Icon Picker Grid (Expanded 28 Icons) -->
             <div class="form-group shortcut-form-group">
               <label class="form-label">Select Icon</label>
               <div class="shortcut-picker-grid" id="shortcut-icon-picker">
-                <button type="button" class="picker-btn active" data-icon="▶" onclick="pickShortcutIcon('▶')">▶ Play</button>
+                <!-- Action & Navigation -->
+                <button type="button" class="picker-btn active" data-icon="▶" onclick="pickShortcutIcon('▶')">▶ Run</button>
                 <button type="button" class="picker-btn" data-icon="⚡" onclick="pickShortcutIcon('⚡')">⚡ Quick</button>
-                <button type="button" class="picker-btn" data-icon="🍽️" onclick="pickShortcutIcon('🍽️')">🍽️ Dinner</button>
-                <button type="button" class="picker-btn" data-icon="📦" onclick="pickShortcutIcon('📦')">📦 Deliver</button>
-                <button type="button" class="picker-btn" data-icon="🤖" onclick="pickShortcutIcon('🤖')">🤖 Patrol</button>
-                <button type="button" class="picker-btn" data-icon="📍" onclick="pickShortcutIcon('📍')">📍 Waypoint</button>
+                <button type="button" class="picker-btn" data-icon="🚀" onclick="pickShortcutIcon('🚀')">🚀 Launch</button>
+                <button type="button" class="picker-btn" data-icon="🔄" onclick="pickShortcutIcon('🔄')">🔄 Loop</button>
+                <!-- Food & Beverage -->
+                <button type="button" class="picker-btn" data-icon="🍽️" onclick="pickShortcutIcon('🍽️')">🍽️ Food</button>
                 <button type="button" class="picker-btn" data-icon="☕" onclick="pickShortcutIcon('☕')">☕ Coffee</button>
+                <button type="button" class="picker-btn" data-icon="🥪" onclick="pickShortcutIcon('🥪')">🥪 Snack</button>
+                <button type="button" class="picker-btn" data-icon="🥤" onclick="pickShortcutIcon('🥤')">🥤 Drink</button>
+                <!-- Delivery & Tasks -->
+                <button type="button" class="picker-btn" data-icon="📦" onclick="pickShortcutIcon('📦')">📦 Deliver</button>
+                <button type="button" class="picker-btn" data-icon="🛒" onclick="pickShortcutIcon('🛒')">🛒 Cart</button>
+                <button type="button" class="picker-btn" data-icon="🧹" onclick="pickShortcutIcon('🧹')">🧹 Clean</button>
+                <button type="button" class="picker-btn" data-icon="🩺" onclick="pickShortcutIcon('🩺')">🩺 Inspect</button>
+                <!-- Robot & Security -->
+                <button type="button" class="picker-btn" data-icon="🤖" onclick="pickShortcutIcon('🤖')">🤖 Patrol</button>
+                <button type="button" class="picker-btn" data-icon="🛡️" onclick="pickShortcutIcon('🛡️')">🛡️ Guard</button>
                 <button type="button" class="picker-btn" data-icon="🔔" onclick="pickShortcutIcon('🔔')">🔔 Alert</button>
+                <button type="button" class="picker-btn" data-icon="👋" onclick="pickShortcutIcon('👋')">👋 Welcome</button>
+                <!-- Places & Waypoints -->
+                <button type="button" class="picker-btn" data-icon="📍" onclick="pickShortcutIcon('📍')">📍 Place</button>
+                <button type="button" class="picker-btn" data-icon="🎯" onclick="pickShortcutIcon('🎯')">🎯 Target</button>
+                <button type="button" class="picker-btn" data-icon="🏠" onclick="pickShortcutIcon('🏠')">🏠 Home</button>
+                <button type="button" class="picker-btn" data-icon="🏢" onclick="pickShortcutIcon('🏢')">🏢 Office</button>
+                <!-- Rooms & Areas -->
+                <button type="button" class="picker-btn" data-icon="🛋️" onclick="pickShortcutIcon('🛋️')">🛋️ Living</button>
+                <button type="button" class="picker-btn" data-icon="🛏️" onclick="pickShortcutIcon('🛏️')">🛏️ Bedroom</button>
+                <button type="button" class="picker-btn" data-icon="🚪" onclick="pickShortcutIcon('🚪')">🚪 Door</button>
+                <button type="button" class="picker-btn" data-icon="💬" onclick="pickShortcutIcon('💬')">💬 Speak</button>
+                <!-- Hardware & Power -->
+                <button type="button" class="picker-btn" data-icon="🔋" onclick="pickShortcutIcon('🔋')">🔋 Dock</button>
+                <button type="button" class="picker-btn" data-icon="💡" onclick="pickShortcutIcon('💡')">💡 Light</button>
+                <button type="button" class="picker-btn" data-icon="🛠️" onclick="pickShortcutIcon('🛠️')">🛠️ Tool</button>
+                <button type="button" class="picker-btn" data-icon="⭐" onclick="pickShortcutIcon('⭐')">⭐ Favorite</button>
               </div>
             </div>
 

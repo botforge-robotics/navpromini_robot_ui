@@ -324,6 +324,21 @@ function initActionButtons() {
     }
   });
 
+  document.getElementById("btn-relocalize-map")?.addEventListener("click", () => {
+    dismissRelocalizationModal();
+    const mapName = activeMapName || document.getElementById("relocalize-map-name")?.textContent;
+    if (mapName && mapName !== "--") {
+      openMapViewer(mapName);
+      setTimeout(() => {
+        if (window.startViewerLocalizeOnMap) {
+          window.startViewerLocalizeOnMap();
+        }
+      }, 300);
+    } else {
+      showToast("Please load a map first from Maps.", true);
+    }
+  });
+
   document.getElementById("btn-relocalize-global")?.addEventListener("click", async () => {
     try {
       await fetch(`${API_BASE}/api/v1/navigation/relocalize/global`, { method: "POST" });

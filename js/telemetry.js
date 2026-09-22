@@ -310,6 +310,8 @@ window.dismissChargingScreen = function() {
 /* --------------------------------------------------------------------------
    7. Relocalization Prompt & Auto-Dismissal
    -------------------------------------------------------------------------- */
+let wasPreviouslyLocalized = false;
+
 function checkRelocalizationRequired(stateData) {
   const modal = document.getElementById("modal-relocalization");
   if (!modal) return;
@@ -318,8 +320,16 @@ function checkRelocalizationRequired(stateData) {
   const currentLoadedMap = (stateData && (stateData.map || stateData.current_map)) || activeMapName;
   const isNavActive = !!(stateData && stateData.mode === "navigation" && currentLoadedMap && currentLoadedMap !== "default");
 
-  // Do not prompt relocalization modal over the charging screen while docked
-  if (isRobotCharging || wasCharging) {
+  // If robot was previously localized and now loses localization (wheel drift, kidnapping, slip),
+  // immediately clear the dismissal timer so the relocalization popup triggers again without delay!
+  if (wasPreviouslyLocalized && !isLoc && isNavActive) {
+    console.warn("[Telemetry] Robot mislocalization detected! Resetting dismissal to trigger prompt.");
+    relocalizeDismissedUntil = 0;
+  }
+  wasPreviouslyLocalized = isLoc;
+
+  // Do not prompt relocalization modal over the charging screen while actively charging
+  if (isRobotCharging) {
     if (modal.style.display === "flex") {
       modal.style.display = "none";
     }
@@ -354,7 +364,7 @@ function checkRelocalizationRequired(stateData) {
 window.dismissRelocalizationModal = function() {
   const modal = document.getElementById("modal-relocalization");
   if (modal) modal.style.display = "none";
-  relocalizeDismissedUntil = Date.now() + 15 * 60 * 1000; // Dismiss for 15 minutes (or until map switch)
+  relocalizeDismissedUntil = Date.now() + 60 * 1000; // Dismiss for 1 minute (or until mislocalization detected)
 };
 
 

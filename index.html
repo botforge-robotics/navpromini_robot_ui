@@ -915,9 +915,11 @@
       <div class="modal-card relocalize-card">
         <div class="relocalize-header-icon">📍</div>
         <h2>Robot Localization Required</h2>
-        <p>A map is loaded (<strong id="relocalize-map-name">--</strong>), but the robot is not yet localized.<br>Is the robot currently positioned at its charging dock?</p>
+        <p>A map is loaded (<strong id="relocalize-map-name">--</strong>), but the robot is not accurately localized.<br>Choose how to relocalize the robot:</p>
         <div class="relocalize-buttons-column">
-          <button class="btn btn-primary btn-lg" id="btn-relocalize-dock">Yes, Robot is at Dock</button>
+          <button class="btn btn-primary btn-lg" id="btn-relocalize-dock">⚡ Localize Robot at Dock</button>
+          <button class="btn btn-secondary btn-lg" id="btn-relocalize-map">🎯 Select on Map</button>
+          <button class="btn btn-secondary btn-lg" id="btn-relocalize-global">🔄 360° Global Relocalize</button>
           <button class="btn btn-outline btn-sm" onclick="dismissRelocalizationModal()">Dismiss for Now</button>
         </div>
       </div>

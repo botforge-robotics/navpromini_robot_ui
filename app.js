@@ -400,6 +400,10 @@ document.addEventListener("DOMContentLoaded", () => {
   initTouchKeyboard();
   initModals();
   startPolling();
+  // Auto-launch Setup Wizard if robot is unconfigured or in hotspot mode
+  if (window.checkAutoSetupScreen) {
+    window.checkAutoSetupScreen();
+  }
   // Immediately fetch initial battery state
   fetch(`${API_BASE}/api/v1/state/battery`)
     .then(r => r.ok ? r.json() : null)

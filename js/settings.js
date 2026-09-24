@@ -27,9 +27,38 @@ window.openSetupScreen = function() {
 window.dismissSetupScreen = function() {
   const screen = document.getElementById("screen-setup");
   if (screen) screen.style.display = "none";
+  sessionStorage.setItem("navpro_setup_dismissed", "true");
+};
+
+window.checkAutoSetupScreen = async function() {
+  if (sessionStorage.getItem("navpro_setup_dismissed") === "true") {
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/system/wifi/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const isSiteConnected = !!(data.connected && data.ip && !data.ip.startsWith("10.42."));
+    if (data.hotspot_active || !isSiteConnected) {
+      const setupScreen = document.getElementById("screen-setup");
+      if (setupScreen && setupScreen.style.display !== "flex") {
+        console.log("[AutoSetup] Robot is unconfigured or in hotspot mode. Launching Setup Screen.");
+        openSetupScreen();
+      }
+    }
+  } catch (e) {
+    // Backend offline or booting
+  }
 };
 
 window.advanceSetupToStep = function(stepNum) {
+  if (stepNum === 2) {
+    const btnContinue = document.getElementById("btn-step2-continue");
+    if (btnContinue && btnContinue.hasAttribute("disabled")) {
+      showToast("Please connect to Wi-Fi before proceeding to Dock setup.", true);
+      return;
+    }
+  }
   document.querySelectorAll(".setup-step-page").forEach(p => p.classList.remove("active"));
   const targetPage = document.getElementById(`setup-step-${stepNum}`);
   if (targetPage) targetPage.classList.add("active");
@@ -54,31 +83,80 @@ async function fetchWifiStatus() {
     const res = await fetch(`${API_BASE}/api/v1/system/wifi/status`);
     if (!res.ok) return;
     const data = await res.json();
+
+    // 1. Hotspot credentials & state (Top Card: Option 1)
+    const hsSsidEl = document.getElementById("setup-hotspot-ssid");
+    const hsPassEl = document.getElementById("setup-hotspot-pass");
+    const hsIpEl = document.getElementById("setup-hotspot-ip");
+    const hsBadgeEl = document.getElementById("hotspot-live-badge");
+
+    if (hsSsidEl && data.hotspot_ssid) hsSsidEl.textContent = data.hotspot_ssid;
+    if (hsPassEl && data.hotspot_password) hsPassEl.textContent = data.hotspot_password;
+    if (hsIpEl && data.hotspot_ip) hsIpEl.textContent = data.hotspot_ip;
+    if (hsBadgeEl) {
+      if (data.hotspot_active) {
+        hsBadgeEl.textContent = "HOTSPOT ACTIVE";
+        hsBadgeEl.style.display = "inline-flex";
+      } else {
+        hsBadgeEl.textContent = "HOTSPOT READY";
+      }
+    }
+
+    // 2. Connected Site Wi-Fi status (Bottom Card: Option 2)
     const nameEl = document.getElementById("wifi-current-name");
     const ipEl = document.getElementById("wifi-current-ip");
     const badgeEl = document.getElementById("wifi-connected-badge");
     const headerIp = document.getElementById("robot-ip");
+    const btnContinue = document.getElementById("btn-step2-continue");
+    const gateMsg = document.getElementById("setup-gate-msg");
 
     const cleanSsid = sanitizeWifiSsid(data.ssid);
+    const liveIp = (data.ip && !data.ip.startsWith("10.42.")) ? data.ip : "";
+    const isConnected = !!(data.connected && cleanSsid && liveIp);
+
     if (nameEl) {
-      nameEl.textContent = cleanSsid || (data.connected ? "Connected Network" : "No Wi-Fi Connected");
+      nameEl.textContent = isConnected ? cleanSsid : "No Wi-Fi Connected";
     }
-    const liveIp = data.ip || data.ip_address || "";
     if (ipEl) {
-      ipEl.textContent = liveIp ? `IP Address: ${liveIp}` : (data.connected ? "Acquiring IP..." : "Offline");
+      ipEl.textContent = isConnected ? `IP: ${liveIp}` : (data.connected ? "Acquiring IP..." : "Offline");
     }
+
     if (badgeEl) {
-      if (data.connected) {
-        badgeEl.textContent = "Connected";
+      if (isConnected) {
+        badgeEl.textContent = `Connected (${cleanSsid})`;
         badgeEl.className = "wifi-connected-pill connected";
+      } else if (data.connected && !liveIp) {
+        badgeEl.textContent = "Obtaining IP...";
+        badgeEl.className = "wifi-connected-pill";
       } else {
-        badgeEl.textContent = "Disconnected";
+        badgeEl.textContent = "Not Connected";
         badgeEl.className = "wifi-connected-pill disconnected";
       }
     }
-    if (headerIp && liveIp) {
-      headerIp.textContent = liveIp;
+
+    // Gate Step 2 Continue Button: strictly enabled only when connected to site Wi-Fi
+    if (btnContinue) {
+      if (isConnected) {
+        btnContinue.removeAttribute("disabled");
+        if (gateMsg) gateMsg.style.display = "none";
+      } else {
+        btnContinue.setAttribute("disabled", "true");
+        if (gateMsg) gateMsg.style.display = "flex";
+      }
     }
+
+    // Top status bar robot IP
+    if (headerIp) {
+      if (liveIp) {
+        headerIp.textContent = liveIp;
+      } else if (data.hotspot_active) {
+        headerIp.textContent = "10.42.0.1 (AP)";
+      } else {
+        headerIp.textContent = "Offline";
+      }
+    }
+
+    return data;
   } catch (e) {
     console.warn("Wi-Fi status error:", e);
   }
@@ -107,7 +185,7 @@ window.scanWifiNetworks = async function() {
       const displaySsid = sanitizeWifiSsid(net.ssid);
       const isSecured = net.protected !== false && (net.security && net.security !== "--");
       return `
-        <div class="wifi-item" onclick="promptWifiConnect('${escapeQuotes(rawSsid)}', '${escapeQuotes(displaySsid)}')">
+        <div class="wifi-item" onclick="promptWifiConnect('${escapeQuotes(rawSsid)}', '${escapeQuotes(displaySsid)}', ${isSecured})">
           <div class="wifi-item-left">
             <span class="wifi-signal-icon">${(net.signal || 50) >= 60 ? "📶" : "🛜"}</span>
             <div class="wifi-item-text">
@@ -128,11 +206,28 @@ window.scanWifiNetworks = async function() {
   }
 };
 
-window.promptWifiConnect = function(rawSsid, displaySsid) {
+window.promptWifiConnect = function(rawSsid, displaySsid, isSecured = true) {
   const nameToShow = displaySsid || sanitizeWifiSsid(rawSsid);
-  openTouchKeyboard(`Enter Password for "${nameToShow}":`, async (password) => {
+  const banner = document.getElementById("wifi-connection-banner");
+  const bannerTitle = document.getElementById("wifi-banner-title");
+  const bannerSub = document.getElementById("wifi-banner-sub");
+  const btnContinue = document.getElementById("btn-step2-continue");
+  const gateMsg = document.getElementById("setup-gate-msg");
+
+  const executeConnect = async (password = "") => {
+    // Show connecting progress banner with spinner
+    if (banner) {
+      banner.style.display = "flex";
+      banner.className = "wifi-connection-banner connecting";
+    }
+    if (bannerTitle) bannerTitle.textContent = `Connecting to ${nameToShow}...`;
+    if (bannerSub) bannerSub.textContent = "Associating with network and obtaining IP address...";
+    if (btnContinue) btnContinue.setAttribute("disabled", "true");
+    if (gateMsg) gateMsg.style.display = "flex";
+
+    showToast(`Connecting to ${nameToShow}...`);
+
     try {
-      showToast(`Connecting to ${nameToShow}...`);
       const res = await fetch(`${API_BASE}/api/v1/system/wifi/connect`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -140,15 +235,66 @@ window.promptWifiConnect = function(rawSsid, displaySsid) {
       });
       const data = await res.json();
       if (data.status === "ok" || data.success) {
+        // Poll for assigned IP up to 6 times (6 seconds)
+        let acquired = false;
+        let finalIp = "";
+        for (let i = 0; i < 6; i++) {
+          await new Promise(r => setTimeout(r, 1000));
+          const st = await fetchWifiStatus();
+          if (st && st.connected && st.ip && !st.ip.startsWith("10.42.")) {
+            acquired = true;
+            finalIp = st.ip;
+            break;
+          }
+        }
+
+        if (banner) {
+          banner.className = "wifi-connection-banner success";
+        }
+        if (bannerTitle) bannerTitle.textContent = `Connected to ${nameToShow}!`;
+        if (bannerSub) bannerSub.textContent = finalIp ? `IP Address: ${finalIp} • Ready to continue` : "Network joined successfully";
+
+        if (btnContinue) btnContinue.removeAttribute("disabled");
+        if (gateMsg) gateMsg.style.display = "none";
         showToast(`Connected to ${nameToShow}!`);
-        fetchWifiStatus();
+        triggerFaceExpression?.("happy");
+
+        setTimeout(() => {
+          if (banner && banner.classList.contains("success")) {
+            banner.style.display = "none";
+          }
+        }, 6000);
       } else {
-        showToast(`Failed: ${data.message || "Connection error"}`, true);
+        const errMsg = data.message || "Failed to join network. Please check password.";
+        if (banner) {
+          banner.className = "wifi-connection-banner error";
+        }
+        if (bannerTitle) bannerTitle.textContent = "Connection Failed";
+        if (bannerSub) bannerSub.textContent = errMsg;
+        if (btnContinue) btnContinue.setAttribute("disabled", "true");
+        if (gateMsg) gateMsg.style.display = "flex";
+        showToast(`Failed: ${errMsg}`, true);
+        triggerFaceExpression?.("confused");
       }
     } catch (e) {
+      if (banner) {
+        banner.className = "wifi-connection-banner error";
+      }
+      if (bannerTitle) bannerTitle.textContent = "Connection Error";
+      if (bannerSub) bannerSub.textContent = e.message || "Network request failed";
+      if (btnContinue) btnContinue.setAttribute("disabled", "true");
+      if (gateMsg) gateMsg.style.display = "flex";
       showToast(`Connect error: ${e.message}`, true);
     }
-  });
+  };
+
+  if (isSecured) {
+    openTouchKeyboard(`Enter Password for "${nameToShow}":`, (enteredPassword) => {
+      executeConnect(enteredPassword);
+    });
+  } else {
+    executeConnect("");
+  }
 };
 
 window.openDockInstructionModal = function() {

@@ -1985,6 +1985,223 @@ body, html {
   gap: 12px;
 }
 
+/* Split-Screen Setup Step 1 */
+.setup-card-split {
+  padding: 24px 28px;
+  gap: 16px;
+}
+
+.setup-split-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+.setup-split-card {
+  background: #FFFFFF;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.setup-hotspot-card {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAFCFF 100%);
+  border-color: #CBD5E1;
+}
+
+.setup-direct-wifi-card {
+  flex: 1;
+}
+
+.setup-card-badge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setup-option-tag {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: #EEF2F6;
+  color: var(--text-secondary);
+}
+
+.hotspot-live-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hotspot-live-pill::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #F59E0B;
+}
+
+.setup-split-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.setup-split-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.hotspot-credentials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.cred-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cred-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+}
+
+.cred-value {
+  font-size: 14.5px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--primary);
+  word-break: break-all;
+}
+
+/* Banner for Wi-Fi connection progress & alerts */
+.wifi-connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.wifi-connection-banner.connecting {
+  background: #EFF6FF;
+  border: 1.5px solid #BFDBFE;
+  color: #1D4ED8;
+}
+
+.wifi-connection-banner.connecting .banner-spinner {
+  display: inline-block;
+  border-color: #93C5FD;
+  border-top-color: #1D4ED8;
+}
+
+.wifi-connection-banner.success {
+  background: #ECFDF5;
+  border: 1.5px solid #A7F3D0;
+  color: #065F46;
+}
+
+.wifi-connection-banner.success .banner-spinner {
+  display: none;
+}
+
+.wifi-connection-banner.error {
+  background: #FEF2F2;
+  border: 1.5px solid #FECACA;
+  color: #991B1B;
+}
+
+.wifi-connection-banner.error .banner-spinner {
+  display: none;
+}
+
+.banner-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(0,0,0,0.15);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.banner-text-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.banner-text-wrap strong {
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.banner-text-wrap span {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+/* Bottom Gating Action */
+.setup-bottom-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.setup-gate-warning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #B45309;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+#btn-step2-continue:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(0.6);
+}
+
 /* Step 2 Dock Placement & Map Creation (Increased Height & Full Width Fit) */
 .setup-card-step2 {
   min-height: 840px;

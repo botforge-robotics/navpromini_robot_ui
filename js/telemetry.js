@@ -470,7 +470,11 @@ function startPolling() {
       // 6. Wi-Fi & IP (debounced to every 10 seconds)
       if (!window._lastWifiCheck || Date.now() - window._lastWifiCheck > 10000) {
         window._lastWifiCheck = Date.now();
-        fetchWifiStatus();
+        fetchWifiStatus().then(st => {
+          if (st && (st.hotspot_active || (!st.connected && !st.ip))) {
+            window.checkAutoSetupScreen?.();
+          }
+        });
       }
 
     } catch (e) {

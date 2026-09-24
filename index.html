@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NavPro Mini — Onboard Screen UI</title>
-  <link rel="stylesheet" href="style.css?v=218">
+  <link rel="stylesheet" href="style.css?v=220">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -599,7 +599,7 @@
     <div class="kiosk-full-screen" id="screen-setup" style="display: none;">
       <div class="setup-screen-shell">
         <div class="setup-header">
-          <button class="btn btn-secondary btn-sm" onclick="dismissSetupScreen()">✕ Exit Setup</button>
+          <button class="btn btn-secondary btn-sm" id="btn-exit-setup" onclick="dismissSetupScreen()">✕ Exit Setup</button>
           <div class="setup-step-indicator">
             <div class="setup-dot active" id="setup-dot-1"></div>
             <div class="setup-dot" id="setup-dot-2"></div>
@@ -607,45 +607,86 @@
           <span class="setup-step-text" id="setup-step-label">Step 1 of 2</span>
         </div>
 
-        <!-- Setup Step 1: Wi-Fi Setup -->
+        <!-- Setup Step 1: Split Screen Setup Options -->
         <div class="setup-step-page active" id="setup-step-1">
-          <div class="setup-content-card">
+          <div class="setup-content-card setup-card-split">
             <div class="setup-card-title-group">
-              <h1>Wi-Fi Network Setup</h1>
-              <p class="setup-desc">Connect NavPro Mini to your local Wi-Fi network so you can control it wirelessly from your phone or PC.</p>
+              <h1>Robot Network Setup</h1>
+              <p class="setup-desc">Choose how you want to connect and set up NavPro Mini:</p>
             </div>
 
-            <!-- Connected Network Box -->
-            <div class="wifi-current-status-box" id="wifi-current-box">
-              <div class="wifi-status-icon-badge">
-                <span class="wifi-icon-symbol">📶</span>
-              </div>
-              <div class="wifi-status-info">
-                <div class="wifi-status-header-line">
-                  <span class="wifi-status-label">CONNECTED WI-FI</span>
-                  <span class="wifi-connected-pill" id="wifi-connected-badge">Connected</span>
+            <div class="setup-split-grid">
+              <!-- OPTION 1: App Pairing via Robot Hotspot -->
+              <div class="setup-split-card setup-hotspot-card" id="setup-hotspot-box">
+                <div class="setup-card-badge-header">
+                  <span class="setup-option-tag">OPTION 1</span>
+                  <span class="hotspot-live-pill" id="hotspot-live-badge">HOTSPOT ACTIVE</span>
                 </div>
-                <strong id="wifi-current-name" class="wifi-current-name">Scanning...</strong>
-                <span class="wifi-status-ip" id="wifi-current-ip">IP: Checking...</span>
+                <h2 class="setup-split-title">Pair via Mobile / Desktop App</h2>
+                <p class="setup-split-desc">
+                  Connect your phone or PC to this robot's Wi-Fi hotspot, then open the <strong>NavPro Mission Planner</strong> app to set up the robot wirelessly.
+                </p>
+
+                <div class="hotspot-credentials-grid">
+                  <div class="cred-cell">
+                    <span class="cred-label">ROBOT HOTSPOT</span>
+                    <strong class="cred-value" id="setup-hotspot-ssid">NavPro-Setup-XXXX</strong>
+                  </div>
+                  <div class="cred-cell">
+                    <span class="cred-label">PASSWORD</span>
+                    <strong class="cred-value" id="setup-hotspot-pass">navprosetup</strong>
+                  </div>
+                  <div class="cred-cell">
+                    <span class="cred-label">IP ADDRESS / PORTAL</span>
+                    <strong class="cred-value" id="setup-hotspot-ip">10.42.0.1</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- OPTION 2: Direct Touchscreen Setup -->
+              <div class="setup-split-card setup-direct-wifi-card">
+                <div class="setup-card-badge-header">
+                  <span class="setup-option-tag">OPTION 2</span>
+                  <span class="wifi-connected-pill disconnected" id="wifi-connected-badge">Not Connected</span>
+                </div>
+                <h2 class="setup-split-title">Or Connect Direct from this Screen</h2>
+                <p class="setup-split-desc">
+                  Select your local Wi-Fi network below to connect this robot directly.
+                </p>
+
+                <!-- Connection Progress / Status Banner -->
+                <div id="wifi-connection-banner" class="wifi-connection-banner" style="display: none;">
+                  <div class="banner-spinner" id="wifi-banner-spinner"></div>
+                  <div class="banner-text-wrap">
+                    <strong id="wifi-banner-title">Connecting to Wi-Fi...</strong>
+                    <span id="wifi-banner-sub">Please wait while robot joins the network</span>
+                  </div>
+                </div>
+
+                <!-- Available Networks List -->
+                <div class="wifi-scanner-section">
+                  <div class="wifi-scanner-header">
+                    <h3>Available Wi-Fi Networks</h3>
+                    <button class="btn btn-secondary btn-sm" id="btn-rescan-wifi" onclick="scanWifiNetworks()">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                      <span>Rescan</span>
+                    </button>
+                  </div>
+                  <div class="wifi-list-container" id="wifi-list-container">
+                    <div class="wifi-loading-box">Scanning nearby Wi-Fi networks...</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <!-- Available Networks List -->
-            <div class="wifi-scanner-section">
-              <div class="wifi-scanner-header">
-                <h3>Available Networks</h3>
-                <button class="btn btn-secondary btn-sm" onclick="scanWifiNetworks()">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                  <span>Rescan</span>
-                </button>
-              </div>
-              <div class="wifi-list-container" id="wifi-list-container">
-                <div class="wifi-loading-box">Scanning nearby Wi-Fi networks...</div>
-              </div>
-            </div>
-
+            <!-- Bottom Gated Action -->
             <div class="setup-bottom-actions">
-              <button class="btn btn-primary btn-xl" id="btn-step2-continue" onclick="advanceSetupToStep(2)">Continue to Dock Setup ➔</button>
+              <div class="setup-gate-warning" id="setup-gate-msg">
+                <span>⚠️ Connect robot to Wi-Fi above to continue</span>
+              </div>
+              <button class="btn btn-primary btn-xl" id="btn-step2-continue" disabled onclick="advanceSetupToStep(2)">
+                Continue to Dock Setup ➔
+              </button>
             </div>
           </div>
         </div>
@@ -1271,17 +1312,17 @@
     </div>
   </div>
 
-  <script src="js/state.js?v=218"></script>
-  <script src="js/clock.js?v=218"></script>
-  <script src="js/audio.js?v=218"></script>
-  <script src="js/rive_face.js?v=218"></script>
-  <script src="js/keyboard.js?v=218"></script>
-  <script src="js/telemetry.js?v=218"></script>
-  <script src="js/map_viewer.js?v=218"></script>
-  <script src="js/mapping.js?v=218"></script>
-  <script src="js/missions.js?v=218"></script>
-  <script src="js/settings.js?v=218"></script>
-  <script src="js/shortcuts.js?v=218"></script>
-  <script src="app.js?v=218"></script>
+  <script src="js/state.js?v=220"></script>
+  <script src="js/clock.js?v=220"></script>
+  <script src="js/audio.js?v=220"></script>
+  <script src="js/rive_face.js?v=220"></script>
+  <script src="js/keyboard.js?v=220"></script>
+  <script src="js/telemetry.js?v=220"></script>
+  <script src="js/map_viewer.js?v=220"></script>
+  <script src="js/mapping.js?v=220"></script>
+  <script src="js/missions.js?v=220"></script>
+  <script src="js/settings.js?v=220"></script>
+  <script src="js/shortcuts.js?v=220"></script>
+  <script src="app.js?v=220"></script>
 </body>
 </html>

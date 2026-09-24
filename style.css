@@ -2056,6 +2056,39 @@ body, html {
   background-color: #F59E0B;
 }
 
+.hotspot-live-pill.active {
+  background: #FEF3C7;
+  color: #B45309;
+  border-color: #FDE68A;
+}
+
+.hotspot-live-pill.active::before {
+  background-color: #F59E0B;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
+}
+
+.hotspot-live-pill.connected {
+  background: #DCFCE7;
+  color: #15803D;
+  border-color: #BBF7D0;
+}
+
+.hotspot-live-pill.connected::before {
+  background-color: #22C55E;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.8);
+}
+
+.hotspot-live-pill.inactive {
+  background: #F1F5F9;
+  color: #64748B;
+  border-color: #E2E8F0;
+}
+
+.hotspot-live-pill.inactive::before {
+  background-color: #94A3B8;
+  box-shadow: none;
+}
+
 .setup-split-title {
   font-size: 17px;
   font-weight: 800;

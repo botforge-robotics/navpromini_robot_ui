@@ -20,6 +20,13 @@ window.openSetupScreen = function() {
   if (!screen) return;
   screen.style.display = "flex";
   advanceSetupToStep(1);
+
+  // Immediately lock continue button until verified by fetchWifiStatus()
+  const btnContinue = document.getElementById("btn-step2-continue");
+  const gateMsg = document.getElementById("setup-gate-msg");
+  if (btnContinue) btnContinue.setAttribute("disabled", "true");
+  if (gateMsg) gateMsg.style.display = "flex";
+
   fetchWifiStatus();
   scanWifiNetworks();
 };
@@ -38,7 +45,7 @@ window.checkAutoSetupScreen = async function() {
     const res = await fetch(`${API_BASE}/api/v1/system/wifi/status`);
     if (!res.ok) return;
     const data = await res.json();
-    const isSiteConnected = !!(data.connected && data.ip && !data.ip.startsWith("10.42."));
+    const isSiteConnected = !data.hotspot_active && !!(data.connected && data.ip && !data.ip.startsWith("10.42."));
     if (data.hotspot_active || !isSiteConnected) {
       const setupScreen = document.getElementById("screen-setup");
       if (setupScreen && setupScreen.style.display !== "flex") {
@@ -55,7 +62,7 @@ window.advanceSetupToStep = function(stepNum) {
   if (stepNum === 2) {
     const btnContinue = document.getElementById("btn-step2-continue");
     if (btnContinue && btnContinue.hasAttribute("disabled")) {
-      showToast("Please connect to Wi-Fi before proceeding to Dock setup.", true);
+      showToast("Please connect robot to Wi-Fi before proceeding to Dock setup.", true);
       return;
     }
   }
@@ -84,22 +91,62 @@ async function fetchWifiStatus() {
     if (!res.ok) return;
     const data = await res.json();
 
-    // 1. Hotspot credentials & state (Top Card: Option 1)
-    const hsSsidEl = document.getElementById("setup-hotspot-ssid");
-    const hsPassEl = document.getElementById("setup-hotspot-pass");
-    const hsIpEl = document.getElementById("setup-hotspot-ip");
-    const hsBadgeEl = document.getElementById("hotspot-live-badge");
+    const isHotspot = !!data.hotspot_active;
+    const cleanSsid = sanitizeWifiSsid(data.ssid);
+    const liveIp = (data.ip && !data.ip.startsWith("10.42.")) ? data.ip : "";
+    // STRICT RULE: Can only be considered connected if NOT in hotspot mode, data.connected is true, and real non-AP IP is assigned
+    const isConnected = !isHotspot && !!(data.connected && cleanSsid && liveIp);
 
-    if (hsSsidEl && data.hotspot_ssid) hsSsidEl.textContent = data.hotspot_ssid;
-    if (hsPassEl && data.hotspot_password) hsPassEl.textContent = data.hotspot_password;
-    if (hsIpEl && data.hotspot_ip) hsIpEl.textContent = data.hotspot_ip;
-    if (hsBadgeEl) {
-      if (data.hotspot_active) {
+    // 1. Hotspot credentials & state (Top Card: Option 1)
+    const hsTitleEl = document.getElementById("setup-hotspot-title");
+    const hsDescEl = document.getElementById("setup-hotspot-desc");
+    const hsBadgeEl = document.getElementById("hotspot-live-badge");
+    const credLabel1 = document.getElementById("setup-cred-label-1");
+    const hsSsidEl = document.getElementById("setup-hotspot-ssid");
+    const credLabel2 = document.getElementById("setup-cred-label-2");
+    const hsPassEl = document.getElementById("setup-hotspot-pass");
+    const credLabel3 = document.getElementById("setup-cred-label-3");
+    const hsIpEl = document.getElementById("setup-hotspot-ip");
+
+    if (isHotspot) {
+      if (hsBadgeEl) {
         hsBadgeEl.textContent = "HOTSPOT ACTIVE";
-        hsBadgeEl.style.display = "inline-flex";
-      } else {
-        hsBadgeEl.textContent = "HOTSPOT READY";
+        hsBadgeEl.className = "hotspot-live-pill active";
       }
+      if (hsTitleEl) hsTitleEl.textContent = "Pair via Mobile / Desktop App";
+      if (hsDescEl) hsDescEl.innerHTML = "Connect your phone or PC to this robot's Wi-Fi hotspot, then open the <strong>NavPro Mission Planner</strong> app to set up the robot wirelessly.";
+      if (credLabel1) credLabel1.textContent = "ROBOT HOTSPOT";
+      if (hsSsidEl) hsSsidEl.textContent = data.hotspot_ssid || "NavPro-Setup";
+      if (credLabel2) credLabel2.textContent = "PASSWORD";
+      if (hsPassEl) hsPassEl.textContent = data.hotspot_password || "navprosetup";
+      if (credLabel3) credLabel3.textContent = "PORTAL IP";
+      if (hsIpEl) hsIpEl.textContent = data.hotspot_ip || "10.42.0.1";
+    } else if (isConnected) {
+      if (hsBadgeEl) {
+        hsBadgeEl.textContent = "WI-FI CONNECTED";
+        hsBadgeEl.className = "hotspot-live-pill connected";
+      }
+      if (hsTitleEl) hsTitleEl.textContent = "Connected to Site Wi-Fi";
+      if (hsDescEl) hsDescEl.innerHTML = `Robot is online on <strong>${escapeHtml(cleanSsid)}</strong>. To manage this robot, connect your phone or PC to the same Wi-Fi network and open <strong>NavPro Mission Planner</strong>.`;
+      if (credLabel1) credLabel1.textContent = "CONNECTED NETWORK";
+      if (hsSsidEl) hsSsidEl.textContent = cleanSsid;
+      if (credLabel2) credLabel2.textContent = "ROBOT IP ADDRESS";
+      if (hsPassEl) hsPassEl.textContent = liveIp;
+      if (credLabel3) credLabel3.textContent = "HOTSPOT STATUS";
+      if (hsIpEl) hsIpEl.textContent = "Inactive (Site Wi-Fi Connected)";
+    } else {
+      if (hsBadgeEl) {
+        hsBadgeEl.textContent = "HOTSPOT STANDBY";
+        hsBadgeEl.className = "hotspot-live-pill inactive";
+      }
+      if (hsTitleEl) hsTitleEl.textContent = "Pair via Mobile / Desktop App";
+      if (hsDescEl) hsDescEl.innerHTML = "Connect your phone or PC to this robot's hotspot or connect direct from this screen below.";
+      if (credLabel1) credLabel1.textContent = "HOTSPOT SSID";
+      if (hsSsidEl) hsSsidEl.textContent = data.hotspot_ssid || "NavPro-Setup";
+      if (credLabel2) credLabel2.textContent = "PASSWORD";
+      if (hsPassEl) hsPassEl.textContent = data.hotspot_password || "navprosetup";
+      if (credLabel3) credLabel3.textContent = "PORTAL IP";
+      if (hsIpEl) hsIpEl.textContent = "10.42.0.1";
     }
 
     // 2. Connected Site Wi-Fi status (Bottom Card: Option 2)
@@ -110,21 +157,20 @@ async function fetchWifiStatus() {
     const btnContinue = document.getElementById("btn-step2-continue");
     const gateMsg = document.getElementById("setup-gate-msg");
 
-    const cleanSsid = sanitizeWifiSsid(data.ssid);
-    const liveIp = (data.ip && !data.ip.startsWith("10.42.")) ? data.ip : "";
-    const isConnected = !!(data.connected && cleanSsid && liveIp);
-
     if (nameEl) {
       nameEl.textContent = isConnected ? cleanSsid : "No Wi-Fi Connected";
     }
     if (ipEl) {
-      ipEl.textContent = isConnected ? `IP: ${liveIp}` : (data.connected ? "Acquiring IP..." : "Offline");
+      ipEl.textContent = isConnected ? `IP: ${liveIp}` : (isHotspot ? "Hotspot Mode (10.42.0.1)" : "Offline");
     }
 
     if (badgeEl) {
       if (isConnected) {
         badgeEl.textContent = `Connected (${cleanSsid})`;
         badgeEl.className = "wifi-connected-pill connected";
+      } else if (isHotspot) {
+        badgeEl.textContent = "Hotspot Mode";
+        badgeEl.className = "wifi-connected-pill disconnected";
       } else if (data.connected && !liveIp) {
         badgeEl.textContent = "Obtaining IP...";
         badgeEl.className = "wifi-connected-pill";
@@ -147,9 +193,9 @@ async function fetchWifiStatus() {
 
     // Top status bar robot IP
     if (headerIp) {
-      if (liveIp) {
+      if (isConnected && liveIp) {
         headerIp.textContent = liveIp;
-      } else if (data.hotspot_active) {
+      } else if (isHotspot) {
         headerIp.textContent = "10.42.0.1 (AP)";
       } else {
         headerIp.textContent = "Offline";
@@ -161,6 +207,7 @@ async function fetchWifiStatus() {
     console.warn("Wi-Fi status error:", e);
   }
 }
+
 
 window.scanWifiNetworks = async function() {
   const list = document.getElementById("wifi-list-container");

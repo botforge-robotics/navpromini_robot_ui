@@ -400,7 +400,7 @@ async function loadPowerHealth() {
 /* --------------------------------------------------------------------------
    14. SOFTWARE UPDATE SYSTEM (GitHub Releases + SDK Updater)
    -------------------------------------------------------------------------- */
-const APP_CURRENT_VERSION = "2.0.0";
+const APP_CURRENT_VERSION = "2.0.1";
 const updateChannel = "main";
 let latestReleaseData = null;
 let updatePollingTimer = null;

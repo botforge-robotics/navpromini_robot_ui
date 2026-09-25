@@ -357,7 +357,11 @@ window.closeDockInstructionModal = function() {
 window.skipMappingSetup = function() {
   dismissSetupScreen();
   showToast("Setup completed! Welcome to NavPro Mini.");
-  setSwipeIndex(1); // Dashboard
+  if (typeof showDashboardView === "function") {
+    showDashboardView();
+  } else {
+    setSwipeIndex(0); // Dashboard
+  }
 };
 
 window.startMappingFromSetup = function() {

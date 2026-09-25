@@ -338,7 +338,11 @@ window.dismissChargingScreen = function() {
   const chargingScreen = document.getElementById("screen-charging");
   if (chargingScreen) chargingScreen.style.display = "none";
   chargingScreenDismissed = true;
-  setSwipeIndex(1); // Go to Dashboard
+  if (typeof showDashboardView === "function") {
+    showDashboardView();
+  } else {
+    setSwipeIndex(0); // Go to Dashboard
+  }
 };
 
 /* --------------------------------------------------------------------------

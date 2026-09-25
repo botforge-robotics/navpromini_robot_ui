@@ -644,7 +644,11 @@ function initMappingControls() {
       if (stoppingModal) stoppingModal.style.display = "none";
       stopMappingLive();
       showToast("Mapping session stopped.");
-      setSwipeIndex(1); // Return to Dashboard
+      if (typeof showDashboardView === "function") {
+        showDashboardView();
+      } else {
+        setSwipeIndex(0); // Return to Dashboard
+      }
     }
   });
 
@@ -738,7 +742,11 @@ function initMappingControls() {
         activeMapName = targetName;
         loadMaps();
         loadWaypoints();
-        setSwipeIndex(1); // Return to Dashboard
+        if (typeof showDashboardView === "function") {
+          showDashboardView();
+        } else {
+          setSwipeIndex(0); // Return to Dashboard
+        }
       } catch (e) {
         showToast(`Error saving map: ${e.message}`, true);
       } finally {

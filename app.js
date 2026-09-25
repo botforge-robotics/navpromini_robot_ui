@@ -44,7 +44,7 @@ function initSwipeGestures() {
     const touchDeltaY = (e.changedTouches && e.changedTouches[0]) ? (e.changedTouches[0].clientY - touchStartY) : 0;
     if (Math.abs(touchDeltaX) > 40 && Math.abs(touchDeltaX) > Math.abs(touchDeltaY)) {
       if (touchDeltaX < 0) {
-        setSwipeIndex(Math.min(2, currentSwipeIndex + 1));
+        setSwipeIndex(Math.min(1, currentSwipeIndex + 1));
       } else {
         setSwipeIndex(Math.max(0, currentSwipeIndex - 1));
       }
@@ -62,26 +62,19 @@ function initSwipeGestures() {
     if (!isMouseDown) return;
     isMouseDown = false;
     const deltaX = e.clientX - mouseStartX;
-    if (deltaX < -40) setSwipeIndex(Math.min(2, currentSwipeIndex + 1));
+    if (deltaX < -40) setSwipeIndex(Math.min(1, currentSwipeIndex + 1));
     if (deltaX > 40) setSwipeIndex(Math.max(0, currentSwipeIndex - 1));
   });
 
   // Explicit click handlers for navigation buttons
-  document.getElementById("pill-btn-face")?.addEventListener("click", () => setSwipeIndex(0));
-  document.getElementById("pill-btn-dashboard")?.addEventListener("click", () => setSwipeIndex(1));
-  document.getElementById("pill-btn-shortcuts")?.addEventListener("click", () => setSwipeIndex(2));
-  document.getElementById("face-swipe-to-dash")?.addEventListener("click", () => setSwipeIndex(1));
-  document.getElementById("dash-swipe-to-face")?.addEventListener("click", () => setSwipeIndex(0));
-  document.getElementById("dash-swipe-to-shortcuts")?.addEventListener("click", () => setSwipeIndex(2));
+  document.getElementById("dash-swipe-to-shortcuts")?.addEventListener("click", () => setSwipeIndex(1));
 
   // Keyboard navigation shortcuts
   window.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight" || e.key === "3" || e.key.toLowerCase() === "s") {
-      setSwipeIndex(Math.min(2, currentSwipeIndex + 1));
-    } else if (e.key === "ArrowLeft" || e.key === "1" || e.key.toLowerCase() === "f") {
+    if (e.key === "ArrowRight" || e.key.toLowerCase() === "s" || e.key === "2") {
+      setSwipeIndex(Math.min(1, currentSwipeIndex + 1));
+    } else if (e.key === "ArrowLeft" || e.key.toLowerCase() === "d" || e.key === "1") {
       setSwipeIndex(Math.max(0, currentSwipeIndex - 1));
-    } else if (e.key === "2" || e.key.toLowerCase() === "d") {
-      setSwipeIndex(1);
     } else if (e.key === "Escape") {
       closeSubpage();
     }
@@ -89,11 +82,8 @@ function initSwipeGestures() {
 }
 
 window.setSwipeIndex = function(index) {
-  currentSwipeIndex = Math.max(0, Math.min(2, index));
+  currentSwipeIndex = Math.max(0, Math.min(1, index));
   const track = document.getElementById("swipe-track");
-  const pillFace = document.getElementById("pill-btn-face");
-  const pillDash = document.getElementById("pill-btn-dashboard");
-  const pillShortcuts = document.getElementById("pill-btn-shortcuts");
 
   if (track) {
     track.classList.remove("show-dashboard");
@@ -101,11 +91,8 @@ window.setSwipeIndex = function(index) {
     track.style.transform = `translateX(${offset}vw)`;
     track.style.webkitTransform = `translateX(${offset}vw)`;
   }
-  if (pillFace) pillFace.classList.toggle("active", currentSwipeIndex === 0);
-  if (pillDash) pillDash.classList.toggle("active", currentSwipeIndex === 1);
-  if (pillShortcuts) pillShortcuts.classList.toggle("active", currentSwipeIndex === 2);
 
-  if (currentSwipeIndex === 2 && window.refreshShortcuts) {
+  if (currentSwipeIndex === 1 && window.refreshShortcuts) {
     window.refreshShortcuts();
   }
 
@@ -115,7 +102,7 @@ window.setSwipeIndex = function(index) {
 
 window.showDashboardView = function() {
   closeSubpage();
-  setSwipeIndex(1);
+  setSwipeIndex(0);
 };
 
 /* --------------------------------------------------------------------------
@@ -391,7 +378,6 @@ function initModals() {
 // Initialize on DOM Ready
 document.addEventListener("DOMContentLoaded", () => {
   initClock();
-  initRiveFace();
   initSwipeGestures();
   initHubTiles();
   initActionButtons();

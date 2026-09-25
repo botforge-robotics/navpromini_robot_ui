@@ -63,6 +63,28 @@ class RobotApiService {
     }
   }
 
+  // --- Robot Mode (idle / mapping / navigation) ---
+  Future<Map<String, dynamic>> getMode() async {
+    try {
+      final res = await _get('/api/v1/mode');
+      if (res is Map<String, dynamic>) return res;
+      return {'mode': 'navigation'};
+    } catch (_) {
+      return {'mode': 'idle'};
+    }
+  }
+
+  Future<void> finishMapping(String name, {bool overwrite = true}) async {
+    await _post('/api/v1/mapping/finish', {
+      'name': name,
+      'overwrite': overwrite,
+    });
+  }
+
+  Future<void> cancelMapping() async {
+    await _post('/api/v1/mode', {'mode': 'idle'});
+  }
+
   // --- Current Robot Pose ---
   Future<Map<String, double>> getCurrentPose() async {
     try {
@@ -188,6 +210,7 @@ class RobotApiService {
   // --- Real-time WebSocket Event Push (Zero-latency) ---
   WebSocketChannel? _wsChannel;
   StreamController<UiInteractionModel?>? _interactionStreamController;
+  StreamController<String>? _modeStreamController;
   Timer? _wsReconnectTimer;
 
   Stream<UiInteractionModel?> get interactionStream {
@@ -196,6 +219,14 @@ class RobotApiService {
       onCancel: _disconnectWs,
     );
     return _interactionStreamController!.stream;
+  }
+
+  Stream<String> get modeStream {
+    _modeStreamController ??= StreamController<String>.broadcast(
+      onListen: _connectWs,
+      onCancel: _disconnectWs,
+    );
+    return _modeStreamController!.stream;
   }
 
   void _connectWs() {
@@ -221,6 +252,13 @@ class RobotApiService {
                   _interactionStreamController?.add(UiInteractionModel.fromJson(evtData));
                 } else if (name == 'mission.ui_interaction_dismissed') {
                   _interactionStreamController?.add(null);
+                } else if (name == 'mapping.started') {
+                  _modeStreamController?.add('mapping');
+                } else if (name == 'navigation.started') {
+                  _modeStreamController?.add('navigation');
+                } else if (name == 'mode.changed' && evtData is Map<String, dynamic>) {
+                  final m = evtData['mode']?.toString();
+                  if (m != null) _modeStreamController?.add(m);
                 }
               }
             }
@@ -256,5 +294,6 @@ class RobotApiService {
     _wsReconnectTimer?.cancel();
     _disconnectWs();
     _interactionStreamController?.close();
+    _modeStreamController?.close();
   }
 }

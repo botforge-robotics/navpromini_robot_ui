@@ -10,6 +10,7 @@ import '../services/robot_api_service.dart';
 import '../widgets/battery_indicator.dart';
 import '../widgets/interactive_ui_overlay.dart';
 import 'home_dashboard_screen.dart';
+import 'mapping_screen.dart';
 import 'missions_control_screen.dart';
 import 'saved_locations_screen.dart';
 
@@ -29,12 +30,14 @@ class _MainKioskShellState extends State<MainKioskShell> {
   List<Waypoint> _waypoints = [];
   List<RobotMission> _missions = [];
   String? _currentMap;
+  String _robotMode = 'navigation';
   bool _isConnected = false;
 
   UiInteractionModel? _activeInteraction;
   Timer? _pollerTimer;
   Timer? _clockTimer;
   StreamSubscription<UiInteractionModel?>? _interactionSub;
+  StreamSubscription<String>? _modeSub;
   String _currentTime = '';
 
   @override
@@ -50,6 +53,9 @@ class _MainKioskShellState extends State<MainKioskShell> {
         });
       }
     });
+    _modeSub = _api.modeStream.listen((mode) {
+      if (mounted) _onModeChanged(mode);
+    });
     _pollerTimer = Timer.periodic(const Duration(seconds: 2), (_) => _pollRobotState());
   }
 
@@ -58,8 +64,28 @@ class _MainKioskShellState extends State<MainKioskShell> {
     _clockTimer?.cancel();
     _pollerTimer?.cancel();
     _interactionSub?.cancel();
+    _modeSub?.cancel();
     _api.dispose();
     super.dispose();
+  }
+
+  void _onModeChanged(String newMode) {
+    final mode = newMode.toLowerCase();
+    if (_robotMode == mode) return;
+    final oldMode = _robotMode;
+    setState(() => _robotMode = mode);
+
+    if (oldMode == 'mapping' && (mode == 'navigation' || mode == 'idle')) {
+      // Switched from mapping to navigation/idle -> Go to Dashboard!
+      setState(() => _selectedTabIndex = 0);
+      _loadAllData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mapping completed! Returned to Dashboard.'),
+          backgroundColor: RobotTheme.success,
+        ),
+      );
+    }
   }
 
   void _updateClock() {
@@ -75,6 +101,8 @@ class _MainKioskShellState extends State<MainKioskShell> {
       final wps = await _api.listWaypoints();
       final ms = await _api.listMissions();
       final map = await _api.getCurrentMap();
+      final modeData = await _api.getMode();
+      final mode = (modeData['mode'] as String? ?? 'navigation').toLowerCase();
 
       if (mounted) {
         setState(() {
@@ -85,6 +113,7 @@ class _MainKioskShellState extends State<MainKioskShell> {
           _currentMap = map;
           _isConnected = true;
         });
+        _onModeChanged(mode);
       }
     } catch (_) {
       if (mounted) setState(() => _isConnected = false);
@@ -96,6 +125,8 @@ class _MainKioskShellState extends State<MainKioskShell> {
       final bat = await _api.getBattery();
       final status = await _api.getMissionStatus();
       final inter = await _api.fetchActiveUiInteraction();
+      final modeData = await _api.getMode();
+      final mode = (modeData['mode'] as String? ?? 'navigation').toLowerCase();
 
       if (mounted) {
         setState(() {
@@ -104,6 +135,7 @@ class _MainKioskShellState extends State<MainKioskShell> {
           _activeInteraction = inter;
           _isConnected = true;
         });
+        _onModeChanged(mode);
       }
     } catch (_) {
       if (mounted) setState(() => _isConnected = false);
@@ -168,34 +200,41 @@ class _MainKioskShellState extends State<MainKioskShell> {
 
               // Selected Screen Body
               Expanded(
-                child: IndexedStack(
-                  index: _selectedTabIndex,
-                  children: [
-                    HomeDashboardScreen(
-                      api: _api,
-                      battery: _battery,
-                      missionStatus: _missionStatus,
-                      currentMap: _currentMap,
-                      onRefresh: _loadAllData,
-                      onNavigateToTab: (idx) => setState(() => _selectedTabIndex = idx),
-                    ),
-                    SavedLocationsScreen(
-                      api: _api,
-                      waypoints: _waypoints,
-                      onRefresh: _loadAllData,
-                    ),
-                    MissionsControlScreen(
-                      api: _api,
-                      missions: _missions,
-                      status: _missionStatus,
-                      onRefresh: _loadAllData,
-                    ),
-                  ],
-                ),
+                child: _robotMode == 'mapping'
+                    ? MappingScreen(
+                        api: _api,
+                        battery: _battery,
+                        onFinishOrCancel: () => _onModeChanged('navigation'),
+                      )
+                    : IndexedStack(
+                        index: _selectedTabIndex,
+                        children: [
+                          HomeDashboardScreen(
+                            api: _api,
+                            battery: _battery,
+                            missionStatus: _missionStatus,
+                            currentMap: _currentMap,
+                            onRefresh: _loadAllData,
+                            onNavigateToTab: (idx) =>
+                                setState(() => _selectedTabIndex = idx),
+                          ),
+                          SavedLocationsScreen(
+                            api: _api,
+                            waypoints: _waypoints,
+                            onRefresh: _loadAllData,
+                          ),
+                          MissionsControlScreen(
+                            api: _api,
+                            missions: _missions,
+                            status: _missionStatus,
+                            onRefresh: _loadAllData,
+                          ),
+                        ],
+                      ),
               ),
 
-              // Bottom Navigation Bar
-              _buildBottomNav(),
+              // Bottom Navigation Bar (hidden during mapping mode)
+              if (_robotMode != 'mapping') _buildBottomNav(),
             ],
           ),
 
@@ -253,6 +292,34 @@ class _MainKioskShellState extends State<MainKioskShell> {
               ),
             ],
           ),
+
+          if (_robotMode == 'mapping') ...[
+            const SizedBox(width: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: RobotTheme.warning.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: RobotTheme.warning, width: 1.2),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.radar_rounded, size: 16, color: RobotTheme.warning),
+                  SizedBox(width: 6),
+                  Text(
+                    'MAPPING ACTIVE',
+                    style: TextStyle(
+                      color: RobotTheme.warning,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const Spacer(),
 

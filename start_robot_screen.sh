@@ -32,12 +32,27 @@ pkill -9 -f onboard 2>/dev/null || true
 PORT=8090
 URL="http://127.0.0.1:${PORT}/ui/"
 
-# If running on host and port 8090 is offline, auto-spawn background HTTP server
-if ! curl -s -m 1 "http://127.0.0.1:${PORT}/" > /dev/null 2>&1; then
-    echo "[Robot Screen] Starting local server on port ${PORT}..."
-    setsid python3 -m http.server ${PORT} --directory "${UI_DIR}" </dev/null >/dev/null 2>&1 &
-    sleep 1
-    URL="http://127.0.0.1:${PORT}/"
+# Wait for SDK (on robot) or spawn dev server (on dev machine)
+if [[ "${CURRENT_USER}" == "navpromini" ]]; then
+    # On the robot: NEVER spawn a competing server — wait for the SDK service
+    if ! curl -s -m 1 "http://127.0.0.1:${PORT}/" > /dev/null 2>&1; then
+        echo "[Robot Screen] Waiting for SDK on port ${PORT}..."
+        for _i in $(seq 1 30); do
+            if curl -s -m 1 "http://127.0.0.1:${PORT}/" > /dev/null 2>&1; then
+                echo "[Robot Screen] SDK is up after ${_i}s."
+                break
+            fi
+            sleep 1
+        done
+    fi
+else
+    # Dev machine: spawn a local static-file server only if nothing is on the port
+    if ! curl -s -m 1 "http://127.0.0.1:${PORT}/" > /dev/null 2>&1; then
+        echo "[Robot Screen] (dev) Starting local server on port ${PORT}..."
+        setsid python3 -m http.server ${PORT} --directory "${UI_DIR}" </dev/null >/dev/null 2>&1 &
+        sleep 1
+        URL="http://127.0.0.1:${PORT}/"
+    fi
 fi
 
 # Clean up previous instances to ensure single clean instance

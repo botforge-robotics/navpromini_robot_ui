@@ -48,7 +48,7 @@ const API_BASE = window.location.port === "8090"
   : "http://" + (window.location.hostname || "127.0.0.1") + ":8090";
 
 // Global Robot State
-let currentSwipeIndex = 0; // 0 = Face, 1 = Dashboard
+let currentSwipeIndex = 0; // 0 = Dashboard, 1 = Shortcuts
 let activeMapName = "";
 let liveRobotPose = null; // { x, y, yaw }
 let isLocalized = false;
@@ -65,9 +65,10 @@ let mappingStartTime = null;
 let mappingTimerInterval = null;
 let jogInterval = null;
 
-// Rive Instance & Expression Inputs
-let riveInstance = null;
-let riveInputs = {};
+// Rive / Face Expression Stubs (No-Op for performance)
+window.triggerFaceExpression = function() {};
+window.pauseRiveFace = function() {};
+window.resumeRiveFace = function() {};
 
 // Touch Keyboard Callback
 let touchKeyboardCallback = null;

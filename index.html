@@ -8,8 +8,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
-  <!-- Vendored Local Rive Canvas Runtime -->
-  <script src="vendor/rive.js"></script>
 </head>
 <body class="kiosk-mode">
   <div id="app" class="app-container">
@@ -77,60 +75,7 @@
         <div class="swipe-track" id="swipe-track">
 
           <!-- ============================================================= -->
-          <!-- SLIDE 0: FULL-SCREEN INTERACTIVE RIVE ROBOT FACE              -->
-          <!-- ============================================================= -->
-          <div class="swipe-slide" id="slide-face">
-            <div class="robot-face-wrapper" id="robot-face-container">
-              <!-- Rive Animation Canvas (Fitted to device width & Watermark covered) -->
-              <div class="rive-face-box">
-                <canvas id="rive-face-canvas" class="rive-face-canvas" width="800" height="800"></canvas>
-                <div class="rive-watermark-cover"></div>
-              </div>
-
-              <!-- Fallback animated face if Rive is loading or offline -->
-              <div class="fallback-face" id="fallback-face" style="display: none;">
-                <div class="fallback-eye fallback-eye-left"></div>
-                <div class="fallback-eye fallback-eye-right"></div>
-                <div class="fallback-mouth"></div>
-              </div>
-
-              <!-- Live Speech Subtitle Bubble -->
-              <div class="face-speech-bubble" id="face-speech-bubble" style="display: none;">
-                <div class="speech-pulse-icon">🔊</div>
-                <div class="speech-text" id="face-speech-text">Hello! I am NavPro Mini.</div>
-              </div>
-
-              <!-- Floating Quick Expression / Interaction Bar -->
-              <div class="face-bottom-bar">
-                <div class="face-reactions-strip">
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('happy')">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/></svg>
-                  </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('curios')">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="9.5" r="1" fill="currentColor"/><circle cx="15.5" cy="9.5" r="2.2" fill="currentColor"/><path d="M9 15h6"/></svg>
-                  </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('blush')">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M9.5 14.5a3 3 0 0 0 5 0"/><circle cx="6.5" cy="12" r="1.5" fill="#FE6829"/><circle cx="17.5" cy="12" r="1.5" fill="#FE6829"/></svg>
-                  </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('thinking')">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 9h2"/><path d="M14 9h2"/><path d="M10 14h4"/></svg>
-                  </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('surprise')">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="12" cy="15" r="2.5"/></svg>
-                  </button>
-                  <button class="face-reaction-btn" onclick="triggerFaceExpression('sleep')">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 10h3l-3 4h3"/><path d="M14 8h2l-2 3h2"/></svg>
-                  </button>
-                </div>
-                <button class="face-swipe-prompt" id="face-swipe-to-dash" onclick="setSwipeIndex(1)">
-                  <span>Dashboard ➔</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- ============================================================= -->
-          <!-- SLIDE 1: 2X2 DASHBOARD HUB                                    -->
+          <!-- SLIDE 0: 2X2 DASHBOARD HUB                                    -->
           <!-- ============================================================= -->
           <div class="swipe-slide" id="slide-dashboard">
             <div class="dashboard-slide-content">
@@ -245,12 +190,9 @@
                   </div>
                 </div>
 
-                <!-- Bottom Swipe Hint & Quick Dock Controls -->
+                <!-- Bottom Quick Dock Controls & Shortcuts Navigation -->
                 <div class="dashboard-bottom-bar">
-                  <button class="dashboard-swipe-prompt" id="dash-swipe-to-face" onclick="setSwipeIndex(0)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align: -2px;"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M9 15c1.5 1.5 4.5 1.5 6 0"/></svg>
-                    <span>Robot Face</span>
-                  </button>
+                  <div class="dashboard-bottom-spacer" style="width: 120px;"></div>
 
                   <div class="dashboard-dock-actions">
                     <button type="button" class="btn-dock-quick btn-quick-dock" id="btn-quick-dock" onclick="triggerAutoDock()">
@@ -263,7 +205,7 @@
                     </button>
                   </div>
 
-                  <button class="dashboard-swipe-prompt" id="dash-swipe-to-shortcuts" onclick="setSwipeIndex(2)">
+                  <button class="dashboard-swipe-prompt" id="dash-swipe-to-shortcuts" onclick="setSwipeIndex(1)">
                     <span>Shortcuts ➔</span>
                   </button>
                 </div>
@@ -272,7 +214,7 @@
           </div>
 
           <!-- ============================================================= -->
-          <!-- SLIDE 2: MISSION SHORTCUTS (ACTIVE MAP SCOPED)               -->
+          <!-- SLIDE 1: MISSION SHORTCUTS (ACTIVE MAP SCOPED)               -->
           <!-- ============================================================= -->
           <div class="swipe-slide" id="slide-shortcuts">
             <div class="shortcuts-slide-content">
@@ -292,13 +234,10 @@
                 </div>
               </div>
 
-              <!-- Bottom Bar with Navigation Back to Dashboard / Face -->
+              <!-- Bottom Bar with Navigation Back to Dashboard -->
               <div class="shortcuts-bottom-bar">
-                <button class="shortcuts-nav-btn" onclick="setSwipeIndex(1)">
-                  <span>➔ Dashboard</span>
-                </button>
                 <button class="shortcuts-nav-btn" onclick="setSwipeIndex(0)">
-                  <span>➔ Robot Face</span>
+                  <span>← Back to Dashboard</span>
                 </button>
               </div>
             </div>
@@ -1315,7 +1254,6 @@
   <script src="js/state.js?v=221"></script>
   <script src="js/clock.js?v=221"></script>
   <script src="js/audio.js?v=221"></script>
-  <script src="js/rive_face.js?v=221"></script>
   <script src="js/keyboard.js?v=221"></script>
   <script src="js/telemetry.js?v=221"></script>
   <script src="js/map_viewer.js?v=221"></script>

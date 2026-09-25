@@ -77,6 +77,13 @@
   display: none;
 }
 
+/* Performance Optimization: Freeze infinite keyframe animations when parent containers are hidden */
+[style*="display: none"] *,
+.kiosk-full-screen:not([style*="display: flex"]):not([style*="display: block"]) *,
+.modal-dialog:not([style*="display: flex"]):not([style*="display: block"]) * {
+  animation-play-state: paused !important;
+}
+
 body, html {
   width: 100vw;
   height: 100vh;

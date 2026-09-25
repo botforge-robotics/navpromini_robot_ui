@@ -4,9 +4,9 @@ function initRiveFace() {
   const canvas = document.getElementById("rive-face-canvas");
   if (!canvas) return;
 
-  // Enforce crisp 800x800 internal buffer dimensions matching device width
-  canvas.width = 800;
-  canvas.height = 800;
+  // Optimized 500x500 internal buffer (CSS GPU bilinear scaling keeps vector face crisp with 60% less CPU rasterization)
+  canvas.width = 500;
+  canvas.height = 500;
 
   try {
     if (typeof rive === "undefined" || !rive.Rive) {
@@ -23,6 +23,27 @@ function initRiveFace() {
       onLoad: () => {
         console.log("Rive animation loaded successfully with crisp 1:1 aspect ratio!");
         window.riveInstance = riveInstance;
+
+        // Apply ~22 FPS cap to prevent 60 FPS software Cairo rasterization load on Raspberry Pi
+        try {
+          const origBoundDraw = riveInstance._boundDraw;
+          let lastDrawTime = 0;
+          const minInterval = 1000 / 22; // ~22 FPS
+          riveInstance._boundDraw = function(time) {
+            if (time - lastDrawTime < minInterval) {
+              if (riveInstance.animator && riveInstance.animator.isPlaying) {
+                riveInstance.frameRequestId = null;
+                riveInstance.scheduleRendering();
+              }
+              return;
+            }
+            lastDrawTime = time;
+            origBoundDraw.call(riveInstance, time);
+          };
+        } catch (err) {
+          console.warn("Could not apply frame cap to Rive instance:", err);
+        }
+
         try {
           const inputs = riveInstance.stateMachineInputs("expressions");
           if (inputs && inputs.length > 0) {
@@ -69,7 +90,26 @@ function showFallbackFace() {
   if (cv) cv.style.display = "none";
 }
 
+window.pauseRiveFace = function() {
+  if (window.riveInstance && typeof window.riveInstance.pause === "function") {
+    try {
+      window.riveInstance.pause();
+    } catch (e) {}
+  }
+};
+
+window.resumeRiveFace = function() {
+  if (window.riveInstance && typeof window.riveInstance.play === "function") {
+    try {
+      window.riveInstance.play();
+    } catch (e) {}
+  }
+};
+
 window.triggerFaceExpression = function(name) {
+  if (window.riveInstance && !window.riveInstance.isPlaying) {
+    window.resumeRiveFace?.();
+  }
   if (riveInputs[name]) {
     try {
       riveInputs[name].fire();

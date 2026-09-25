@@ -401,22 +401,22 @@ async function loadPowerHealth() {
    14. SOFTWARE UPDATE SYSTEM (GitHub Releases + SDK Updater)
    -------------------------------------------------------------------------- */
 const APP_CURRENT_VERSION = "2.0.0";
-let updateChannel = localStorage.getItem("navpro_ui_update_channel") || "main";
+const updateChannel = "main";
 let latestReleaseData = null;
 let updatePollingTimer = null;
 
-async function checkAppUpdates(silent = true, branchOverride = null) {
+async function checkAppUpdates(silent = true) {
   // Session dismissal check: if user dismissed during THIS session, do not prompt on silent boot checks.
   // On next reboot / kiosk restart, sessionStorage is fresh, so it will prompt again.
   if (silent && sessionStorage.getItem("navpro_ui_update_dismissed") === "true") {
     return;
   }
 
-  const branch = branchOverride || updateChannel;
+  const branch = "main";
   try {
     let updateInfo = null;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/system/app/update/check?branch=${encodeURIComponent(branch)}`, {
+      const res = await fetch(`${API_BASE}/api/v1/system/app/update/check?branch=main`, {
         signal: AbortSignal.timeout(6000)
       });
       if (res.ok) {
@@ -497,36 +497,27 @@ function showUpdateAvailableModal(info) {
   const modal = document.getElementById("modal-app-update");
   if (!modal) return;
 
-  const curBranch = info.branch || updateChannel || "main";
-
-  // Synchronize channel selection chips
-  const mainChip = document.getElementById("channel-chip-main");
-  const devChip = document.getElementById("channel-chip-dev");
-  if (mainChip && devChip) {
-    if (curBranch === "dev") {
-      devChip.classList.add("active");
-      mainChip.classList.remove("active");
-    } else {
-      mainChip.classList.add("active");
-      devChip.classList.remove("active");
-    }
+  // Do not prompt if commits are identical and commits_behind is 0
+  if (info.current_commit && info.latest_commit && info.current_commit === info.latest_commit && (!info.commits_behind || info.commits_behind === 0)) {
+    return;
   }
 
   // Current and target version chips
   const curEl = document.getElementById("update-modal-cur-ver");
   const newEl = document.getElementById("update-modal-new-ver");
   if (curEl) {
-    const curShort = info.current_commit_short || (info.current_version ? `v${info.current_version}` : "current");
-    curEl.textContent = `${info.current_branch || curBranch}: ${curShort}`;
+    curEl.textContent = `v${info.current_version || APP_CURRENT_VERSION}`;
   }
   if (newEl) {
     const behind = info.commits_behind;
     if (behind && behind > 0) {
       newEl.textContent = `${behind} new commit${behind > 1 ? "s" : ""}`;
+    } else if (info.latest_version && info.latest_version !== info.current_version) {
+      newEl.textContent = `v${info.latest_version}`;
     } else if (info.latest_commit_short) {
-      newEl.textContent = `${curBranch}: ${info.latest_commit_short}`;
+      newEl.textContent = `${info.latest_commit_short}`;
     } else {
-      newEl.textContent = `v${info.latest_version || "1.0.1"}`;
+      newEl.textContent = `v${info.latest_version || "2.0.0"}`;
     }
   }
 
@@ -551,23 +542,7 @@ function showUpdateAvailableModal(info) {
 }
 
 window.switchUpdateBranch = function(branch) {
-  updateChannel = branch;
-  localStorage.setItem("navpro_ui_update_channel", branch);
-
-  const mainChip = document.getElementById("channel-chip-main");
-  const devChip = document.getElementById("channel-chip-dev");
-  if (mainChip && devChip) {
-    if (branch === "dev") {
-      devChip.classList.add("active");
-      mainChip.classList.remove("active");
-    } else {
-      mainChip.classList.add("active");
-      devChip.classList.remove("active");
-    }
-  }
-
-  showToast(`Checking ${branch} channel for updates...`);
-  checkAppUpdates(false, branch);
+  // Production only tracks main branch
 };
 
 window.dismissUpdateModal = function() {

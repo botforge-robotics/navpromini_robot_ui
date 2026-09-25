@@ -5,6 +5,20 @@
    -------------------------------------------------------------------------- */
 let onScreenNavInitiated = false;
 let previousDockOperation = "idle";
+let cachedWaypoints = [];
+
+async function refreshCachedWaypoints() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/waypoints`);
+    if (res.ok) {
+      const data = await res.json();
+      cachedWaypoints = data.waypoints || [];
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+refreshCachedWaypoints();
 
 function updateNavigationState(navData, isMissionActive = false) {
   if (!navData) return;
@@ -34,22 +48,23 @@ function updateNavigationState(navData, isMissionActive = false) {
       const destEl = document.getElementById("nav-screen-destination");
       if (destEl) {
         let targetName = "";
-        if (navData.target_waypoint) {
+        if (typeof navData.target === "string" && navData.target.trim()) {
+          targetName = navData.target.trim();
+        } else if (navData.target_waypoint) {
           targetName = navData.target_waypoint;
         } else if (navData.target && typeof navData.target === "object") {
-          if (navData.target.name) {
+          if (navData.target.waypoint) {
+            targetName = navData.target.waypoint;
+          } else if (navData.target.name) {
             targetName = navData.target.name;
           } else if (navData.target.x !== undefined && navData.target.y !== undefined) {
             const tx = Number(navData.target.x);
             const ty = Number(navData.target.y);
-            const matchedWp = (cachedWaypoints || []).find(w => Math.hypot(w.x - tx, w.y - ty) < 0.4);
-            targetName = matchedWp && matchedWp.name ? matchedWp.name : "Designated Station";
-          } else {
-            targetName = "Designated Station";
+            const matchedWp = (cachedWaypoints || []).find(w => Math.hypot(w.x - tx, w.y - ty) < 0.5);
+            targetName = matchedWp && matchedWp.name ? matchedWp.name : `Location (${tx.toFixed(1)}, ${ty.toFixed(1)})`;
           }
-        } else {
-          targetName = "Designated Station";
         }
+        if (!targetName) targetName = "Target Location";
         destEl.innerHTML = `Navigating to <span class="nav-target-highlight">${escapeHtml(targetName)}</span>`;
       }
 
@@ -92,7 +107,16 @@ let dockCamPollTimer = null;
 function startDockCamStream() {
   if (dockCamPollActive) return;
   dockCamPollActive = true;
-  pollNextDockFrame();
+  const cameraImg = document.getElementById("dock-camera-preview-img");
+  if (!cameraImg) return;
+
+  // Use persistent MJPEG stream for high frame rate, zero JS loop overhead
+  cameraImg.src = `${API_BASE}/api/v1/dock/stream.mjpg`;
+  cameraImg.onerror = () => {
+    if (!dockCamPollActive) return;
+    cameraImg.onerror = null;
+    pollNextDockFrame();
+  };
 }
 
 function pollNextDockFrame() {
@@ -106,12 +130,12 @@ function pollNextDockFrame() {
     if (!dockCamPollActive) return;
     cameraImg.src = img.src;
     const elapsed = Date.now() - startTime;
-    const delay = Math.max(10, 35 - elapsed);
+    const delay = Math.max(10, 40 - elapsed);
     dockCamPollTimer = setTimeout(pollNextDockFrame, delay);
   };
   img.onerror = () => {
     if (!dockCamPollActive) return;
-    dockCamPollTimer = setTimeout(pollNextDockFrame, 200);
+    dockCamPollTimer = setTimeout(pollNextDockFrame, 250);
   };
   img.src = `${API_BASE}/api/v1/dock/debug_image?t=${Date.now()}`;
 }
@@ -123,7 +147,10 @@ function stopDockCamStream() {
     dockCamPollTimer = null;
   }
   const cameraImg = document.getElementById("dock-camera-preview-img");
-  if (cameraImg) cameraImg.src = "";
+  if (cameraImg) {
+    cameraImg.onerror = null;
+    cameraImg.src = "";
+  }
 }
 
 function updateDockingScreen(dockData, stateData, isMissionActive = false) {
@@ -136,7 +163,7 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
 
   // Mission mode guard: during mission execution, mission progress screen displays the dock node
   if (isMissionActive) {
-    if (dockScreen.style.display === "flex") {
+    if (dockScreen.style.display !== "none") {
       dockScreen.style.display = "none";
     }
     stopDockCamStream();
@@ -144,21 +171,32 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
     return;
   }
 
+  const isCharging = !!(
+    (dockData && (dockData.charging || dockData.state === "charging" || dockData.state === "full")) ||
+    (stateData && (
+      (stateData.dock && (stateData.dock.status === "charging" || stateData.dock.status === "full")) ||
+      (stateData.battery && (stateData.battery.charging || stateData.battery.status === "charging" || stateData.battery.status === "full"))
+    ))
+  );
+
+  const isDockComplete = dockOp === "docked" || dockOp === "succeeded";
+  const isDockActive = (dockOp === "docking" || dockOp === "searching" || dockOp === "servo" || dockOp === "staging" || dockOp === "navigating" || dockOp === "approaching" || dockOp === "aligning") && !isDockComplete;
+  const isUndockActive = (dockOp === "undocking") && !isDockComplete;
+
   const titleEl = document.getElementById("dock-progress-title");
   const subEl = document.getElementById("dock-progress-subtitle");
   const markerEl = document.getElementById("dock-marker-icon");
   const cancelBtn = document.getElementById("btn-cancel-docking");
   const cameraCard = document.getElementById("dock-camera-card");
-  const cameraImg = document.getElementById("dock-camera-preview-img");
   const tagStatusEl = document.getElementById("dock-camera-tag-status");
   const radarAnim = document.getElementById("docking-target-animation");
 
-  if (dockOp === "docking") {
-    dockScreen.style.display = "flex";
+  if (isDockActive) {
+    if (dockScreen.style.display !== "flex") dockScreen.style.display = "flex";
     if (cameraCard) cameraCard.style.display = "flex";
     if (radarAnim) radarAnim.style.display = "none";
 
-    // Start zero-latency double-buffered camera preview
+    // Start zero-latency camera preview
     startDockCamStream();
 
     const tagVisible = !!((dockData && dockData.tag_visible) || (stateData && stateData.dock && stateData.dock.tag_visible));
@@ -177,8 +215,8 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
       ? "Locked onto dock marker — visual-servoing into charging contact pins..."
       : "Aligning robot heading and searching for charging station marker...";
     if (cancelBtn) cancelBtn.textContent = "Cancel Docking";
-  } else if (dockOp === "undocking") {
-    dockScreen.style.display = "flex";
+  } else if (isUndockActive) {
+    if (dockScreen.style.display !== "flex") dockScreen.style.display = "flex";
     if (cameraCard) cameraCard.style.display = "none";
     if (radarAnim) radarAnim.style.display = "flex";
     stopDockCamStream();
@@ -188,16 +226,12 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
     if (markerEl) markerEl.textContent = "⚡";
     if (cancelBtn) cancelBtn.textContent = "Cancel Undock";
   } else {
-    // Docking/undocking idle or finished -> disconnect camera and auto-hide
+    // Docking/undocking idle, completed, or failed -> disconnect camera and auto-hide
     stopDockCamStream();
-    if (dockScreen.style.display === "flex") {
+    if (dockScreen.style.display !== "none") {
       dockScreen.style.display = "none";
       if (previousDockOperation === "docking") {
-        const isCharging = !!(stateData && (
-          (stateData.dock && (stateData.dock.status === "charging" || stateData.dock.status === "full")) ||
-          (stateData.battery && stateData.battery.charging)
-        ));
-        if (dockOp === "docked" || isCharging) {
+        if (isDockComplete) {
           showToast("Robot successfully docked & charging!");
           triggerFaceExpression("happy");
         } else if (dockOp === "failed") {
@@ -477,6 +511,12 @@ function startPolling() {
         });
       }
 
+      // 7. Cached Waypoints (debounced to every 20 seconds)
+      if (!window._lastWpCheck || Date.now() - window._lastWpCheck > 20000) {
+        window._lastWpCheck = Date.now();
+        refreshCachedWaypoints();
+      }
+
     } catch (e) {
       // Offline / connecting
     }
@@ -487,8 +527,8 @@ function startPolling() {
   };
 
   poll();
-  // Poll faster (800ms) for snappy UI updates
-  setInterval(poll, 800);
+  // Relaxed background poll interval (2000ms) with instant event-driven reactivity via WebSocket
+  setInterval(poll, 2000);
 
   // Connect WebSocket for instant zero-latency event reactivity
   initSdkEventsWebSocket();

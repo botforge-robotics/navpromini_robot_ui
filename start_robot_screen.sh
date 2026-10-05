@@ -68,16 +68,16 @@ sleep 0.5
 APPIMAGE_BIN="/home/navpromini/navpromini_robot_ui_app/current/NavProMiniRobotUI-aarch64.AppImage"
 LOCAL_APPIMAGE="${UI_DIR}/NavProMiniRobotUI-$(uname -m).AppImage"
 
-# Launch Headless AppImage or Native WebKitGTK Runner (No browser)
-if [ -x "${APPIMAGE_BIN}" ]; then
+# Launch Headless Native WebKitGTK Runner or AppImage
+if [ -f "${UI_DIR}/navpromini_robot_ui_runner.py" ]; then
+    echo "[Robot Screen] Launching Live Native Headless WebKitGTK Kiosk Runner..."
+    setsid python3 "${UI_DIR}/navpromini_robot_ui_runner.py" "${URL}" </dev/null >/tmp/navpro_screen.log 2>&1 &
+elif [ -x "${APPIMAGE_BIN}" ]; then
     echo "[Robot Screen] Launching Headless AppImage: ${APPIMAGE_BIN}..."
     setsid "${APPIMAGE_BIN}" "${URL}" </dev/null >/tmp/navpro_screen.log 2>&1 &
 elif [ -x "${LOCAL_APPIMAGE}" ]; then
     echo "[Robot Screen] Launching Local Headless AppImage: ${LOCAL_APPIMAGE}..."
     setsid "${LOCAL_APPIMAGE}" "${URL}" </dev/null >/tmp/navpro_screen.log 2>&1 &
-elif [ -f "${UI_DIR}/navpromini_robot_ui_runner.py" ]; then
-    echo "[Robot Screen] Launching Native Headless WebKitGTK Kiosk Runner..."
-    setsid python3 "${UI_DIR}/navpromini_robot_ui_runner.py" "${URL}" </dev/null >/tmp/navpro_screen.log 2>&1 &
 elif command -v epiphany-browser > /dev/null 2>&1 || command -v epiphany > /dev/null 2>&1; then
     BROWSER_CMD="$(command -v epiphany-browser || command -v epiphany)"
     setsid "${BROWSER_CMD}" "${URL}" </dev/null >/tmp/navpro_screen.log 2>&1 &

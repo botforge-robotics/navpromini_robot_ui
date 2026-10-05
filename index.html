@@ -1317,6 +1317,19 @@
       </svg>
     </button>
 
+    <!-- Circular Audio Mute / Unmute Button at Top Right -->
+    <button type="button" class="fullscreen-circle-audio-btn" id="btn-fullscreen-audio" onclick="toggleFullscreenAudio(event)" title="Toggle Sound (Tap to Unmute/Mute)">
+      <svg id="icon-fullscreen-audio-on" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+      </svg>
+      <svg id="icon-fullscreen-audio-off" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+        <line x1="23" y1="9" x2="17" y2="15"></line>
+        <line x1="17" y1="9" x2="23" y2="15"></line>
+      </svg>
+    </button>
+
     <!-- Media Display Stage -->
     <div class="fullscreen-media-stage" id="fullscreen-media-stage">
       <img id="fullscreen-img-viewer" class="fullscreen-media-display" src="" alt="Fullscreen Media Display" style="display: none;">

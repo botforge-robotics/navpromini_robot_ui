@@ -148,6 +148,56 @@
     }
   }
 
+  // --- Global Web Audio & AudioContext Unlocking ---
+  let audioContextUnlocked = false;
+  function unlockGlobalAudio() {
+    if (audioContextUnlocked) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        audioContextUnlocked = true;
+      }
+    } catch (_) {}
+  }
+  document.addEventListener('touchstart', unlockGlobalAudio, { passive: true });
+  document.addEventListener('click', unlockGlobalAudio, { passive: true });
+
+  window.toggleFullscreenAudio = function(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const vidEl = document.getElementById('fullscreen-video-viewer');
+    if (!vidEl) return;
+    unlockGlobalAudio();
+    vidEl.muted = !vidEl.muted;
+    if (!vidEl.muted && vidEl.volume === 0) {
+      vidEl.volume = 1.0;
+    }
+    updateAudioToggleUI(!vidEl.muted && vidEl.volume > 0);
+  };
+
+  function updateAudioToggleUI(isSoundOn) {
+    const audioBtn = document.getElementById('btn-fullscreen-audio');
+    const iconOn = document.getElementById('icon-fullscreen-audio-on');
+    const iconOff = document.getElementById('icon-fullscreen-audio-off');
+    if (!audioBtn) return;
+    if (isSoundOn) {
+      if (iconOn) iconOn.style.display = 'block';
+      if (iconOff) iconOff.style.display = 'none';
+      audioBtn.title = 'Sound On (Tap to Mute)';
+      audioBtn.style.background = 'rgba(15, 23, 42, 0.85)';
+      audioBtn.style.borderColor = 'rgba(255, 255, 255, 0.28)';
+    } else {
+      if (iconOn) iconOn.style.display = 'none';
+      if (iconOff) iconOff.style.display = 'block';
+      audioBtn.title = 'Sound Muted (Tap to Unmute)';
+      audioBtn.style.background = 'rgba(239, 68, 68, 0.9)';
+      audioBtn.style.borderColor = 'rgba(255, 255, 255, 0.7)';
+    }
+  }
+
   // --- Fullscreen Preview / Video Player ---
   window.openFullscreenMedia = function(index) {
     if (!mediaItems || mediaItems.length === 0) return;
@@ -156,9 +206,11 @@
     if (!item) return;
 
     isFullscreenActive = true;
+    unlockGlobalAudio();
     const overlay = document.getElementById('fullscreen-media-overlay');
     const imgEl = document.getElementById('fullscreen-img-viewer');
     const vidEl = document.getElementById('fullscreen-video-viewer');
+    const audioBtn = document.getElementById('btn-fullscreen-audio');
     const filenameEl = document.getElementById('fullscreen-filename');
     const counterEl = document.getElementById('fullscreen-counter');
 
@@ -177,13 +229,25 @@
 
     if (isVideo) {
       if (imgEl) imgEl.style.display = 'none';
+      if (audioBtn) audioBtn.style.display = 'flex';
       if (vidEl) {
         vidEl.style.display = 'block';
+        vidEl.controls = true;
+        vidEl.muted = false;
+        vidEl.volume = 1.0;
         vidEl.src = item.url;
         vidEl.currentTime = 0;
-        vidEl.play().catch(e => console.log('Fullscreen video autoplay:', e));
+        vidEl.onvolumechange = () => updateAudioToggleUI(!vidEl.muted && vidEl.volume > 0);
+        updateAudioToggleUI(true);
+        vidEl.play().catch(e => {
+          console.warn('[Media] Video play unmuted rejected, falling back to muted play:', e);
+          vidEl.muted = true;
+          vidEl.play().catch(err => console.error('[Media] Video play completely failed:', err));
+          updateAudioToggleUI(false);
+        });
       }
     } else {
+      if (audioBtn) audioBtn.style.display = 'none';
       if (vidEl) {
         vidEl.pause();
         vidEl.src = '';
@@ -202,9 +266,11 @@
 
   window.showMissionMediaFullscreen = function(url, filename, isVideo, onClosed) {
     isFullscreenActive = true;
+    unlockGlobalAudio();
     const overlay = document.getElementById('fullscreen-media-overlay');
     const imgEl = document.getElementById('fullscreen-img-viewer');
     const vidEl = document.getElementById('fullscreen-video-viewer');
+    const audioBtn = document.getElementById('btn-fullscreen-audio');
     const filenameEl = document.getElementById('fullscreen-filename');
     const counterEl = document.getElementById('fullscreen-counter');
     const prevBtn = document.getElementById('btn-fullscreen-prev');
@@ -228,6 +294,7 @@
         imgEl.src = '';
         imgEl.style.display = 'none';
       }
+      if (audioBtn) audioBtn.style.display = 'flex';
       if (vidEl) {
         vidEl.style.display = 'block';
         vidEl.loop = false;
@@ -236,6 +303,8 @@
         vidEl.volume = 1.0;
         vidEl.src = url;
         vidEl.currentTime = 0;
+        vidEl.onvolumechange = () => updateAudioToggleUI(!vidEl.muted && vidEl.volume > 0);
+        updateAudioToggleUI(true);
         vidEl.onended = () => {
           console.log('[Media] Video finished playing naturally -> advancing mission');
           window.closeFullscreenMedia(true);
@@ -246,10 +315,12 @@
             console.warn('[Media] Autoplay unmuted failed, falling back to muted play:', err);
             vidEl.muted = true;
             vidEl.play().catch(e => console.error('[Media] Video play completely failed:', e));
+            updateAudioToggleUI(false);
           });
         }
       }
     } else {
+      if (audioBtn) audioBtn.style.display = 'none';
       if (vidEl) {
         vidEl.pause();
         vidEl.onended = null;
@@ -268,15 +339,18 @@
     const overlay = document.getElementById('fullscreen-media-overlay');
     const vidEl = document.getElementById('fullscreen-video-viewer');
     const imgEl = document.getElementById('fullscreen-img-viewer');
+    const audioBtn = document.getElementById('btn-fullscreen-audio');
     const prevBtn = document.getElementById('btn-fullscreen-prev');
     const nextBtn = document.getElementById('btn-fullscreen-next');
 
     if (prevBtn) prevBtn.style.display = '';
     if (nextBtn) nextBtn.style.display = '';
+    if (audioBtn) audioBtn.style.display = 'none';
 
     if (vidEl) {
       vidEl.pause();
       vidEl.onended = null;
+      vidEl.onvolumechange = null;
       vidEl.src = '';
       vidEl.style.display = 'none';
     }

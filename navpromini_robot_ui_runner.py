@@ -101,9 +101,39 @@ class RobotKioskWindow(Gtk.Window):
             pass
         settings.set_zoom_text_only(False)
 
-        # WebKit WebView with Ephemeral Context
-        self.webview = WebKit2.WebView.new_with_context(context)
-        self.webview.set_settings(settings)
+        # WebKit Website Policies: Explicitly ALLOW unmuted autoplay for robot screen
+        website_policies = None
+        try:
+            website_policies = WebKit2.WebsitePolicies(autoplay=WebKit2.AutoplayPolicy.ALLOW)
+        except Exception as ex:
+            logger.warning(f"Could not initialize WebKit2.WebsitePolicies: {ex}")
+
+        # WebKit WebView with Ephemeral Context & Unrestricted Audio Policies
+        try:
+            if website_policies is not None:
+                self.webview = WebKit2.WebView(web_context=context, settings=settings, website_policies=website_policies)
+            else:
+                self.webview = WebKit2.WebView.new_with_context(context)
+                self.webview.set_settings(settings)
+        except Exception:
+            self.webview = WebKit2.WebView.new_with_context(context)
+            self.webview.set_settings(settings)
+
+        # Enforce ALLOW autoplay policy on all navigations
+        def _on_decide_policy(view, decision, dt):
+            if dt == WebKit2.PolicyDecisionType.NAVIGATION_ACTION:
+                try:
+                    p = WebKit2.WebsitePolicies(autoplay=WebKit2.AutoplayPolicy.ALLOW)
+                    decision.use_with_policies(p)
+                    return True
+                except Exception:
+                    pass
+            return False
+        try:
+            self.webview.connect('decide-policy', _on_decide_policy)
+        except Exception:
+            pass
+
         # Suppress context menu for clean touch kiosk experience
         self.webview.connect('context-menu', lambda *args: True)
 

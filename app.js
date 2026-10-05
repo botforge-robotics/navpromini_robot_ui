@@ -128,10 +128,9 @@ window.setSwipeIndex = function(index) {
     window.isDndActive = false;
     if (dndPill) dndPill.style.display = "none";
 
-    // Pause video playback to save CPU when leaving media slide
-    const vid = document.getElementById("media-video-viewer");
-    if (vid && !vid.paused) {
-      vid.pause();
+    // Close fullscreen preview and pause video playback when leaving media slide
+    if (typeof window.closeFullscreenMedia === "function") {
+      window.closeFullscreenMedia();
     }
   }
 

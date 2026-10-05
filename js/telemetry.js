@@ -180,10 +180,10 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
   }
 
   const isCharging = !!(
-    (dockData && (dockData.charging || dockData.state === "charging")) ||
+    (dockData && dockData.charging) ||
     (stateData && (
-      (stateData.dock && stateData.dock.status === "charging") ||
-      (stateData.battery && (stateData.battery.charging && (stateData.battery.current === undefined || stateData.battery.current === null || stateData.battery.current > 0.04)))
+      (stateData.dock && stateData.dock.charging) ||
+      (stateData.battery && stateData.battery.charging)
     ))
   );
 
@@ -264,10 +264,11 @@ function updatePowerState(pState) {
   try {
     const b = pState.data || pState.battery || pState;
     const isCharging = !!(
-      (b.charging && (b.current === undefined || b.current === null || b.current > 0.04)) ||
-      (b.status === "charging" || b.status === "Charging") ||
-      (b.power_supply_status === 1) ||
-      (pState.detail && (pState.detail.charger_connected || (pState.detail.pack_current_a && pState.detail.pack_current_a > 0.05)))
+      b.charging ||
+      b.status === "charging" ||
+      b.status === "Charging" ||
+      b.power_supply_status === 1 ||
+      (pState.detail && pState.detail.charger_connected && (pState.detail.pack_current_a === undefined || pState.detail.pack_current_a > 0.25))
     );
     const rawPct = b.percentage !== undefined ? b.percentage : (b.soc_percent !== undefined ? b.soc_percent : (b.battery_level !== undefined ? b.battery_level : null));
     
@@ -298,10 +299,12 @@ function updatePowerState(pState) {
       const chargingPct = document.getElementById("charging-screen-pct");
       if (chargingPct) chargingPct.textContent = `${displayPct}%`;
 
-      // Truly full when hardware reports full/completed OR SOC >= 99.5% with float/saturation current (<= 0.25A)
-      const isFull = b.status === "Full" || b.status === "full" || b.status === "completed" ||
-                     b.power_supply_status === "Full" || b.power_supply_status === 4 ||
-                     (val >= 99.5 && (b.current === undefined || b.current === null || b.current <= 0.25));
+      // Truly full ONLY when actively connected/charging AND reported full or topped-off (>= 99.5%)
+      const isFull = isCharging && (
+        b.status === "Full" || b.status === "full" || b.status === "completed" ||
+        b.power_supply_status === "Full" || b.power_supply_status === 4 ||
+        val >= 99.5
+      );
 
       const chargingStateText = document.getElementById("charging-state-text");
       const chargingInfoDesc = document.getElementById("charging-info-desc");

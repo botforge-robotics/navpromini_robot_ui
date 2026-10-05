@@ -196,6 +196,10 @@
     }
   };
 
+  window.isMediaFullscreenActive = function() {
+    return isFullscreenActive;
+  };
+
   window.showMissionMediaFullscreen = function(url, filename, isVideo, onClosed) {
     isFullscreenActive = true;
     const overlay = document.getElementById('fullscreen-media-overlay');
@@ -217,17 +221,38 @@
     overlay.style.opacity = '1';
     overlay.style.display = 'flex';
 
+    window._missionMediaOnClosed = onClosed;
+
     if (isVideo) {
-      if (imgEl) imgEl.style.display = 'none';
+      if (imgEl) {
+        imgEl.src = '';
+        imgEl.style.display = 'none';
+      }
       if (vidEl) {
         vidEl.style.display = 'block';
+        vidEl.loop = false;
+        vidEl.controls = true;
+        vidEl.muted = false;
+        vidEl.volume = 1.0;
         vidEl.src = url;
         vidEl.currentTime = 0;
-        vidEl.play().catch(e => console.log('Fullscreen video autoplay:', e));
+        vidEl.onended = () => {
+          console.log('[Media] Video finished playing naturally -> advancing mission');
+          window.closeFullscreenMedia(true);
+        };
+        const playPromise = vidEl.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            console.warn('[Media] Autoplay unmuted failed, falling back to muted play:', err);
+            vidEl.muted = true;
+            vidEl.play().catch(e => console.error('[Media] Video play completely failed:', e));
+          });
+        }
       }
     } else {
       if (vidEl) {
         vidEl.pause();
+        vidEl.onended = null;
         vidEl.src = '';
         vidEl.style.display = 'none';
       }
@@ -236,10 +261,9 @@
         imgEl.src = url;
       }
     }
-    window._missionMediaOnClosed = onClosed;
   };
 
-  window.closeFullscreenMedia = function() {
+  window.closeFullscreenMedia = function(isUserDismiss = false) {
     isFullscreenActive = false;
     const overlay = document.getElementById('fullscreen-media-overlay');
     const vidEl = document.getElementById('fullscreen-video-viewer');
@@ -252,6 +276,7 @@
 
     if (vidEl) {
       vidEl.pause();
+      vidEl.onended = null;
       vidEl.src = '';
       vidEl.style.display = 'none';
     }
@@ -267,10 +292,12 @@
       overlay.style.opacity = '1';
     }
 
-    if (window._missionMediaOnClosed) {
+    if (isUserDismiss && window._missionMediaOnClosed) {
       const cb = window._missionMediaOnClosed;
       window._missionMediaOnClosed = null;
       try { cb(); } catch (_) {}
+    } else {
+      window._missionMediaOnClosed = null;
     }
   };
 
@@ -343,7 +370,7 @@
         overlay.style.transform = 'translateY(100vh)';
         overlay.style.opacity = '0';
         setTimeout(() => {
-          closeFullscreenMedia();
+          closeFullscreenMedia(true);
         }, 220);
         return;
       }
@@ -367,7 +394,7 @@
     window.addEventListener('keydown', (e) => {
       if (!isFullscreenActive) return;
       if (e.key === 'Escape') {
-        closeFullscreenMedia();
+        closeFullscreenMedia(true);
       } else if (e.key === 'ArrowRight') {
         nextMediaItem();
       } else if (e.key === 'ArrowLeft') {
@@ -412,7 +439,7 @@
         
         // If the deleted file was open in fullscreen, close fullscreen
         if (isFullscreenActive && mediaItems[currentMediaIndex] && mediaItems[currentMediaIndex].filename === filename) {
-          closeFullscreenMedia();
+          closeFullscreenMedia(true);
         }
 
         await fetchMediaList();

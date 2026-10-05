@@ -510,10 +510,10 @@ function startPolling() {
           if (interaction.interaction_id !== activeInteractionId) {
             handleActiveInteraction(interaction);
           }
-        } else if (activeInteractionId) {
+        } else if (activeInteractionId && (!window.isMediaFullscreenActive || !window.isMediaFullscreenActive())) {
           dismissActiveInteraction();
         }
-      } else if (activeInteractionId) {
+      } else if (activeInteractionId && (!window.isMediaFullscreenActive || !window.isMediaFullscreenActive())) {
         dismissActiveInteraction();
       }
 

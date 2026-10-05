@@ -736,8 +736,9 @@ function dismissActiveInteraction() {
 
   const overlay = document.getElementById("interaction-overlay");
   if (overlay) overlay.style.display = "none";
+  window._missionMediaOnClosed = null;
   if (window.closeFullscreenMedia) {
-    window.closeFullscreenMedia();
+    window.closeFullscreenMedia(false);
   }
   activeInteractionId = null;
   triggerFaceExpression("happy");

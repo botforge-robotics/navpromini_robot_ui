@@ -30,6 +30,14 @@ function updateNavigationState(navData, isMissionActive = false) {
     const navScreen = document.getElementById("screen-nav-progress");
     if (!navScreen) return;
 
+    // DND Screen guard: if media player / DND screen is active, NEVER show navigation popup!
+    if (window.isDndActive) {
+      if (navScreen.style.display === "flex") {
+        navScreen.style.display = "none";
+      }
+      return;
+    }
+
     // Mission mode guard: if a mission workflow is executing, the mission progress screen is active.
     // Navigation progress screen MUST NOT collide with mission goto steps!
     if (isMissionActive) {

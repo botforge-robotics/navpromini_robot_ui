@@ -83,7 +83,7 @@ window.startMission = async function(missionId, missionName) {
     const nodeEl = document.getElementById("mission-screen-node");
     if (titleEl) titleEl.textContent = missionName || missionId;
     if (nodeEl) nodeEl.textContent = "Initializing routine...";
-    if (missionScreen) missionScreen.style.display = "flex";
+    if (missionScreen && !window.isDndActive) missionScreen.style.display = "flex";
 
     await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(missionId)}/start`, { method: "POST" });
     activeMissionId = missionId;
@@ -122,6 +122,13 @@ let lastObservedMissionState = "idle";
 function updateMissionExecutionScreen(mStatus) {
   const missionScreen = document.getElementById("screen-mission-progress");
   const floatingBanner = document.getElementById("mission-floating-banner");
+
+  // DND Screen guard: if media player / DND screen is active, NEVER show mission popups or floating banners!
+  if (window.isDndActive) {
+    if (missionScreen) missionScreen.style.display = "none";
+    if (floatingBanner) floatingBanner.style.display = "none";
+    return;
+  }
 
   const isMissionActive = mStatus && ["running", "waiting_for_user", "paused", "charging_paused"].includes(mStatus.state);
 

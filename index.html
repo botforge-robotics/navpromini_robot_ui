@@ -30,9 +30,18 @@
       </div>
 
       <div class="header-center">
+        <div class="header-slide-nav" id="header-slide-nav">
+          <button type="button" class="slide-nav-pill active" id="pill-slide-0" onclick="setSwipeIndex(0)">Hub</button>
+          <button type="button" class="slide-nav-pill" id="pill-slide-1" onclick="setSwipeIndex(1)">Shortcuts</button>
+          <button type="button" class="slide-nav-pill" id="pill-slide-2" onclick="setSwipeIndex(2)">📺 Media DND</button>
+        </div>
         <div class="state-pill" id="state-pill">
           <span class="state-dot"></span>
           <span class="state-text" id="state-text">IDLE</span>
+        </div>
+        <div class="dnd-indicator-pill" id="dnd-indicator-pill" style="display: none;">
+          <span class="dnd-moon">🌙</span>
+          <span class="dnd-text">DND ACTIVE</span>
         </div>
       </div>
 
@@ -205,9 +214,14 @@
                     </button>
                   </div>
 
-                  <button class="dashboard-swipe-prompt" id="dash-swipe-to-shortcuts" onclick="setSwipeIndex(1)">
-                    <span>Shortcuts ➔</span>
-                  </button>
+                  <div class="dashboard-swipe-nav-row">
+                    <button class="dashboard-swipe-prompt" id="dash-swipe-to-shortcuts" onclick="setSwipeIndex(1)">
+                      <span>Shortcuts ➔</span>
+                    </button>
+                    <button class="dashboard-swipe-prompt dash-prompt-media" id="dash-swipe-to-media" onclick="setSwipeIndex(2)">
+                      <span>📺 Media DND ➔</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -234,12 +248,122 @@
                 </div>
               </div>
 
-              <!-- Bottom Bar with Navigation Back to Dashboard -->
+              <!-- Bottom Bar with Navigation Back to Dashboard or forward to Media Player -->
               <div class="shortcuts-bottom-bar">
                 <button class="shortcuts-nav-btn" onclick="setSwipeIndex(0)">
                   <span>← Back to Dashboard</span>
                 </button>
+                <button class="shortcuts-nav-btn shortcuts-nav-next" onclick="setSwipeIndex(2)">
+                  <span>Media Player (DND) ➔</span>
+                </button>
               </div>
+            </div>
+          </div>
+
+          <!-- ============================================================= -->
+          <!-- SLIDE 2: FULL IMAGE VIEWER & VIDEO PLAYER (DND SCREEN)        -->
+          <!-- ============================================================= -->
+          <div class="swipe-slide" id="slide-media">
+            <div class="media-slide-content">
+              <!-- Media Player Top Toolbar -->
+              <div class="media-toolbar">
+                <div class="media-toolbar-left">
+                  <button type="button" class="media-nav-back-btn" onclick="setSwipeIndex(1)" title="Back to Shortcuts">
+                    <span>← Shortcuts</span>
+                  </button>
+                  <button type="button" class="media-nav-back-btn media-nav-dash-btn" onclick="setSwipeIndex(0)" title="Back to Dashboard">
+                    <span>Hub</span>
+                  </button>
+                  <div class="media-file-info-badge">
+                    <span class="media-active-icon" id="media-current-icon">🖼️</span>
+                    <span class="media-active-name" id="media-current-name">No Media</span>
+                  </div>
+                </div>
+
+                <div class="media-dnd-status-pill">
+                  <span class="media-dnd-dot"></span>
+                  <span class="media-dnd-label">DND Screen (Popups Suppressed)</span>
+                </div>
+
+                <div class="media-toolbar-right">
+                  <button type="button" class="btn btn-sm btn-secondary media-btn-action" id="btn-media-autoplay" onclick="toggleMediaAutoplay()" title="Toggle Slideshow / Autoplay">
+                    <span id="media-autoplay-icon">▶</span>
+                    <span id="media-autoplay-text">Autoplay</span>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-secondary media-btn-action" id="btn-media-fit" onclick="toggleMediaFit()" title="Toggle Contain / Cover">
+                    <span id="media-fit-icon">🔲</span>
+                    <span id="media-fit-text">Fit</span>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-primary media-btn-action" id="btn-media-upload" onclick="triggerMediaUpload()" title="Upload Image or Video">
+                    <span>+ Upload</span>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-danger media-btn-action" id="btn-media-delete-active" onclick="confirmDeleteActiveMedia()" title="Delete Current File">
+                    <span>🗑️</span>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-secondary media-btn-action" id="btn-media-fullscreen" onclick="toggleMediaFullscreen()" title="Fullscreen Preview">
+                    <span id="media-fullscreen-icon">⛶</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Media Viewer & Video Player Stage -->
+              <div class="media-stage-wrapper" id="media-stage-wrapper">
+                <!-- Image Display -->
+                <img id="media-img-viewer" class="media-stage-element" src="" alt="Robot Media Display" style="display: none;">
+
+                <!-- Video Player Display -->
+                <video id="media-video-viewer" class="media-stage-element" playsinline loop muted controls style="display: none;"></video>
+
+                <!-- Stage Overlay Touch Gestures Zone & Arrows -->
+                <div class="media-stage-touch-zone" id="media-stage-touch-zone">
+                  <button type="button" class="stage-nav-arrow stage-arrow-left" onclick="prevMediaItem(event)" title="Previous">‹</button>
+                  <button type="button" class="stage-nav-arrow stage-arrow-right" onclick="nextMediaItem(event)" title="Next">›</button>
+                </div>
+
+                <!-- Empty State -->
+                <div class="media-empty-state" id="media-empty-state">
+                  <div class="media-empty-icon-box">
+                    <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.8">
+                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                    </svg>
+                  </div>
+                  <h3>Media Display & DND Screen</h3>
+                  <p>Play uninterrupted full-screen images and videos. Navigation & mission popups are muted on this screen.</p>
+                  <p class="media-empty-hint">Share files from Mission Planner mobile/desktop app, or upload directly:</p>
+                  <button type="button" class="btn btn-primary btn-lg" onclick="triggerMediaUpload()">Upload Media Files</button>
+                </div>
+
+                <!-- Delete Confirmation Banner / Modal -->
+                <div class="media-delete-overlay" id="media-delete-overlay" style="display: none;">
+                  <div class="media-delete-dialog">
+                    <h4>Delete Media File?</h4>
+                    <p id="media-delete-dialog-filename">filename.jpg</p>
+                    <p class="media-delete-dialog-sub">This will permanently delete the file from the robot's media folder.</p>
+                    <div class="media-delete-actions">
+                      <button type="button" class="btn btn-secondary" onclick="dismissDeleteMediaModal()">Cancel</button>
+                      <button type="button" class="btn btn-danger" id="btn-confirm-delete-media">Delete File</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bottom Playlist & Thumbnail Carousel -->
+              <div class="media-playlist-bar" id="media-playlist-bar">
+                <div class="media-playlist-header">
+                  <span class="media-playlist-title">Files (<span id="media-file-count">0</span>) • <small>Swipe card left to delete</small></span>
+                  <div class="media-playlist-controls">
+                    <button type="button" class="btn btn-xs btn-secondary" onclick="fetchMediaList()">⟳ Refresh</button>
+                  </div>
+                </div>
+                <div class="media-playlist-track" id="media-playlist-track">
+                  <!-- Dynamically rendered thumbnail cards -->
+                </div>
+              </div>
+
+              <!-- Hidden File Input for Kiosk Upload -->
+              <input type="file" id="kiosk-media-upload-input" accept="image/*,video/*" multiple style="display: none;" onchange="handleMediaFilesSelected(this.files)">
             </div>
           </div>
         </div>
@@ -1252,6 +1376,7 @@
   <script src="js/missions.js?v=221"></script>
   <script src="js/settings.js?v=221"></script>
   <script src="js/shortcuts.js?v=221"></script>
+  <script src="js/media_player.js?v=221"></script>
   <script src="app.js?v=221"></script>
 </body>
 </html>

@@ -15,9 +15,10 @@ import threading
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
-# Enable hardware compositing for WebKitGTK
+# Enable hardware compositing and smooth video playback for WebKitGTK
 os.environ.setdefault("WEBKIT_FORCE_COMPOSITING_MODE", "1")
 os.environ.setdefault("WEBKIT_DISABLE_COMPOSITING_MODE", "0")
+os.environ.setdefault("GST_GL_WINDOW", "wayland,x11")
 
 import gi
 gi.require_version('Gtk', '3.0')
@@ -83,6 +84,14 @@ class RobotKioskWindow(Gtk.Window):
             pass
         try:
             settings.set_enable_webaudio(True)
+        except Exception:
+            pass
+        try:
+            settings.set_enable_mediasource(True)
+        except Exception:
+            pass
+        try:
+            settings.set_enable_media_stream(True)
         except Exception:
             pass
         settings.set_enable_developer_extras(True)

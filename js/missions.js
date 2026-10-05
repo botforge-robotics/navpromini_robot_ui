@@ -561,63 +561,79 @@ function handleActiveInteraction(interaction) {
   if (!interaction || !interaction.interaction_id) return;
   activeInteractionId = interaction.interaction_id;
 
+  const isBrowser = Boolean(
+    interaction.subtype === "browser" ||
+    interaction.type === "browser" ||
+    interaction.subtype === "ui_browser" ||
+    interaction.type === "ui_browser" ||
+    interaction.node_type === "ui_browser" ||
+    (interaction.url && typeof interaction.url === "string" && (interaction.url.startsWith("http://") || interaction.url.startsWith("https://") || interaction.url.startsWith("/")))
+  );
+
+  const browserContainer = document.getElementById("robot-embedded-browser");
+  const browserIframe = document.getElementById("robot-browser-iframe");
   const overlay = document.getElementById("interaction-overlay");
+
+  if (isBrowser) {
+    // Hide standard interaction popup completely
+    if (overlay) overlay.style.display = "none";
+    if (browserContainer && browserIframe) {
+      browserIframe.src = interaction.url || "";
+      browserContainer.style.display = "flex";
+    }
+    triggerFaceExpression("thinking");
+    if (interaction.sound_alert !== false && window.playAlertTone) {
+      window.playAlertTone();
+    }
+    return;
+  }
+
+  // Hide browser if not a browser interaction
+  if (browserContainer) browserContainer.style.display = "none";
+  if (browserIframe) browserIframe.src = "about:blank";
+
+  // Standard interactive kiosk popup (form, choices, notifications)
+  if (!overlay) return;
+
   const titleEl = document.getElementById("interaction-title");
   const msgEl = document.getElementById("interaction-message");
   const formEl = document.getElementById("kiosk-form");
   const choicesEl = document.getElementById("kiosk-choices");
-
-  if (!overlay) return;
+  const destEl = document.getElementById("kiosk-destinations");
 
   if (titleEl) titleEl.textContent = interaction.title || "Action Required";
   if (msgEl) msgEl.textContent = interaction.message || "";
 
-  const isBrowser = interaction.subtype === "browser" ||
-                    interaction.type === "browser";
+  const isNotification = (
+    interaction.subtype === "notification" ||
+    interaction.type === "notification"
+  );
 
-  const isNotification = !isBrowser && (
-                         interaction.subtype === "notification" ||
-                         interaction.type === "notification");
+  const isForm = !isNotification && (
+    interaction.subtype === "form" ||
+    interaction.subtype === "dynamic_form" ||
+    interaction.type === "form" ||
+    (Array.isArray(interaction.fields) && interaction.fields.length > 0)
+  );
 
-  const isForm = !isBrowser && !isNotification && (
-                 interaction.subtype === "form" ||
-                 interaction.subtype === "dynamic_form" ||
-                 interaction.type === "form" ||
-                 (Array.isArray(interaction.fields) && interaction.fields.length > 0));
+  if (destEl) destEl.style.display = "none";
 
-  const browserEl = document.getElementById("kiosk-browser");
-  const browserIframe = document.getElementById("kiosk-browser-iframe");
-  const destEl = document.getElementById("kiosk-destinations");
-
-  if (isBrowser) {
-    if (formEl) formEl.style.display = "none";
-    if (choicesEl) choicesEl.style.display = "none";
-    if (destEl) destEl.style.display = "none";
-    if (browserEl) {
-      browserEl.style.display = "flex";
-      if (browserIframe) {
-        browserIframe.src = interaction.url || "";
-      }
-    }
-  } else if (isNotification) {
-    if (browserEl) browserEl.style.display = "none";
+  if (isNotification) {
     renderInteractionNotification(interaction);
     if (formEl) formEl.style.display = "none";
     if (choicesEl) choicesEl.style.display = "flex";
   } else if (isForm) {
-    if (browserEl) browserEl.style.display = "none";
     renderInteractionForm(interaction);
     if (formEl) formEl.style.display = "flex";
     if (choicesEl) choicesEl.style.display = "none";
   } else {
-    if (browserEl) browserEl.style.display = "none";
     renderInteractionChoices(interaction);
     if (formEl) formEl.style.display = "none";
     if (choicesEl) choicesEl.style.display = "flex";
   }
 
   // Handle countdown timer and progress bar
-  const timeoutSec = isBrowser ? (Number(interaction.timeout_sec) || 0) : (Number(interaction.timeout_sec) || 60);
+  const timeoutSec = Number(interaction.timeout_sec) || 60;
   const startedAt = interaction.started_at ? (Number(interaction.started_at) * 1000) : Date.now();
   const timerSecEl = document.getElementById("interaction-timer-sec");
   const progressFillEl = document.getElementById("timer-progress-fill");
@@ -657,14 +673,20 @@ function handleActiveInteraction(interaction) {
     window.playAlertTone();
   }
   if (interaction.speech_text && window.speakText) {
-    // Delay speech so it starts cleanly after the alert chime completes
     setTimeout(() => {
       window.speakText(interaction.speech_text);
-    }, interaction.sound_alert !== false ? 500 : 80);
+    }, 400);
   }
 }
 
+window.handleActiveInteraction = handleActiveInteraction;
+window.dismissActiveInteraction = dismissActiveInteraction;
+
 window.closeEmbeddedBrowser = async function() {
+  const browserContainer = document.getElementById("robot-embedded-browser");
+  const browserIframe = document.getElementById("robot-browser-iframe");
+  if (browserContainer) browserContainer.style.display = "none";
+  if (browserIframe) browserIframe.src = "about:blank";
   await submitInteractionResponse({ action: "closed", status: "closed" });
 };
 
@@ -673,12 +695,13 @@ function dismissActiveInteraction() {
     clearInterval(window._interactionTimerInterval);
     window._interactionTimerInterval = null;
   }
+  const browserContainer = document.getElementById("robot-embedded-browser");
+  const browserIframe = document.getElementById("robot-browser-iframe");
+  if (browserContainer) browserContainer.style.display = "none";
+  if (browserIframe) browserIframe.src = "about:blank";
+
   const overlay = document.getElementById("interaction-overlay");
   if (overlay) overlay.style.display = "none";
-  const browserIframe = document.getElementById("kiosk-browser-iframe");
-  if (browserIframe) browserIframe.src = "about:blank";
-  const browserEl = document.getElementById("kiosk-browser");
-  if (browserEl) browserEl.style.display = "none";
   activeInteractionId = null;
   triggerFaceExpression("happy");
 }

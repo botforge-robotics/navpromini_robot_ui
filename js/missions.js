@@ -264,22 +264,20 @@ function initMissionExecutionControls() {
       isDanger: true,
       icon: "🛑",
       onConfirm: async () => {
-        if (!activeMissionId) {
-          try {
-            const res = await fetch(`${API_BASE}/api/v1/missions/status`);
-            const data = await res.json();
-            if (data && data.mission_id) activeMissionId = data.mission_id;
-          } catch (_) {}
-        }
-        if (!activeMissionId) return;
+        const targetId = activeMissionId || 'active';
         try {
-          await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(activeMissionId)}/cancel`, { method: "POST" });
-          dismissActiveInteraction();
-          showToast("Routine cancelled.");
-          if (window.triggerFastTelemetryPoll) window.triggerFastTelemetryPoll();
-        } catch (e) {
-          showToast(`Failed to stop: ${e.message}`, true);
-        }
+          await fetch(`${API_BASE}/api/v1/missions/${encodeURIComponent(targetId)}/cancel`, { method: "POST" });
+        } catch (_) {}
+        dismissActiveInteraction();
+        activeMissionId = null;
+        activeMissionState = "idle";
+        lastObservedMissionState = "idle";
+        const mScreen = document.getElementById("screen-mission-execution");
+        const fBanner = document.getElementById("active-mission-banner");
+        if (mScreen) mScreen.style.display = "none";
+        if (fBanner) fBanner.style.display = "none";
+        showToast("Routine cancelled.");
+        if (window.triggerFastTelemetryPoll) window.triggerFastTelemetryPoll();
       }
     });
   };

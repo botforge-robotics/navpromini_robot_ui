@@ -196,11 +196,59 @@
     }
   };
 
+  window.showMissionMediaFullscreen = function(url, filename, isVideo, onClosed) {
+    isFullscreenActive = true;
+    const overlay = document.getElementById('fullscreen-media-overlay');
+    const imgEl = document.getElementById('fullscreen-img-viewer');
+    const vidEl = document.getElementById('fullscreen-video-viewer');
+    const filenameEl = document.getElementById('fullscreen-filename');
+    const counterEl = document.getElementById('fullscreen-counter');
+    const prevBtn = document.getElementById('btn-fullscreen-prev');
+    const nextBtn = document.getElementById('btn-fullscreen-next');
+
+    if (!overlay) return;
+    if (prevBtn) prevBtn.style.display = 'none';
+    if (nextBtn) nextBtn.style.display = 'none';
+    if (counterEl) counterEl.textContent = 'Mission Display';
+    if (filenameEl) filenameEl.textContent = filename || 'Photo / Video';
+
+    overlay.style.transition = 'none';
+    overlay.style.transform = 'translateY(0)';
+    overlay.style.opacity = '1';
+    overlay.style.display = 'flex';
+
+    if (isVideo) {
+      if (imgEl) imgEl.style.display = 'none';
+      if (vidEl) {
+        vidEl.style.display = 'block';
+        vidEl.src = url;
+        vidEl.currentTime = 0;
+        vidEl.play().catch(e => console.log('Fullscreen video autoplay:', e));
+      }
+    } else {
+      if (vidEl) {
+        vidEl.pause();
+        vidEl.src = '';
+        vidEl.style.display = 'none';
+      }
+      if (imgEl) {
+        imgEl.style.display = 'block';
+        imgEl.src = url;
+      }
+    }
+    window._missionMediaOnClosed = onClosed;
+  };
+
   window.closeFullscreenMedia = function() {
     isFullscreenActive = false;
     const overlay = document.getElementById('fullscreen-media-overlay');
     const vidEl = document.getElementById('fullscreen-video-viewer');
     const imgEl = document.getElementById('fullscreen-img-viewer');
+    const prevBtn = document.getElementById('btn-fullscreen-prev');
+    const nextBtn = document.getElementById('btn-fullscreen-next');
+
+    if (prevBtn) prevBtn.style.display = '';
+    if (nextBtn) nextBtn.style.display = '';
 
     if (vidEl) {
       vidEl.pause();
@@ -217,6 +265,12 @@
       overlay.style.transform = '';
       overlay.style.transition = '';
       overlay.style.opacity = '1';
+    }
+
+    if (window._missionMediaOnClosed) {
+      const cb = window._missionMediaOnClosed;
+      window._missionMediaOnClosed = null;
+      try { cb(); } catch (_) {}
     }
   };
 

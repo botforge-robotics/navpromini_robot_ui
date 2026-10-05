@@ -180,10 +180,10 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
   }
 
   const isCharging = !!(
-    (dockData && (dockData.charging || dockData.state === "charging" || dockData.state === "full")) ||
+    (dockData && (dockData.charging || dockData.state === "charging")) ||
     (stateData && (
-      (stateData.dock && (stateData.dock.status === "charging" || stateData.dock.status === "full")) ||
-      (stateData.battery && (stateData.battery.charging || stateData.battery.status === "charging" || stateData.battery.status === "full"))
+      (stateData.dock && stateData.dock.status === "charging") ||
+      (stateData.battery && (stateData.battery.charging && (stateData.battery.current === undefined || stateData.battery.current === null || stateData.battery.current > 0.04)))
     ))
   );
 
@@ -201,11 +201,11 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
 
   if (isDockActive) {
     if (dockScreen.style.display !== "flex") dockScreen.style.display = "flex";
-    if (cameraCard) cameraCard.style.display = "flex";
-    if (radarAnim) radarAnim.style.display = "none";
+    if (cameraCard) cameraCard.style.display = "none";
+    if (radarAnim) radarAnim.style.display = "flex";
 
-    // Start zero-latency camera preview
-    startDockCamStream();
+    // Camera preview disabled on UI per user request
+    stopDockCamStream();
 
     const tagVisible = !!((dockData && dockData.tag_visible) || (stateData && stateData.dock && stateData.dock.tag_visible));
     if (tagStatusEl) {
@@ -263,7 +263,12 @@ function updatePowerState(pState) {
   if (!pState) return;
   try {
     const b = pState.data || pState.battery || pState;
-    const isCharging = !!(b.charging || b.is_charging || b.status === "charging" || b.status === "Charging" || b.power_supply_status === "Charging" || b.adapter_connected || (pState.detail && pState.detail.charger_connected));
+    const isCharging = !!(
+      (b.charging && (b.current === undefined || b.current === null || b.current > 0.04)) ||
+      (b.status === "charging" || b.status === "Charging") ||
+      (b.power_supply_status === 1) ||
+      (pState.detail && (pState.detail.charger_connected || (pState.detail.pack_current_a && pState.detail.pack_current_a > 0.05)))
+    );
     const rawPct = b.percentage !== undefined ? b.percentage : (b.soc_percent !== undefined ? b.soc_percent : (b.battery_level !== undefined ? b.battery_level : null));
     
     if (rawPct !== null && rawPct !== undefined && !isNaN(rawPct)) {

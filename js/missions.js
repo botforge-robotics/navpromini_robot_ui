@@ -559,22 +559,58 @@ function handleActiveInteraction(interaction) {
   if (!interaction || !interaction.interaction_id) return;
   activeInteractionId = interaction.interaction_id;
 
-  const isBrowser = Boolean(
+  const isMedia = Boolean(
+    interaction.subtype === "media_display" ||
+    interaction.type === "media_display" ||
+    interaction.subtype === "ui_media" ||
+    interaction.type === "ui_media" ||
+    interaction.node_type === "ui_media"
+  );
+
+  const isBrowser = !isMedia && Boolean(
     interaction.subtype === "browser" ||
     interaction.type === "browser" ||
     interaction.subtype === "ui_browser" ||
     interaction.type === "ui_browser" ||
     interaction.node_type === "ui_browser" ||
-    (interaction.url && typeof interaction.url === "string" && (interaction.url.startsWith("http://") || interaction.url.startsWith("https://") || interaction.url.startsWith("/")))
+    (interaction.url && typeof interaction.url === "string" && !interaction.url.includes("/media/") && (interaction.url.startsWith("http://") || interaction.url.startsWith("https://") || interaction.url.startsWith("/")))
   );
 
   const browserContainer = document.getElementById("robot-embedded-browser");
   const browserIframe = document.getElementById("robot-browser-iframe");
   const overlay = document.getElementById("interaction-overlay");
 
+  if (isMedia) {
+    if (overlay) overlay.style.display = "none";
+    if (browserContainer) browserContainer.style.display = "none";
+    const mediaUrl = interaction.media_url || interaction.url || "";
+    const isVid = (interaction.media_type === "video") || mediaUrl.endsWith(".mp4") || mediaUrl.endsWith(".webm");
+    const filename = interaction.filename || interaction.title || "Photo / Video";
+
+    if (window.showMissionMediaFullscreen) {
+      window.showMissionMediaFullscreen(mediaUrl, filename, isVid, () => {
+        fetch(`${API_BASE}/api/v1/missions/ui_response`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            interaction_id: interaction.interaction_id,
+            action: "completed",
+            node_id: interaction.node_id,
+          })
+        }).catch(() => {});
+      });
+    }
+    triggerFaceExpression("happy");
+    if (interaction.sound_alert !== false && window.playSuccessChime) {
+      window.playSuccessChime();
+    }
+    return;
+  }
+
   if (isBrowser) {
     // Hide standard interaction popup completely
     if (overlay) overlay.style.display = "none";
+    if (window.closeFullscreenMedia) window.closeFullscreenMedia();
     if (browserContainer && browserIframe) {
       browserIframe.src = interaction.url || "";
       browserContainer.style.display = "flex";
@@ -700,6 +736,9 @@ function dismissActiveInteraction() {
 
   const overlay = document.getElementById("interaction-overlay");
   if (overlay) overlay.style.display = "none";
+  if (window.closeFullscreenMedia) {
+    window.closeFullscreenMedia();
+  }
   activeInteractionId = null;
   triggerFaceExpression("happy");
 }

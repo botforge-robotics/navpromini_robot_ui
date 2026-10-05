@@ -572,34 +572,60 @@ function handleActiveInteraction(interaction) {
   if (titleEl) titleEl.textContent = interaction.title || "Action Required";
   if (msgEl) msgEl.textContent = interaction.message || "";
 
-  const isNotification = interaction.subtype === "notification" ||
-                         interaction.type === "notification";
+  const isBrowser = interaction.subtype === "browser" ||
+                    interaction.type === "browser";
 
-  const isForm = !isNotification && (
+  const isNotification = !isBrowser && (
+                         interaction.subtype === "notification" ||
+                         interaction.type === "notification");
+
+  const isForm = !isBrowser && !isNotification && (
                  interaction.subtype === "form" ||
                  interaction.subtype === "dynamic_form" ||
                  interaction.type === "form" ||
                  (Array.isArray(interaction.fields) && interaction.fields.length > 0));
 
-  if (isNotification) {
+  const browserEl = document.getElementById("kiosk-browser");
+  const browserIframe = document.getElementById("kiosk-browser-iframe");
+  const destEl = document.getElementById("kiosk-destinations");
+
+  if (isBrowser) {
+    if (formEl) formEl.style.display = "none";
+    if (choicesEl) choicesEl.style.display = "none";
+    if (destEl) destEl.style.display = "none";
+    if (browserEl) {
+      browserEl.style.display = "flex";
+      if (browserIframe) {
+        browserIframe.src = interaction.url || "";
+      }
+    }
+  } else if (isNotification) {
+    if (browserEl) browserEl.style.display = "none";
     renderInteractionNotification(interaction);
     if (formEl) formEl.style.display = "none";
     if (choicesEl) choicesEl.style.display = "flex";
   } else if (isForm) {
+    if (browserEl) browserEl.style.display = "none";
     renderInteractionForm(interaction);
     if (formEl) formEl.style.display = "flex";
     if (choicesEl) choicesEl.style.display = "none";
   } else {
+    if (browserEl) browserEl.style.display = "none";
     renderInteractionChoices(interaction);
     if (formEl) formEl.style.display = "none";
     if (choicesEl) choicesEl.style.display = "flex";
   }
 
   // Handle countdown timer and progress bar
-  const timeoutSec = Number(interaction.timeout_sec) || 60;
+  const timeoutSec = isBrowser ? (Number(interaction.timeout_sec) || 0) : (Number(interaction.timeout_sec) || 60);
   const startedAt = interaction.started_at ? (Number(interaction.started_at) * 1000) : Date.now();
   const timerSecEl = document.getElementById("interaction-timer-sec");
   const progressFillEl = document.getElementById("timer-progress-fill");
+  const timerChip = document.getElementById("interaction-timer-chip");
+  const timerTrack = document.querySelector(".timer-progress-track");
+
+  if (timerChip) timerChip.style.display = timeoutSec > 0 ? "flex" : "none";
+  if (timerTrack) timerTrack.style.display = timeoutSec > 0 ? "block" : "none";
 
   if (window._interactionTimerInterval) {
     clearInterval(window._interactionTimerInterval);
@@ -607,6 +633,7 @@ function handleActiveInteraction(interaction) {
   }
 
   const updateTimer = () => {
+    if (timeoutSec <= 0) return;
     const elapsedSec = (Date.now() - startedAt) / 1000;
     const remainingSec = Math.max(0, timeoutSec - elapsedSec);
     if (timerSecEl) timerSecEl.textContent = remainingSec.toFixed(1) + "s";
@@ -619,8 +646,10 @@ function handleActiveInteraction(interaction) {
       window._interactionTimerInterval = null;
     }
   };
-  updateTimer();
-  window._interactionTimerInterval = setInterval(updateTimer, 100);
+  if (timeoutSec > 0) {
+    updateTimer();
+    window._interactionTimerInterval = setInterval(updateTimer, 100);
+  }
 
   overlay.style.display = "flex";
   triggerFaceExpression("thinking");
@@ -635,6 +664,10 @@ function handleActiveInteraction(interaction) {
   }
 }
 
+window.closeEmbeddedBrowser = async function() {
+  await submitInteractionResponse({ action: "closed", status: "closed" });
+};
+
 function dismissActiveInteraction() {
   if (window._interactionTimerInterval) {
     clearInterval(window._interactionTimerInterval);
@@ -642,6 +675,10 @@ function dismissActiveInteraction() {
   }
   const overlay = document.getElementById("interaction-overlay");
   if (overlay) overlay.style.display = "none";
+  const browserIframe = document.getElementById("kiosk-browser-iframe");
+  if (browserIframe) browserIframe.src = "about:blank";
+  const browserEl = document.getElementById("kiosk-browser");
+  if (browserEl) browserEl.style.display = "none";
   activeInteractionId = null;
   triggerFaceExpression("happy");
 }

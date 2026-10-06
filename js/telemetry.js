@@ -263,12 +263,13 @@ function updatePowerState(pState) {
   if (!pState) return;
   try {
     const b = pState.data || pState.battery || pState;
-    const isCharging = !!(
-      b.charging ||
+    const notCharging = b.status === "not_charging" || b.status === "discharging" || b.power_supply_status === 2 || b.power_supply_status === 3;
+    const isCharging = !notCharging && Boolean(
+      (b.charging && b.charging !== "false") ||
       b.status === "charging" ||
       b.status === "Charging" ||
       b.power_supply_status === 1 ||
-      (pState.detail && pState.detail.charger_connected && (pState.detail.pack_current_a === undefined || pState.detail.pack_current_a > 0.25))
+      (pState.detail && pState.detail.charger_connected && pState.detail.charge_state !== "discharging")
     );
     const rawPct = b.percentage !== undefined ? b.percentage : (b.soc_percent !== undefined ? b.soc_percent : (b.battery_level !== undefined ? b.battery_level : null));
     
@@ -323,12 +324,17 @@ function updatePowerState(pState) {
         chargingScreenDismissed = false;
         if (chargingScreen) chargingScreen.style.display = "flex";
         triggerFaceExpression("sleep");
-      } else if (!isCharging && wasCharging) {
-        // Robot undocked / disconnected
-        wasCharging = false;
-        chargingScreenDismissed = false;
-        if (chargingScreen) chargingScreen.style.display = "none";
-        triggerFaceExpression("wakeup");
+      } else if (!isCharging) {
+        if (wasCharging) {
+          // Robot undocked / disconnected
+          wasCharging = false;
+          chargingScreenDismissed = false;
+          if (chargingScreen) chargingScreen.style.display = "none";
+          triggerFaceExpression("wakeup");
+        }
+        if (chargingScreen && !chargingScreenDismissed) {
+          chargingScreen.style.display = "none";
+        }
       }
 
       // Keep static text Dock and Undock on dashboard bottom bar
@@ -510,10 +516,10 @@ function startPolling() {
           if (interaction.interaction_id !== activeInteractionId) {
             handleActiveInteraction(interaction);
           }
-        } else if (activeInteractionId && (!window.isMediaFullscreenActive || !window.isMediaFullscreenActive())) {
+        } else if (activeInteractionId && (!window.isMediaFullscreenActive || !window.isMediaFullscreenActive()) && (!window.isBrowserActive || !window.isBrowserActive())) {
           dismissActiveInteraction();
         }
-      } else if (activeInteractionId && (!window.isMediaFullscreenActive || !window.isMediaFullscreenActive())) {
+      } else if (activeInteractionId && (!window.isMediaFullscreenActive || !window.isMediaFullscreenActive()) && (!window.isBrowserActive || !window.isBrowserActive())) {
         dismissActiveInteraction();
       }
 

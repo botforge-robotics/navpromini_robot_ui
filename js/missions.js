@@ -716,6 +716,11 @@ function handleActiveInteraction(interaction) {
 window.handleActiveInteraction = handleActiveInteraction;
 window.dismissActiveInteraction = dismissActiveInteraction;
 
+window.isBrowserActive = function() {
+  const browserContainer = document.getElementById("robot-embedded-browser");
+  return Boolean(browserContainer && browserContainer.style.display !== "none");
+};
+
 window.closeEmbeddedBrowser = async function() {
   const browserContainer = document.getElementById("robot-embedded-browser");
   const browserIframe = document.getElementById("robot-browser-iframe");

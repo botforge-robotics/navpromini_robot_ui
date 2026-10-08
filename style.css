@@ -611,6 +611,13 @@ body, html {
   position: relative;
   overflow: hidden;
   transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.hub-card * {
+  pointer-events: none;
 }
 
 .hub-card::before {

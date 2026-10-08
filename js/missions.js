@@ -22,7 +22,15 @@ async function loadMissions() {
     let missions = data.missions || [];
 
     if (activeMapName) {
-      missions = missions.filter(m => !m.map || m.map === activeMapName);
+      const cleanActive = activeMapName.replace(/\.ya?ml$/i, "").toLowerCase();
+      const filtered = missions.filter(m => {
+        if (!m.map) return true;
+        const cleanM = String(m.map).replace(/\.ya?ml$/i, "").toLowerCase();
+        return cleanM === cleanActive;
+      });
+      if (filtered.length > 0 || missions.length === 0) {
+        missions = filtered;
+      }
     }
     loadedMissionsCache = missions;
 

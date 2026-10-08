@@ -18,12 +18,12 @@ window.addEventListener('touchmove', (e) => {
   }
 }, { passive: false });
 
-// Prevent double-tap zoom
+// Prevent double-tap zoom (exempt interactive elements, buttons, and hub cards)
 let lastTouchEndTime = 0;
 document.addEventListener('touchend', (e) => {
   const now = Date.now();
   if (now - lastTouchEndTime <= 280) {
-    if (!e.target.closest('input') && !e.target.closest('textarea')) {
+    if (!e.target.closest('input') && !e.target.closest('textarea') && !e.target.closest('.hub-card') && !e.target.closest('button')) {
       e.preventDefault();
     }
   }

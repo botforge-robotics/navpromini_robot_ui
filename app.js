@@ -29,13 +29,18 @@ function initSwipeGestures() {
       touchStartX = e.touches[0].clientX;
       touchStartY = e.touches[0].clientY;
       touchDeltaX = 0;
-      isSwiping = true;
+      isSwiping = false;
     }
   }, { passive: true });
 
   viewport.addEventListener("touchmove", (e) => {
-    if (!isSwiping || e.touches.length !== 1) return;
-    touchDeltaX = e.touches[0].clientX - touchStartX;
+    if (e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+    if (Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy)) {
+      isSwiping = true;
+      touchDeltaX = dx;
+    }
   }, { passive: true });
 
   viewport.addEventListener("touchend", (e) => {
@@ -151,33 +156,48 @@ window.showDashboardView = function() {
    4. Hub 2x2 Grid & Subpage Management
    -------------------------------------------------------------------------- */
 function initHubTiles() {
-  let lastClickTime = 0;
-  const debounce = (fn) => (e) => {
-    e?.preventDefault();
-    e?.stopPropagation();
-    const now = Date.now();
-    if (now - lastClickTime < 400) return;
-    lastClickTime = now;
-    fn();
+  const bindTileAction = (tileId, subpageName) => {
+    const tile = document.getElementById(tileId);
+    if (!tile) return;
+
+    let startX = 0;
+    let startY = 0;
+    let startTime = 0;
+    let hasMoved = false;
+
+    tile.addEventListener("pointerdown", (e) => {
+      startX = e.clientX;
+      startY = e.clientY;
+      startTime = Date.now();
+      hasMoved = false;
+    });
+
+    tile.addEventListener("pointermove", (e) => {
+      if (Math.hypot(e.clientX - startX, e.clientY - startY) > 20) {
+        hasMoved = true;
+      }
+    });
+
+    tile.addEventListener("pointerup", (e) => {
+      const elapsed = Date.now() - startTime;
+      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+      if (!hasMoved && dist < 25 && elapsed < 800) {
+        openSubpage(subpageName);
+      }
+    });
+
+    tile.addEventListener("click", (e) => {
+      e?.preventDefault();
+      openSubpage(subpageName);
+    });
   };
 
-  document.getElementById("hub-tile-missions")?.addEventListener("click", debounce(() => {
-    openSubpage("missions");
-  }));
+  bindTileAction("hub-tile-missions", "missions");
+  bindTileAction("hub-tile-locations", "locations");
+  bindTileAction("hub-tile-schedules", "schedules");
+  bindTileAction("hub-tile-maps", "maps");
 
-  document.getElementById("hub-tile-locations")?.addEventListener("click", debounce(() => {
-    openSubpage("locations");
-  }));
-
-  document.getElementById("hub-tile-schedules")?.addEventListener("click", debounce(() => {
-    openSubpage("schedules");
-  }));
-
-  document.getElementById("hub-tile-maps")?.addEventListener("click", debounce(() => {
-    openSubpage("maps");
-  }));
-
-  document.getElementById("btn-trigger-test-popup")?.addEventListener("click", debounce(() => {
+  document.getElementById("btn-trigger-test-popup")?.addEventListener("click", () => {
     showToast("Triggering interactive UI popup on robot screen...");
     handleActiveInteraction({
       interaction_id: "test_dynamic_" + Date.now(),
@@ -192,13 +212,18 @@ function initHubTiles() {
       ],
       timeout_sec: 60
     });
-  }));
+  });
 }
 
 let currentOpenSubpage = null;
+let lastSubpageOpenTime = 0;
 
-function openSubpage(subpageName) {
+window.openSubpage = function(subpageName) {
+  const now = Date.now();
+  if (currentOpenSubpage === subpageName && now - lastSubpageOpenTime < 350) return;
+  lastSubpageOpenTime = now;
   currentOpenSubpage = subpageName;
+
   const container = document.getElementById("subpages-viewport");
   if (!container) return;
   container.style.display = "flex";
@@ -207,12 +232,12 @@ function openSubpage(subpageName) {
     page.classList.toggle("active", page.id === "tab-" + subpageName);
   });
 
-  if (subpageName === "locations") loadWaypoints();
-  if (subpageName === "missions") loadMissions();
-  if (subpageName === "schedules") loadSchedules();
-  if (subpageName === "maps") loadMaps();
-  if (subpageName === "power") loadPowerHealth();
-}
+  if (subpageName === "locations" && typeof loadWaypoints === "function") loadWaypoints();
+  if (subpageName === "missions" && typeof loadMissions === "function") loadMissions();
+  if (subpageName === "schedules" && typeof loadSchedules === "function") loadSchedules();
+  if (subpageName === "maps" && typeof loadMaps === "function") loadMaps();
+  if (subpageName === "power" && typeof loadPowerHealth === "function") loadPowerHealth();
+};
 
 window.closeSubpage = function() {
   currentOpenSubpage = null;
@@ -428,6 +453,13 @@ document.addEventListener("DOMContentLoaded", () => {
   initTouchKeyboard();
   initModals();
   startPolling();
+
+  // Pre-load data lists immediately in background so subpages and counts are ready instantly
+  if (typeof loadWaypoints === "function") loadWaypoints();
+  if (typeof loadMissions === "function") loadMissions();
+  if (typeof loadMaps === "function") loadMaps();
+  if (typeof loadSchedules === "function") loadSchedules();
+
   // Auto-launch Setup Wizard if robot is unconfigured or in hotspot mode
   if (window.checkAutoSetupScreen) {
     window.checkAutoSetupScreen();

@@ -1842,16 +1842,24 @@ async function refreshHubCounters() {
       fetch(`${API_BASE}/api/v1/maps`).then(r => r.ok ? r.json() : null)
     ]);
 
+    const cleanActive = activeMapName ? activeMapName.replace(/\.ya?ml$/i, "").toLowerCase() : "";
+
     if (wRes.status === "fulfilled" && wRes.value) {
       let waypoints = wRes.value.waypoints || [];
-      if (activeMapName) waypoints = waypoints.filter(wp => !wp.map || wp.map === activeMapName);
+      if (cleanActive) {
+        const filtered = waypoints.filter(wp => !wp.map || String(wp.map).replace(/\.ya?ml$/i, "").toLowerCase() === cleanActive);
+        if (filtered.length > 0 || waypoints.length === 0) waypoints = filtered;
+      }
       const hubCount = document.getElementById("hub-locations-count");
       if (hubCount) hubCount.textContent = `${waypoints.length} Stations`;
     }
 
     if (mRes.status === "fulfilled" && mRes.value) {
       let missions = mRes.value.missions || [];
-      if (activeMapName) missions = missions.filter(m => !m.map || m.map === activeMapName);
+      if (cleanActive) {
+        const filtered = missions.filter(m => !m.map || String(m.map).replace(/\.ya?ml$/i, "").toLowerCase() === cleanActive);
+        if (filtered.length > 0 || missions.length === 0) missions = filtered;
+      }
       const hubCount = document.getElementById("hub-missions-count");
       if (hubCount) hubCount.textContent = `${missions.length} Routines`;
     }
@@ -2034,7 +2042,15 @@ async function loadWaypoints() {
 
     // Filter to current active map if waypoint has map metadata
     if (activeMapName) {
-      waypoints = waypoints.filter(wp => !wp.map || wp.map === activeMapName);
+      const cleanActive = activeMapName.replace(/\.ya?ml$/i, "").toLowerCase();
+      const filtered = waypoints.filter(wp => {
+        if (!wp.map) return true;
+        const cleanWp = String(wp.map).replace(/\.ya?ml$/i, "").toLowerCase();
+        return cleanWp === cleanActive;
+      });
+      if (filtered.length > 0 || waypoints.length === 0) {
+        waypoints = filtered;
+      }
     }
 
     // Update hub count

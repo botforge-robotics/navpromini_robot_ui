@@ -27,6 +27,18 @@ function updateNavigationState(navData, isMissionActive = false) {
     const wasNav = isNavigating;
     isNavigating = isNav;
 
+    if (isNav) {
+      const cs = document.getElementById("screen-charging");
+      if (cs && cs.style.display !== "none") {
+        cs.style.display = "none";
+        chargingScreenDismissed = true;
+      }
+      wasCharging = false;
+      isRobotCharging = false;
+      const bolt = document.getElementById("charging-bolt");
+      if (bolt) bolt.style.display = "none";
+    }
+
     const navScreen = document.getElementById("screen-nav-progress");
     if (!navScreen) return;
 
@@ -262,6 +274,26 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
 function updatePowerState(pState) {
   if (!pState) return;
   try {
+    if (pState.age_sec !== undefined && pState.age_sec > 5.0) {
+      const cs = document.getElementById("screen-charging");
+      if (cs && cs.style.display !== "none") cs.style.display = "none";
+      const bolt = document.getElementById("charging-bolt");
+      if (bolt) bolt.style.display = "none";
+      isRobotCharging = false;
+      wasCharging = false;
+      return;
+    }
+
+    const isMovingOrNav = Boolean(isNavigating || (typeof liveLinearSpeed !== "undefined" && Math.abs(liveLinearSpeed) > 0.02));
+    if (isMovingOrNav) {
+      const cs = document.getElementById("screen-charging");
+      if (cs && cs.style.display !== "none") cs.style.display = "none";
+      const bolt = document.getElementById("charging-bolt");
+      if (bolt) bolt.style.display = "none";
+      isRobotCharging = false;
+      wasCharging = false;
+      return;
+    }
     const b = pState.data || pState.battery || pState;
     const notCharging = b.status === "not_charging" || b.status === "discharging" || b.power_supply_status === 2 || b.power_supply_status === 3;
     const isCharging = !notCharging && Boolean(

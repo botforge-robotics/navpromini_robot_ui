@@ -2118,6 +2118,11 @@ window.triggerAutoDock = async function() {
 
 window.triggerUndock = async function() {
   try {
+    const cs = document.getElementById("screen-charging");
+    if (cs) cs.style.display = "none";
+    if (typeof chargingScreenDismissed !== "undefined") chargingScreenDismissed = true;
+    if (typeof wasCharging !== "undefined") wasCharging = false;
+    if (typeof isRobotCharging !== "undefined") isRobotCharging = false;
     showToast("Undocking from charging station...");
     triggerFaceExpression("thinking");
     const res = await fetch(`${API_BASE}/api/v1/undock`, {

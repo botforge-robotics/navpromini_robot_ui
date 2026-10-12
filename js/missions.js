@@ -586,6 +586,9 @@ window.deleteSchedule = async function(schedId, schedName) {
    -------------------------------------------------------------------------- */
 function handleActiveInteraction(interaction) {
   if (!interaction || !interaction.interaction_id) return;
+  if (interaction.interaction_id === activeInteractionId) {
+    return;
+  }
   activeInteractionId = interaction.interaction_id;
 
   const isMedia = Boolean(
@@ -736,9 +739,7 @@ function handleActiveInteraction(interaction) {
     window.playAlertTone();
   }
   if (interaction.speech_text && window.speakText) {
-    setTimeout(() => {
-      window.speakText(interaction.speech_text);
-    }, 400);
+    window.speakText(interaction.speech_text);
   }
 }
 
@@ -936,21 +937,56 @@ function renderInteractionChoices(interaction) {
   const choices = interaction.choices || ["Confirm", "Dismiss"];
 
   grid.innerHTML = choices.map(choice => `
-    <button class="kiosk-choice-btn" onclick="submitChoiceResponse('${escapeQuotes(choice)}')">
+    <button class="kiosk-choice-btn" onclick="submitChoiceResponse('${escapeQuotes(choice)}', this)">
       <span>${escapeHtml(choice)}</span>
     </button>
   `).join("");
 }
 
-window.submitChoiceResponse = async function(choiceText) {
+window.submitChoiceResponse = async function(choiceText, btnEl = null) {
+  if (btnEl) {
+    btnEl.innerHTML = `<span class="loading-spinner-inline" style="display:inline-block; width:22px; height:22px; border:3px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.6s linear infinite; margin-right:10px; vertical-align:middle;"></span><span>Processing choice...</span>`;
+    btnEl.disabled = true;
+    btnEl.style.opacity = '0.9';
+    btnEl.style.pointerEvents = 'none';
+  }
+  const grid = document.getElementById("choices-buttons-grid");
+  if (grid) {
+    grid.querySelectorAll("button").forEach(b => {
+      if (b !== btnEl) {
+        b.disabled = true;
+        b.style.pointerEvents = 'none';
+        b.style.opacity = '0.5';
+      }
+    });
+  }
+
+  // Also update modal header to show immediate feedback
+  const titleEl = document.getElementById("interaction-title");
+  const msgEl = document.getElementById("interaction-message");
+  if (titleEl) titleEl.textContent = "Processing choice...";
+  if (msgEl) msgEl.textContent = `Selected "${choiceText}". Advancing routine...`;
+
   await submitInteractionResponse({ status: "selected", choice: choiceText });
 };
 
 async function submitInteractionResponse(data) {
   if (window.playTapBeep) window.playTapBeep();
+  const currentInteractionId = activeInteractionId;
+
+  // Clear countdown timer immediately so it doesn't keep ticking down while advancing
+  if (window._interactionTimerInterval) {
+    clearInterval(window._interactionTimerInterval);
+    window._interactionTimerInterval = null;
+  }
+  const timerChip = document.getElementById("interaction-timer-chip");
+  if (timerChip) timerChip.style.display = "none";
+  const timerTrack = document.querySelector(".timer-progress-track");
+  if (timerTrack) timerTrack.style.display = "none";
+
   try {
     const payload = {
-      interaction_id: activeInteractionId,
+      interaction_id: currentInteractionId,
       action: data.action || data.status || "submit",
       status: data.status || "submitted",
       selected: data.selected || data.choice || "",
@@ -967,9 +1003,14 @@ async function submitInteractionResponse(data) {
   } catch (e) {
     console.warn("Failed to post UI interaction response:", e);
   }
-  dismissActiveInteraction();
-  if (window.triggerFastTelemetryPoll) {
-    window.triggerFastTelemetryPoll();
-  }
+
+  // Auto-dismiss interaction popup after 600ms so user has clearly seen the confirmation/loading feedback
+  setTimeout(() => {
+    dismissActiveInteraction();
+    if (window.triggerFastTelemetryPoll) {
+      window.triggerFastTelemetryPoll();
+    }
+  }, 600);
 }
+
 

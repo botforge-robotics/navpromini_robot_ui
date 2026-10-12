@@ -373,28 +373,172 @@ window.startMappingFromSetup = function() {
 /* --------------------------------------------------------------------------
    14. Power & Health Subpage
    -------------------------------------------------------------------------- */
+let powerHealthPollTimer = null;
+
 async function loadPowerHealth() {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/system/health`);
-    const data = await res.json();
+    const [healthRes, batRes, stateRes] = await Promise.allSettled([
+      fetch(`${API_BASE}/api/v1/system/health`),
+      fetch(`${API_BASE}/api/v1/state/battery`),
+      fetch(`${API_BASE}/api/v1/state`),
+    ]);
+
+    const healthData = healthRes.status === "fulfilled" && healthRes.value.ok ? await healthRes.value.json() : null;
+    const batData = batRes.status === "fulfilled" && batRes.value.ok ? await batRes.value.json() : null;
+    const stateData = stateRes.status === "fulfilled" && stateRes.value.ok ? await stateRes.value.json() : null;
+
+    // 1. Update Power Gauge & Battery Metrics
+    const b = batData?.data || stateData?.battery || {};
+    const detail = batData?.detail || {};
+
+    const rawPct = b.percentage !== undefined ? b.percentage : (detail.soc_percent !== undefined ? detail.soc_percent : 100);
+    let pctVal = Number(rawPct);
+    if (pctVal <= 1.0 && pctVal > 0.0) pctVal *= 100.0;
+    pctVal = Math.max(0, Math.min(100, pctVal));
+    const displayPct = Number.isInteger(pctVal) ? pctVal.toString() : pctVal.toFixed(1);
+
+    const isCharging = Boolean(
+      (b.charging && b.charging !== "false") ||
+      b.status === "charging" ||
+      (detail.charger_connected && detail.charge_state !== "discharging")
+    );
+    const isFull = isCharging && (pctVal >= 99.5 || b.status === "Full" || b.status === "full");
+
+    const gaugePct = document.getElementById("gauge-battery-pct");
+    if (gaugePct) gaugePct.textContent = `${displayPct}%`;
+
+    const gaugeStatus = document.getElementById("gauge-battery-status");
+    if (gaugeStatus) {
+      gaugeStatus.textContent = isFull ? "Fully Charged" : (isCharging ? "Charging" : "Discharging");
+    }
+
+    const circProgress = document.getElementById("circular-progress");
+    if (circProgress) {
+      circProgress.style.setProperty("--pct", pctVal);
+      const colorVar = pctVal < 20 ? 'var(--danger, #ef4444)' : (pctVal < 40 ? 'var(--warning, #f59e0b)' : 'var(--success, #10b981)');
+      circProgress.style.background = `conic-gradient(${colorVar} ${pctVal}%, var(--surface-sunken) 0)`;
+    }
+
+    // Stats Table
+    const statCharging = document.getElementById("stat-charging-state");
+    if (statCharging) statCharging.textContent = isFull ? "Full (Topped Off)" : (isCharging ? "Active Recharging" : "Not Charging");
+
+    const statAdapter = document.getElementById("stat-adapter-state");
+    if (statAdapter) statAdapter.textContent = isCharging ? "Connected (Dock/Adapter)" : "Disconnected";
+
+    const statVoltage = document.getElementById("stat-pack-voltage");
+    const vVal = b.voltage !== undefined ? b.voltage : detail.pack_voltage_v;
+    if (statVoltage) statVoltage.textContent = vVal != null ? `${Number(vVal).toFixed(2)} V` : "-- V";
+
+    const statCurrent = document.getElementById("stat-pack-current");
+    const cVal = b.current !== undefined ? b.current : detail.pack_current_a;
+    if (statCurrent) statCurrent.textContent = cVal != null ? `${Number(cVal).toFixed(2)} A` : "-- A";
+
+    const statBattTemp = document.getElementById("stat-battery-temp");
+    const btVal = b.temperature !== undefined ? b.temperature : (detail.max_temp_c !== undefined ? detail.max_temp_c : stateData?.system?.battery_temperature_c);
+    if (statBattTemp) statBattTemp.textContent = btVal != null ? `${Number(btVal).toFixed(1)} °C` : "-- °C";
+
+    const statCpuTemp = document.getElementById("stat-cpu-health");
+    const cpuTempVal = healthData?.cpu_temperature_c !== undefined ? healthData.cpu_temperature_c : stateData?.system?.cpu_temperature_c;
+    const cpuLoadVal = stateData?.system?.cpu_load_pct;
+    if (statCpuTemp) {
+      if (cpuTempVal != null && cpuLoadVal != null) {
+        statCpuTemp.textContent = `${Number(cpuTempVal).toFixed(1)} °C (${Math.round(cpuLoadVal)}% load)`;
+      } else if (cpuTempVal != null) {
+        statCpuTemp.textContent = `${Number(cpuTempVal).toFixed(1)} °C`;
+      } else {
+        statCpuTemp.textContent = "-- °C";
+      }
+    }
+
+    const statDisk = document.getElementById("stat-disk-usage");
+    if (statDisk && healthData?.disk) {
+      const freeGb = healthData.disk.free_gb ?? (healthData.disk.free ? (healthData.disk.free / 1073741824).toFixed(1) : null);
+      const usedPct = healthData.disk.used_percent;
+      statDisk.textContent = freeGb != null ? `${freeGb} GB Free (${usedPct ?? '?'}% used)` : "--";
+    }
+
+    // 2. Hardware Diagnostics List
     const list = document.getElementById("health-checklist");
-    if (!list) return;
-    const items = data.components || [
-      { name: "Base Motion Controller", ok: true },
-      { name: "RPLidar 360 Laser", ok: true },
-      { name: "Nav2 Costmap Layers", ok: true },
-      { name: "AMCL Localization", ok: isLocalized }
-    ];
-    list.innerHTML = items.map(c => `
-      <div class="health-item">
-        <span class="badge ${c.ok ? 'badge-ok' : 'badge-danger'}">${c.ok ? 'ONLINE' : 'OFFLINE'}</span>
-        ${escapeHtml(c.name)}
-      </div>
-    `).join("");
+    if (list) {
+      const sources = healthData?.sources || {};
+      const hw = stateData?.hardware || {};
+
+      const isLocalized = stateData?.is_localized || (stateData?.localization?.status === "LOCALIZED");
+      const navStatus = stateData?.navigation?.status || "idle";
+
+      const items = [
+        {
+          name: "Base Odometry Motors",
+          ok: sources.odom?.ok ?? (hw.odom === "OK"),
+          detail: sources.odom?.age_sec != null ? `${sources.odom.age_sec.toFixed(2)}s age` : ""
+        },
+        {
+          name: "RPLidar 360° Laser",
+          ok: sources.lidar?.ok ?? (hw.lidar === "OK"),
+          detail: sources.lidar?.age_sec != null ? `${sources.lidar.age_sec.toFixed(2)}s age` : ""
+        },
+        {
+          name: "IMU Motion Sensor",
+          ok: sources.imu?.ok ?? (hw.imu === "OK"),
+          detail: sources.imu?.age_sec != null ? `${sources.imu.age_sec.toFixed(2)}s age` : ""
+        },
+        {
+          name: "BMS Battery Telemetry",
+          ok: sources.battery?.ok ?? (hw.battery === "OK"),
+          detail: sources.battery?.age_sec != null ? `${sources.battery.age_sec.toFixed(2)}s age` : ""
+        },
+        {
+          name: "AMCL Map Localization",
+          ok: isLocalized,
+          label: isLocalized ? "LOCALIZED" : "SEARCHING",
+          detail: stateData?.localization?.cov_x != null ? `cov: ${Number(stateData.localization.cov_x).toFixed(2)}m²` : ""
+        },
+        {
+          name: "Nav2 Navigation Planner",
+          ok: navStatus !== "failed" && navStatus !== "error",
+          label: navStatus === "running" ? "NAVIGATING" : (navStatus === "succeeded" ? "READY" : navStatus.toUpperCase()),
+          detail: ""
+        },
+        {
+          name: "CPU Thermal Health",
+          ok: sources.cpu_temperature?.ok ?? (healthData?.cpu_temperature_c != null && healthData.cpu_temperature_c < 85.0),
+          detail: cpuTempVal != null ? `${Number(cpuTempVal).toFixed(1)}°C` : ""
+        }
+      ];
+
+      list.innerHTML = items.map(c => {
+        const badgeClass = c.ok ? "badge-ok" : "badge-danger";
+        const badgeText = c.label || (c.ok ? "ONLINE" : "OFFLINE");
+        return `
+          <div class="health-item">
+            <span class="badge ${badgeClass}">${badgeText}</span>
+            <span>${escapeHtml(c.name)}</span>
+            ${c.detail ? `<span style="margin-left:auto; font-size:12px; font-weight:500; color:var(--text-secondary);">${escapeHtml(c.detail)}</span>` : ""}
+          </div>
+        `;
+      }).join("");
+    }
   } catch (e) {
     console.warn("Health load error:", e);
   }
 }
+
+function startPowerHealthPolling() {
+  stopPowerHealthPolling();
+  powerHealthPollTimer = setInterval(loadPowerHealth, 2000);
+}
+
+function stopPowerHealthPolling() {
+  if (powerHealthPollTimer) {
+    clearInterval(powerHealthPollTimer);
+    powerHealthPollTimer = null;
+  }
+}
+
+window.loadPowerHealth = loadPowerHealth;
+window.startPowerHealthPolling = startPowerHealthPolling;
+window.stopPowerHealthPolling = stopPowerHealthPolling;
 
 
 /* --------------------------------------------------------------------------

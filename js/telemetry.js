@@ -327,6 +327,17 @@ function updatePowerState(pState) {
       if (pctEl) pctEl.textContent = `${displayPct}%`;
       if (boltEl) boltEl.style.display = isCharging ? "inline" : "none";
 
+      // Update Power Subpage gauge and stats if present
+      const gaugePctEl = document.getElementById("gauge-battery-pct");
+      if (gaugePctEl) gaugePctEl.textContent = `${displayPct}%`;
+
+      const circProgressEl = document.getElementById("circular-progress");
+      if (circProgressEl) {
+        circProgressEl.style.setProperty("--pct", val);
+        const colorVar = val < 20 ? 'var(--danger, #ef4444)' : (val < 40 ? 'var(--warning, #f59e0b)' : 'var(--success, #10b981)');
+        circProgressEl.style.background = `conic-gradient(${colorVar} ${val}%, var(--surface-sunken) 0)`;
+      }
+
       // Update full-screen charging overlay if visible
       const chargingScreen = document.getElementById("screen-charging");
       const chargingPct = document.getElementById("charging-screen-pct");

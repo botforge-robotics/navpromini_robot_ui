@@ -236,11 +236,15 @@ window.openSubpage = function(subpageName) {
   if (subpageName === "missions" && typeof loadMissions === "function") loadMissions();
   if (subpageName === "schedules" && typeof loadSchedules === "function") loadSchedules();
   if (subpageName === "maps" && typeof loadMaps === "function") loadMaps();
-  if (subpageName === "power" && typeof loadPowerHealth === "function") loadPowerHealth();
+  if (subpageName === "power" && typeof loadPowerHealth === "function") {
+    loadPowerHealth();
+    if (typeof startPowerHealthPolling === "function") startPowerHealthPolling();
+  }
 };
 
 window.closeSubpage = function() {
   currentOpenSubpage = null;
+  if (typeof stopPowerHealthPolling === "function") stopPowerHealthPolling();
   const container = document.getElementById("subpages-viewport");
   if (container) container.style.display = "none";
 };

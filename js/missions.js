@@ -194,6 +194,27 @@ function updateMissionExecutionScreen(mStatus) {
   }
 
 
+  const stepIdx = (mStatus.step_index !== undefined && mStatus.step_index !== null) ? Number(mStatus.step_index) : null;
+  const stepTotal = (mStatus.step_total !== undefined && mStatus.step_total !== null) ? Number(mStatus.step_total) : ((mStatus.step_count !== undefined && mStatus.step_count !== null) ? Number(mStatus.step_count) : null);
+  const loopIdx = (mStatus.loop_index !== undefined && mStatus.loop_index !== null) ? Number(mStatus.loop_index) : null;
+  const loopTotal = (mStatus.loop_total !== undefined && mStatus.loop_total !== null) ? Number(mStatus.loop_total) : null;
+
+  let progressDetail = "";
+  if (stepIdx !== null && stepTotal !== null && stepTotal > 0) {
+    progressDetail += `Step ${stepIdx + 1}/${stepTotal}`;
+  } else if (stepIdx !== null) {
+    progressDetail += `Step ${stepIdx + 1}`;
+  }
+  if (loopIdx !== null) {
+    if (loopTotal !== null && loopTotal > 1) {
+      progressDetail += ` • Lap ${loopIdx + 1}/${loopTotal}`;
+    } else if (loopTotal === null) {
+      progressDetail += ` • Lap ${loopIdx + 1} (repeating)`;
+    }
+  }
+
+  const fullDesc = progressDetail ? `${progressDetail} — ${stepDesc}` : stepDesc;
+
   const progressPct = (mStatus.progress_pct !== undefined && mStatus.progress_pct !== null) ? mStatus.progress_pct : 0;
 
   if (missionScreen && missionScreen.style.display !== "flex") {
@@ -208,8 +229,8 @@ function updateMissionExecutionScreen(mStatus) {
   const pauseBtn = document.getElementById("btn-mission-pause-screen");
 
   if (titleEl) titleEl.textContent = title;
-  if (nodeEl) nodeEl.textContent = activeNode;
-  if (descEl) descEl.textContent = stepDesc;
+  if (nodeEl) nodeEl.textContent = (mStatus.state === "failed" && mStatus.message) ? `Failed: ${mStatus.message}` : activeNode;
+  if (descEl) descEl.textContent = fullDesc;
   if (fillEl) fillEl.style.width = `${progressPct}%`;
   if (timeEl && mStatus.elapsed_sec != null) {
     const totalSec = Math.floor(mStatus.elapsed_sec);
@@ -228,7 +249,7 @@ function updateMissionExecutionScreen(mStatus) {
     const bannerBar = document.getElementById("mission-progress-bar");
     const bannerPause = document.getElementById("btn-mission-pause");
     if (bannerTitle) bannerTitle.textContent = title;
-    if (bannerNode) bannerNode.textContent = `Task: ${activeNode}`;
+    if (bannerNode) bannerNode.textContent = progressDetail ? `${progressDetail} • ${activeNode}` : `Task: ${activeNode}`;
     if (bannerBar) bannerBar.style.width = `${progressPct}%`;
     if (bannerPause) bannerPause.textContent = (mStatus.state === "paused") ? "Resume" : "Pause";
   }

@@ -341,11 +341,14 @@ function initActionButtons() {
   async function localizeAtDock() {
     let dock = null;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/dock/pose`);
+      const res = await fetch(`${API_BASE}/api/v1/dock/pose?t=${Date.now()}`);
       if (res.ok) {
         const d = await res.json();
         if (d && d.data && typeof d.data.x === "number") {
           dock = d.data;
+          if (typeof viewerDockPose !== "undefined") {
+            viewerDockPose = dock;
+          }
         }
       }
     } catch (e) {

@@ -1766,9 +1766,26 @@ window.saveViewerEditMode = async function() {
         })
       });
 
+      viewerDockPose = {
+        x: viewerNewDock.x,
+        y: viewerNewDock.y,
+        theta: viewerNewDock.theta
+      };
+      viewerStandoffPose = {
+        x: standoff.x,
+        y: standoff.y,
+        theta: standoff.theta
+      };
+
+      if (typeof loadViewerWaypoints === "function") {
+        await loadViewerWaypoints();
+      }
+
       showToast("Dock & Standoff poses updated successfully!");
       cancelViewerEditMode();
-      openMapViewer(viewerMapName);
+      if (typeof renderViewerCanvas === "function") {
+        renderViewerCanvas();
+      }
     } catch (e) {
       showToast("Failed to save dock pose: " + e.message, true);
     }

@@ -6,6 +6,7 @@
 let onScreenNavInitiated = false;
 let previousDockOperation = "idle";
 let cachedWaypoints = [];
+window.cachedWaypoints = cachedWaypoints;
 
 async function refreshCachedWaypoints() {
   try {
@@ -13,11 +14,13 @@ async function refreshCachedWaypoints() {
     if (res.ok) {
       const data = await res.json();
       cachedWaypoints = data.waypoints || [];
+      window.cachedWaypoints = cachedWaypoints;
     }
   } catch (e) {
     // ignore
   }
 }
+window.refreshCachedWaypoints = refreshCachedWaypoints;
 refreshCachedWaypoints();
 
 function updateNavigationState(navData, isMissionActive = false) {

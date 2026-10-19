@@ -779,13 +779,85 @@ function dismissActiveInteraction() {
   triggerFaceExpression("happy");
 }
 
-function renderInteractionForm(interaction) {
+async function getFormAvailableWaypoints() {
+  if (window.cachedWaypoints && window.cachedWaypoints.length > 0) {
+    return window.cachedWaypoints;
+  }
+  if (typeof cachedWaypoints !== "undefined" && Array.isArray(cachedWaypoints) && cachedWaypoints.length > 0) {
+    window.cachedWaypoints = cachedWaypoints;
+    return cachedWaypoints;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/waypoints`);
+    if (res.ok) {
+      const data = await res.json();
+      const list = data.waypoints || [];
+      window.cachedWaypoints = list;
+      return list;
+    }
+  } catch (e) {
+    console.warn("Failed to fetch waypoints for form:", e);
+  }
+  return [];
+}
+
+async function renderInteractionForm(interaction) {
   const container = document.getElementById("form-fields-container");
   if (!container) return;
   const fields = interaction.fields || [];
 
+  const hasLocationField = fields.some(f => f.type === "location");
+  let waypoints = window.cachedWaypoints || [];
+  if (hasLocationField && (!waypoints || waypoints.length === 0)) {
+    waypoints = await getFormAvailableWaypoints();
+  }
+
   container.innerHTML = fields.map(f => {
-    if (f.type === "select") {
+    if (f.type === "location") {
+      const options = (Array.isArray(f.options) && f.options.length > 0)
+        ? f.options
+        : waypoints.map(w => w.name || w.id || w.waypoint_id).filter(Boolean);
+      const defaultVal = f.default_value || (options.length > 0 ? options[0] : "");
+
+      if (options.length === 0) {
+        return `
+          <div class="kiosk-field-group">
+            <label>📍 ${escapeHtml(f.label)}</label>
+            <input type="text" class="kiosk-input" name="${escapeHtml(f.key)}" value="${escapeHtml(f.default_value || "")}" placeholder="No map waypoints found. Type location name...">
+          </div>
+        `;
+      } else if (options.length <= 4) {
+        return `
+          <div class="kiosk-field-group">
+            <label>📍 ${escapeHtml(f.label)}</label>
+            <div class="kiosk-touch-options-grid" id="touch-chips-${escapeHtml(f.key)}">
+              ${options.map(opt => {
+                const isSel = (opt === defaultVal);
+                return `
+                  <button type="button" class="touch-option-chip ${isSel ? 'selected' : ''}"
+                          onclick="selectTouchChip('${escapeQuotes(f.key)}', '${escapeQuotes(opt)}', this)">
+                    <span class="chip-check">✓</span>
+                    <span>📍 ${escapeHtml(opt)}</span>
+                  </button>
+                `;
+              }).join("")}
+            </div>
+            <input type="hidden" name="${escapeHtml(f.key)}" id="hidden-input-${escapeHtml(f.key)}" value="${escapeHtml(defaultVal)}">
+          </div>
+        `;
+      } else {
+        return `
+          <div class="kiosk-field-group">
+            <label>📍 ${escapeHtml(f.label)}</label>
+            <div class="touch-select-box" onclick="openTouchSelectPicker('${escapeQuotes(f.key)}', '${escapeQuotes(f.label)}', ${escapeQuotes(JSON.stringify(options))}, true)">
+              <span id="touch-select-label-${escapeHtml(f.key)}">📍 ${escapeHtml(defaultVal || "Tap to Select Location")}</span>
+              <span class="touch-select-box-arrow">▼</span>
+            </div>
+            <input type="hidden" name="${escapeHtml(f.key)}" id="hidden-input-${escapeHtml(f.key)}" value="${escapeHtml(defaultVal)}">
+          </div>
+        `;
+      }
+    } else if (f.type === "select") {
       const options = f.options || [];
       const defaultVal = f.default_value || (options.length > 0 ? options[0] : "");
 
@@ -814,7 +886,7 @@ function renderInteractionForm(interaction) {
         return `
           <div class="kiosk-field-group">
             <label>${escapeHtml(f.label)}</label>
-            <div class="touch-select-box" onclick="openTouchSelectPicker('${escapeQuotes(f.key)}', '${escapeQuotes(f.label)}', ${escapeQuotes(JSON.stringify(options))})">
+            <div class="touch-select-box" onclick="openTouchSelectPicker('${escapeQuotes(f.key)}', '${escapeQuotes(f.label)}', ${escapeQuotes(JSON.stringify(options))}, false)">
               <span id="touch-select-label-${escapeHtml(f.key)}">${escapeHtml(defaultVal || "Tap to Select Option")}</span>
               <span class="touch-select-box-arrow">▼</span>
             </div>
@@ -822,33 +894,96 @@ function renderInteractionForm(interaction) {
           </div>
         `;
       }
+    } else if (f.type === "switch") {
+      const isChecked = Boolean(f.default_value === true || f.default_value === "true" || f.default_value === 1);
+      return `
+        <div class="kiosk-field-group kiosk-switch-group">
+          <label class="kiosk-switch-label">
+            <span>${escapeHtml(f.label)}</span>
+            <input type="checkbox" name="${escapeHtml(f.key)}" ${isChecked ? "checked" : ""}>
+            <span class="kiosk-toggle-track"></span>
+          </label>
+        </div>
+      `;
     } else if (f.type === "checkbox") {
+      const isChecked = Boolean(f.default_value === true || f.default_value === "true" || f.default_value === 1);
       return `
         <div class="kiosk-field-group kiosk-checkbox-group">
           <label class="kiosk-checkbox-label">
-            <input type="checkbox" name="${escapeHtml(f.key)}" ${f.default_value ? "checked" : ""}>
+            <input type="checkbox" name="${escapeHtml(f.key)}" ${isChecked ? "checked" : ""}>
             <span>${escapeHtml(f.label)}</span>
           </label>
+        </div>
+      `;
+    } else if (f.type === "number") {
+      return `
+        <div class="kiosk-field-group">
+          <label>${escapeHtml(f.label)}</label>
+          <input type="number" inputmode="numeric" class="kiosk-input" name="${escapeHtml(f.key)}" value="${escapeHtml(f.default_value !== undefined && f.default_value !== null ? String(f.default_value) : "")}" placeholder="Enter digits...">
+        </div>
+      `;
+    } else if (f.type === "signature") {
+      return `
+        <div class="kiosk-field-group">
+          <label>✍️ ${escapeHtml(f.label)}</label>
+          <input type="text" class="kiosk-input" name="${escapeHtml(f.key)}" value="${escapeHtml(f.default_value || "")}" placeholder="Type signature or full name...">
         </div>
       `;
     } else {
       return `
         <div class="kiosk-field-group">
           <label>${escapeHtml(f.label)}</label>
-          <input type="text" class="kiosk-input" name="${escapeHtml(f.key)}" value="${escapeHtml(f.default_value || "")}">
+          <input type="text" class="kiosk-input" name="${escapeHtml(f.key)}" value="${escapeHtml(f.default_value || "")}" placeholder="Type answer...">
         </div>
       `;
     }
   }).join("");
 
   const form = document.getElementById("kiosk-form");
+  const submitBtn = document.getElementById("btn-form-submit");
+  const cancelBtn = document.getElementById("btn-form-cancel");
+
+  // Reset button state whenever a form is displayed
+  if (submitBtn) {
+    submitBtn.innerHTML = "Submit Form";
+    submitBtn.disabled = false;
+    submitBtn.style.opacity = '1';
+    submitBtn.style.pointerEvents = 'auto';
+  }
+  if (cancelBtn) {
+    cancelBtn.innerHTML = "Cancel / Skip";
+    cancelBtn.disabled = false;
+    cancelBtn.style.opacity = '1';
+    cancelBtn.style.pointerEvents = 'auto';
+  }
+
   form.onsubmit = async (e) => {
     e.preventDefault();
+    if (submitBtn) {
+      submitBtn.innerHTML = `<span class="loading-spinner-inline" style="display:inline-block; width:22px; height:22px; border:3px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.6s linear infinite; margin-right:10px; vertical-align:middle;"></span><span>Submitting...</span>`;
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.9';
+      submitBtn.style.pointerEvents = 'none';
+    }
+    if (cancelBtn) {
+      cancelBtn.disabled = true;
+      cancelBtn.style.pointerEvents = 'none';
+      cancelBtn.style.opacity = '0.5';
+    }
+
+    const titleEl = document.getElementById("interaction-title");
+    const msgEl = document.getElementById("interaction-message");
+    if (titleEl) titleEl.textContent = "Submitting response...";
+    if (msgEl) msgEl.textContent = "Processing form data...";
+
     const formData = new FormData(form);
     const result = {};
     fields.forEach(f => {
-      if (f.type === "checkbox") {
+      if (f.type === "checkbox" || f.type === "switch") {
         result[f.key] = formData.has(f.key);
+      } else if (f.type === "number") {
+        const raw = formData.get(f.key);
+        result[f.key] = raw !== null && raw !== "" ? Number(raw) : raw;
       } else {
         result[f.key] = formData.get(f.key);
       }
@@ -856,9 +991,18 @@ function renderInteractionForm(interaction) {
     await submitInteractionResponse({ status: "submitted", form_data: result });
   };
 
-  document.getElementById("btn-form-cancel").onclick = async () => {
-    await submitInteractionResponse({ status: "canceled" });
-  };
+  if (cancelBtn) {
+    cancelBtn.onclick = async () => {
+      cancelBtn.innerHTML = `<span class="loading-spinner-inline" style="display:inline-block; width:18px; height:18px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.6s linear infinite; margin-right:8px; vertical-align:middle;"></span><span>Canceling...</span>`;
+      cancelBtn.disabled = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.style.pointerEvents = 'none';
+        submitBtn.style.opacity = '0.5';
+      }
+      await submitInteractionResponse({ status: "canceled" });
+    };
+  }
 }
 
 window.selectTouchChip = function(key, val, el) {
@@ -872,7 +1016,7 @@ window.selectTouchChip = function(key, val, el) {
   if (input) input.value = val;
 };
 
-window.openTouchSelectPicker = function(key, label, options) {
+window.openTouchSelectPicker = function(key, label, options, isLocation = false) {
   if (window.playTapBeep) window.playTapBeep();
   const currentVal = document.getElementById(`hidden-input-${key}`) ? document.getElementById(`hidden-input-${key}`).value : "";
 
@@ -893,8 +1037,8 @@ window.openTouchSelectPicker = function(key, label, options) {
       <div class="touch-picker-list">
         ${options.map(opt => `
           <div class="touch-picker-item ${opt === currentVal ? 'active' : ''}"
-               onclick="confirmTouchSelectOption('${escapeQuotes(key)}', '${escapeQuotes(opt)}')">
-            <span>${escapeHtml(opt)}</span>
+               onclick="confirmTouchSelectOption('${escapeQuotes(key)}', '${escapeQuotes(opt)}', ${isLocation ? 'true' : 'false'})">
+            <span>${isLocation ? '📍 ' : ''}${escapeHtml(opt)}</span>
             ${opt === currentVal ? '<span style="font-size:20px; font-weight:bold;">✓</span>' : ''}
           </div>
         `).join("")}
@@ -905,11 +1049,11 @@ window.openTouchSelectPicker = function(key, label, options) {
   modal.style.display = "flex";
 };
 
-window.confirmTouchSelectOption = function(key, val) {
+window.confirmTouchSelectOption = function(key, val, isLocation = false) {
   if (window.playTapBeep) window.playTapBeep();
   const labelEl = document.getElementById(`touch-select-label-${key}`);
   const inputEl = document.getElementById(`hidden-input-${key}`);
-  if (labelEl) labelEl.textContent = val;
+  if (labelEl) labelEl.textContent = isLocation ? `📍 ${val}` : val;
   if (inputEl) inputEl.value = val;
   closeTouchSelectPicker();
 };

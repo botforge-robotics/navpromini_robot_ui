@@ -523,22 +523,22 @@
     if (!mouthPath) return;
 
     if (total < 10) {
-      // Gentle smile
-      mouthPath.setAttribute("d", "M 70 140 Q 100 156 130 140");
+      // Gentle natural smile
+      mouthPath.setAttribute("d", "M 365 578 Q 400 592 435 578 Q 400 584 365 578 Z");
       return;
     }
 
-    // Dynamic viseme mouth opening based on energy
-    const openH = Math.min(32, Math.max(6, (low / 255) * 40));
-    const widthW = Math.min(75, Math.max(45, (mid / 255) * 80));
+    // Dynamic viseme mouth opening based on audio energy
+    const openH = Math.min(26, Math.max(4, (low / 255) * 32));
+    const widthW = Math.min(76, Math.max(48, (mid / 255) * 80));
 
-    const leftX = 100 - (widthW / 2);
-    const rightX = 100 + (widthW / 2);
-    const topY = 138 - (openH / 3);
-    const bottomY = 142 + openH;
+    const leftX = 400 - (widthW / 2);
+    const rightX = 400 + (widthW / 2);
+    const topY = 578 - (openH / 4);
+    const bottomY = 582 + openH;
 
-    // Rounded mouth cavity
-    const d = `M ${leftX} ${topY} Q 100 ${topY - 4} ${rightX} ${topY} Q ${rightX + 4} ${140} ${rightX} ${bottomY} Q 100 ${bottomY + 8} ${leftX} ${bottomY} Q ${leftX - 4} ${140} ${leftX} ${topY} Z`;
+    // Smooth anatomical lip and oral cavity path
+    const d = `M ${leftX} ${topY} Q 400 ${topY - 2} ${rightX} ${topY} Q ${rightX + 3} 582 ${rightX} ${bottomY} Q 400 ${bottomY + 6} ${leftX} ${bottomY} Q ${leftX - 3} 582 ${leftX} ${topY} Z`;
     mouthPath.setAttribute("d", d);
   }
 
@@ -546,9 +546,9 @@
     const mouthPath = document.getElementById("avatar-mouth-path");
     if (!mouthPath) return;
     if (expr === "neutral") {
-      mouthPath.setAttribute("d", "M 70 140 Q 100 155 130 140");
+      mouthPath.setAttribute("d", "M 365 578 Q 400 592 435 578 Q 400 584 365 578 Z");
     } else if (expr === "happy") {
-      mouthPath.setAttribute("d", "M 65 136 Q 100 168 135 136 Q 100 148 65 136 Z");
+      mouthPath.setAttribute("d", "M 362 576 Q 400 600 438 576 Q 400 586 362 576 Z");
     }
   }
 

@@ -328,129 +328,308 @@
         <!-- 0. VIRTUAL AVATAR & GEMINI FLASH LIVE SCREEN -->
         <section id="tab-avatar" class="tab-page">
           <div class="subpage-container avatar-subpage-container">
-            <!-- Header Bar -->
-            <div class="subpage-header avatar-header">
-              <div class="subpage-nav-bar">
-                <button class="btn btn-secondary btn-back-home btn-subpage-back" onclick="closeSubpage()">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-                  <span>Dashboard</span>
-                </button>
-                <div class="avatar-header-meta">
-                  <div class="avatar-live-pill" id="avatar-live-pill">
-                    <span class="avatar-pulse-dot"></span>
-                    <span id="avatar-live-text">Ready to listen</span>
-                  </div>
-                </div>
-              </div>
-              <div class="subpage-headline avatar-titles">
-                <h2 id="avatar-scenario-title">AI Voice Assistant</h2>
-                <p class="subtitle" id="avatar-state-text">Tap the microphone below to speak</p>
-              </div>
-            </div>
+            <!-- Discreet Minimal Back Button to Dashboard -->
+            <button class="avatar-nav-back" onclick="closeSubpage()" title="Back to Dashboard">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6"/>
+              </svg>
+            </button>
 
-            <!-- Avatar Hero Stage -->
+            <!-- Full-Screen Female Human Avatar Stage (Starting from Chest at Bottom of Screen) -->
             <div class="avatar-stage">
-              <!-- Aura Glow Ring -->
-              <div class="avatar-aura" id="avatar-aura-ring"></div>
-
-              <!-- Interactive Stylized Robot Avatar SVG -->
               <div class="avatar-character">
-                <svg viewBox="0 0 200 200" width="280" height="280" class="avatar-svg" id="avatar-svg">
+                <svg viewBox="0 0 800 1280" class="avatar-svg" id="avatar-svg">
                   <defs>
-                    <linearGradient id="headGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#1E293B" />
-                      <stop offset="100%" stop-color="#0F172A" />
+                    <!-- Complexion Gradients -->
+                    <linearGradient id="skinFace" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#FFF6F1" />
+                      <stop offset="35%" stop-color="#FEEDDF" />
+                      <stop offset="75%" stop-color="#FCDDCE" />
+                      <stop offset="100%" stop-color="#F5C4B2" />
                     </linearGradient>
-                    <linearGradient id="faceGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stop-color="#0F172A" />
+
+                    <linearGradient id="skinNeck" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#E59B87" />
+                      <stop offset="40%" stop-color="#F5BAA6" />
+                      <stop offset="100%" stop-color="#FDE2D3" />
+                    </linearGradient>
+
+                    <!-- Hair Tones -->
+                    <linearGradient id="hairDark" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#231713" />
+                      <stop offset="50%" stop-color="#34221A" />
+                      <stop offset="100%" stop-color="#18100D" />
+                    </linearGradient>
+
+                    <linearGradient id="hairWarm" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#55382B" />
+                      <stop offset="60%" stop-color="#3A251C" />
+                      <stop offset="100%" stop-color="#20140F" />
+                    </linearGradient>
+
+                    <!-- Iris Gradient (Radiant Hazel Oceanic Teal) -->
+                    <radialGradient id="irisGrad" cx="44%" cy="38%" r="56%">
+                      <stop offset="0%" stop-color="#38BDF8" />
+                      <stop offset="40%" stop-color="#0284C7" />
+                      <stop offset="80%" stop-color="#0369A1" />
+                      <stop offset="100%" stop-color="#082F49" />
+                    </radialGradient>
+
+                    <!-- Lips -->
+                    <linearGradient id="lipUpper" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#D74F65" />
+                      <stop offset="100%" stop-color="#B8344A" />
+                    </linearGradient>
+                    <linearGradient id="lipLower" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#E6657B" />
+                      <stop offset="60%" stop-color="#D74F65" />
+                      <stop offset="100%" stop-color="#BA364D" />
+                    </linearGradient>
+
+                    <!-- Clothing (Tailored Slate-Navy Blazer + Inner Silk Top) -->
+                    <linearGradient id="blazerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#1E293B" />
+                      <stop offset="45%" stop-color="#0F172A" />
                       <stop offset="100%" stop-color="#020617" />
                     </linearGradient>
-                    <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
-                      <stop offset="0%" stop-color="#38BDF8" />
-                      <stop offset="100%" stop-color="#0284C7" />
-                    </radialGradient>
+                    <linearGradient id="silkTopGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#E2E8F0" />
+                      <stop offset="100%" stop-color="#CBD5E1" />
+                    </linearGradient>
+
+                    <!-- Soft Filters -->
+                    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feGaussianBlur stdDeviation="10" />
+                    </filter>
+                    <filter id="blushFilter" x="-30%" y="-30%" width="160%" height="160%">
+                      <feGaussianBlur stdDeviation="28" />
+                    </filter>
                   </defs>
 
-                  <!-- Antenna with pulsating status bulb -->
-                  <rect x="97" y="10" width="6" height="24" rx="3" fill="#64748B" />
-                  <circle cx="100" cy="10" r="10" fill="#38BDF8" class="avatar-antenna-bulb" />
-
-                  <!-- Robot Outer Head Casing -->
-                  <rect x="25" y="32" width="150" height="140" rx="36" fill="url(#headGrad)" stroke="#334155" stroke-width="4" />
-
-                  <!-- Head Ear Accents -->
-                  <rect x="15" y="80" width="12" height="40" rx="6" fill="#38BDF8" opacity="0.85" />
-                  <rect x="173" y="80" width="12" height="40" rx="6" fill="#38BDF8" opacity="0.85" />
-
-                  <!-- Inner Visor / Face Screen -->
-                  <rect x="36" y="44" width="128" height="116" rx="26" fill="url(#faceGrad)" stroke="#1E293B" stroke-width="2" />
-
-                  <!-- Eyes (Left & Right) with blinking animation support -->
-                  <g class="avatar-eye avatar-eye-left" id="eye-left">
-                    <ellipse cx="72" cy="88" rx="16" ry="20" fill="url(#eyeGlow)" />
-                    <circle cx="76" cy="84" r="5" fill="#FFFFFF" opacity="0.9" />
-                  </g>
-                  <g class="avatar-eye avatar-eye-right" id="eye-right">
-                    <ellipse cx="128" cy="88" rx="16" ry="20" fill="url(#eyeGlow)" />
-                    <circle cx="132" cy="84" r="5" fill="#FFFFFF" opacity="0.9" />
+                  <!-- ================= LAYER 1: BACK HAIR MASS ================= -->
+                  <g id="back-hair">
+                    <path d="M 235 440
+                             C 230 320, 310 260, 400 260
+                             C 490 260, 570 320, 565 440
+                             C 575 560, 590 680, 580 820
+                             C 540 850, 480 840, 470 760
+                             C 470 660, 490 530, 490 440
+                             C 490 340, 450 300, 400 300
+                             C 350 300, 310 340, 310 440
+                             C 310 530, 330 660, 330 760
+                             C 320 840, 260 850, 220 820
+                             C 210 680, 225 560, 235 440 Z"
+                          fill="url(#hairDark)" />
                   </g>
 
-                  <!-- Cute Blushing Cheeks -->
-                  <ellipse cx="58" cy="122" rx="10" ry="5" fill="#F43F5E" opacity="0.45" />
-                  <ellipse cx="142" cy="122" rx="10" ry="5" fill="#F43F5E" opacity="0.45" />
+                  <!-- ================= LAYER 2: TORSO, CHEST & SHOULDERS ================= -->
+                  <!-- Starting from the bottom of the screen (y=1280) and rising into chest and shoulders -->
+                  <g id="body-and-chest">
+                    <!-- Perfectly Proportioned Neck (Height: 65px, from chin y=650 to collar y=715) -->
+                    <path d="M 348 640
+                             C 348 670, 338 695, 328 720
+                             C 375 730, 425 730, 472 720
+                             C 462 695, 452 670, 452 640 Z"
+                          fill="url(#skinNeck)" />
 
-                  <!-- Viseme Mouth Path (Reshaped dynamically via FFT Web Audio) -->
-                  <path id="avatar-mouth-path" d="M 70 140 Q 100 155 130 140" fill="#38BDF8" stroke="#38BDF8" stroke-width="5" stroke-linecap="round" />
+                    <!-- Inner Elegant Silk Top with Soft Scoop Collar -->
+                    <path d="M 326 718
+                             C 368 738, 432 738, 474 718
+                             L 505 820
+                             C 450 845, 350 845, 295 820 Z"
+                          fill="url(#silkTopGrad)"
+                          stroke="#94A3B8"
+                          stroke-width="1.8" />
+
+                    <!-- Tailored Blazer from y=720 Down to Bottom Edge (y=1280) -->
+                    <!-- Left Shoulder & Body -->
+                    <path d="M 0 1280
+                             L 0 860
+                             C 20 790, 110 745, 250 720
+                             C 295 715, 335 745, 370 815
+                             L 395 1280 Z"
+                          fill="url(#blazerGrad)" />
+
+                    <!-- Right Shoulder & Body -->
+                    <path d="M 800 1280
+                             L 800 860
+                             C 780 790, 690 745, 550 720
+                             C 505 715, 465 745, 430 815
+                             L 405 1280 Z"
+                          fill="url(#blazerGrad)" />
+
+                    <!-- Tailored Lapel Seams -->
+                    <path d="M 250 720 L 370 815 L 396 1280" stroke="#334155" stroke-width="3" fill="none" />
+                    <path d="M 550 720 L 430 815 L 404 1280" stroke="#334155" stroke-width="3" fill="none" />
+                    <path d="M 370 815 L 330 945" stroke="#1E293B" stroke-width="2.2" fill="none" />
+                    <path d="M 430 815 L 470 945" stroke="#1E293B" stroke-width="2.2" fill="none" />
+                  </g>
+
+                  <!-- ================= LAYER 3: HEAD & JAWLINE ================= -->
+                  <g id="head-base">
+                    <!-- Chin Ambient Occlusion Shadow -->
+                    <ellipse cx="400" cy="656" rx="64" ry="16" fill="#CF8A77" filter="url(#softShadow)" opacity="0.65" />
+
+                    <!-- Feminine Oval Face with Soft Naturally Rounded Chin -->
+                    <path d="M 282 440
+                             C 278 535, 312 625, 372 654
+                             C 388 660, 412 660, 428 654
+                             C 488 625, 522 535, 518 440
+                             C 518 335, 480 285, 400 285
+                             C 320 285, 282 335, 282 440 Z"
+                          fill="url(#skinFace)" />
+
+                    <!-- Radiant Rosy Cheek Blush -->
+                    <circle cx="330" cy="515" r="48" fill="#F43F5E" filter="url(#blushFilter)" opacity="0.22" />
+                    <circle cx="470" cy="515" r="48" fill="#F43F5E" filter="url(#blushFilter)" opacity="0.22" />
+
+                    <!-- Delicate Profile Ears & Pearl Studs -->
+                    <path d="M 282 445 C 266 465, 264 510, 284 528" fill="#F9D0BF" stroke="#EAA490" stroke-width="1.8" />
+                    <circle cx="278" cy="524" r="5" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+
+                    <path d="M 518 445 C 534 465, 536 510, 516 528" fill="#F9D0BF" stroke="#EAA490" stroke-width="1.8" />
+                    <circle cx="522" cy="524" r="5" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+                  </g>
+
+                  <!-- ================= LAYER 4: FACIAL FEATURES ================= -->
+                  <!-- Eyebrows -->
+                  <g id="eyebrows">
+                    <path d="M 302 400 C 322 384, 355 384, 376 398" stroke="#311F18" stroke-width="4.5" stroke-linecap="round" fill="none" />
+                    <path d="M 424 398 C 445 384, 478 384, 498 400" stroke="#311F18" stroke-width="4.5" stroke-linecap="round" fill="none" />
+                  </g>
+
+                  <!-- Expressive Eyes with Blinking Support -->
+                  <g id="eyes">
+                    <!-- Left Eye -->
+                    <g class="avatar-eye" id="eye-left" style="transform-origin: 338px 438px;">
+                      <path d="M 310 422 C 324 416, 354 416, 368 422" stroke="#DDA190" stroke-width="2" stroke-linecap="round" fill="none" />
+                      <path d="M 306 438 C 320 418, 356 418, 370 438 C 356 456, 320 456, 306 438 Z" fill="#F8FAFC" />
+                      <circle cx="338" cy="438" r="15.5" fill="url(#irisGrad)" />
+                      <circle cx="338" cy="438" r="15.5" fill="none" stroke="#082F49" stroke-width="1.8" />
+                      <circle cx="338" cy="438" r="6" fill="#0A1120" />
+                      <circle cx="342" cy="434" r="3.6" fill="#FFFFFF" />
+                      <circle cx="333" cy="442" r="1.8" fill="#FFFFFF" opacity="0.8" />
+                      <path d="M 302 439 C 318 416, 360 416, 374 437" stroke="#1A1210" stroke-width="4.5" stroke-linecap="round" fill="none" />
+                    </g>
+
+                    <!-- Right Eye -->
+                    <g class="avatar-eye" id="eye-right" style="transform-origin: 462px 438px;">
+                      <path d="M 432 422 C 446 416, 476 416, 490 422" stroke="#DDA190" stroke-width="2" stroke-linecap="round" fill="none" />
+                      <path d="M 430 438 C 444 418, 480 418, 494 438 C 480 456, 444 456, 430 438 Z" fill="#F8FAFC" />
+                      <circle cx="462" cy="438" r="15.5" fill="url(#irisGrad)" />
+                      <circle cx="462" cy="438" r="15.5" fill="none" stroke="#082F49" stroke-width="1.8" />
+                      <circle cx="462" cy="438" r="6" fill="#0A1120" />
+                      <circle cx="466" cy="434" r="3.6" fill="#FFFFFF" />
+                      <circle cx="457" cy="442" r="1.8" fill="#FFFFFF" opacity="0.8" />
+                      <path d="M 426 437 C 440 416, 482 416, 498 439" stroke="#1A1210" stroke-width="4.5" stroke-linecap="round" fill="none" />
+                    </g>
+                  </g>
+
+                  <!-- Soft Feminine Nose -->
+                  <g id="nose">
+                    <path d="M 391 520 C 396 525, 404 525, 409 520" stroke="#D58370" stroke-width="2.4" stroke-linecap="round" fill="none" />
+                    <ellipse cx="388" cy="521" rx="2.5" ry="1.5" fill="#BA6955" opacity="0.6" />
+                    <ellipse cx="412" cy="521" rx="2.5" ry="1.5" fill="#BA6955" opacity="0.6" />
+                    <circle cx="400" cy="516" r="4.5" fill="#FFFFFF" opacity="0.3" />
+                  </g>
+
+                  <!-- Dynamic Viseme Mouth & Lips -->
+                  <g id="mouth-group">
+                    <!-- Dynamic Inner Mouth Opening (Responsive to Audio FFT) -->
+                    <path id="avatar-mouth-path"
+                          d="M 365 578 Q 400 592 435 578 Q 400 584 365 578 Z"
+                          fill="#7F1D2B"
+                          stroke="#6B1424"
+                          stroke-width="1.5" />
+
+                    <!-- Upper Lip with Soft Cupids Bow -->
+                    <path d="M 363 578
+                             C 378 567, 391 569, 400 572
+                             C 409 569, 422 567, 437 578
+                             C 418 582, 382 582, 363 578 Z"
+                          fill="url(#lipUpper)" />
+
+                    <!-- Lower Lip -->
+                    <path d="M 363 578
+                             C 380 606, 420 606, 437 578
+                             C 418 586, 382 586, 363 578 Z"
+                          fill="url(#lipLower)" />
+
+                    <!-- Lip Highlight -->
+                    <ellipse cx="400" cy="591" rx="15" ry="3.5" fill="#FFFFFF" opacity="0.45" />
+                  </g>
+
+                  <!-- ================= LAYER 5: FRONT HAIR & STYLING ================= -->
+                  <g id="front-hair">
+                    <!-- Left Soft Face-Framing Wave -->
+                    <path d="M 400 285
+                             C 330 285, 275 330, 260 410
+                             C 250 480, 260 560, 275 640
+                             C 290 710, 275 765, 250 805
+                             C 285 795, 320 755, 325 695
+                             C 330 630, 290 535, 290 440
+                             C 290 365, 345 305, 400 285 Z"
+                          fill="url(#hairWarm)" />
+
+                    <!-- Right Face-Framing Part Wave -->
+                    <path d="M 400 285
+                             C 460 285, 520 320, 535 410
+                             C 545 480, 535 560, 520 640
+                             C 505 710, 520 765, 545 805
+                             C 510 795, 475 755, 470 695
+                             C 465 630, 505 535, 505 440
+                             C 505 365, 455 305, 400 285 Z"
+                          fill="url(#hairWarm)" />
+
+                    <!-- Soft Forehead Parting Strand -->
+                    <path d="M 395 285
+                             C 350 305, 305 355, 290 415
+                             C 310 380, 360 335, 405 308 Z"
+                          fill="#4D3328" />
+
+                    <!-- Highlights -->
+                    <path d="M 330 340 C 290 410, 280 500, 275 590" stroke="#664334" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.6" />
+                    <path d="M 470 340 C 510 410, 520 500, 525 590" stroke="#664334" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.6" />
+                  </g>
                 </svg>
               </div>
 
-              <!-- Live Dialogue / Subtitles Transcript -->
-              <div class="avatar-transcript-card" id="avatar-transcript-card">
-                <div class="transcript-user" id="user-transcript">You: Tap the mic below to start speaking</div>
-                <div class="transcript-robot" id="robot-transcript">Hello! I am your AI Voice Assistant. How can I help you today?</div>
+              <!-- Invisible Transcript Container (maintains DOM references safely) -->
+              <div class="avatar-transcript-card" id="avatar-transcript-card" style="display: none;">
+                <div class="transcript-user" id="user-transcript"></div>
+                <div class="transcript-robot" id="robot-transcript"></div>
               </div>
             </div>
 
-            <!-- Slide-Out Media Card (Floor plans, room photos, store brochures) -->
+            <!-- Slide-Out Media Card (Floor plans, room photos if requested) -->
             <div class="avatar-media-card" id="avatar-media-card" style="display: none;">
               <div class="avatar-media-header">
-                <h4 id="avatar-media-title">Room Specifications</h4>
+                <h4 id="avatar-media-title">Specifications</h4>
                 <button type="button" class="btn-close-media" onclick="closeAvatarMediaCard()">✕</button>
               </div>
               <div class="avatar-media-body">
-                <img id="avatar-media-img" src="assets/logo.png" alt="Media Item" class="avatar-media-img" />
-                <p id="avatar-media-desc" class="avatar-media-desc">Dimensions: 14' x 11' • Quartz countertops • Blum hardware</p>
+                <img id="avatar-media-img" src="assets/logo.png" alt="Media" class="avatar-media-img" />
+                <p id="avatar-media-desc" class="avatar-media-desc"></p>
               </div>
             </div>
 
-            <!-- Context Suggestion Chips -->
-            <div class="avatar-suggestion-chips" id="avatar-suggestion-chips">
-              <!-- Dynamically populated chips -->
-            </div>
+            <!-- Hidden Suggestion Chips container to maintain JS references without visual clutter -->
+            <div class="avatar-suggestion-chips" id="avatar-suggestion-chips" style="display: none;"></div>
 
-            <!-- Bottom Floating Control Bar -->
-            <div class="avatar-bottom-bar">
-              <!-- Bottom-Left Mic Button -->
-              <button type="button" class="btn-avatar-mic" id="btn-avatar-mic" onclick="toggleAvatarMic()">
+            <!-- The ONLY Interactive Control: Bottom-Left Floating Mic Button -->
+            <div class="avatar-mic-wrapper">
+              <button type="button" class="btn-avatar-mic btn-clean-mic" id="btn-avatar-mic" onclick="toggleAvatarMic()">
                 <div class="mic-wave-ring"></div>
-                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                  <line x1="12" y1="19" x2="12" y2="23"></line>
-                  <line x1="8" y1="23" x2="16" y2="23"></line>
-                </svg>
+                <div class="mic-icon-circle">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                  </svg>
+                </div>
                 <span class="mic-label" id="avatar-mic-label">Tap to Speak</span>
               </button>
-
-              <!-- Quick Robot Action Controls on the Right -->
-              <div class="avatar-quick-actions">
-                <button type="button" class="btn btn-outline btn-sm btn-avatar-action" onclick="stopRobotAction()">
-                  <span>🛑 Pause</span>
-                </button>
-                <button type="button" class="btn btn-primary btn-sm btn-avatar-action" onclick="dockRobotAction()">
-                  <span>⚡ Base</span>
-                </button>
-              </div>
             </div>
           </div>
         </section>

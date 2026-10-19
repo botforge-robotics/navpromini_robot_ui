@@ -5757,6 +5757,7 @@ select.kiosk-select option,
 }
 
 .avatar-eye {
+  transform-box: fill-box;
   transform-origin: center;
   transition: transform 0.08s cubic-bezier(0.4, 0, 0.2, 1);
 }

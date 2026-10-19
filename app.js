@@ -232,6 +232,14 @@ window.openSubpage = function(subpageName) {
     page.classList.toggle("active", page.id === "tab-" + subpageName);
   });
 
+  // If navigating away from avatar screen, ensure mic and session are torn down
+  if (currentOpenSubpage !== "avatar" && typeof window.teardownGeminiAvatarScreen === "function") {
+    window.teardownGeminiAvatarScreen();
+  }
+
+  if (subpageName === "avatar" && typeof window.initGeminiAvatarScreen === "function") {
+    window.initGeminiAvatarScreen();
+  }
   if (subpageName === "locations" && typeof loadWaypoints === "function") loadWaypoints();
   if (subpageName === "missions" && typeof loadMissions === "function") loadMissions();
   if (subpageName === "schedules" && typeof loadSchedules === "function") loadSchedules();
@@ -243,6 +251,10 @@ window.openSubpage = function(subpageName) {
 };
 
 window.closeSubpage = function() {
+  // Screen-gated lifecycle: immediately hard mute mic and disconnect when closing
+  if (typeof window.teardownGeminiAvatarScreen === "function") {
+    window.teardownGeminiAvatarScreen();
+  }
   currentOpenSubpage = null;
   if (typeof stopPowerHealthPolling === "function") stopPowerHealthPolling();
   const container = document.getElementById("subpages-viewport");

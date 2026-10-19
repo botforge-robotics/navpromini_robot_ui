@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NavPro Mini — Onboard Screen UI</title>
-  <link rel="stylesheet" href="style.css?v=223">
+  <link rel="stylesheet" href="style.css?v=224">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -335,261 +335,228 @@
               </svg>
             </button>
 
-            <!-- Full-Screen Female Human Avatar Stage (Starting from Chest at Bottom of Screen) -->
+            <!-- Full-Screen Cute Little Face Robot Avatar Stage -->
             <div class="avatar-stage">
               <div class="avatar-character">
                 <svg viewBox="0 0 800 1280" class="avatar-svg" id="avatar-svg">
                   <defs>
-                    <!-- Complexion Gradients -->
-                    <linearGradient id="skinFace" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stop-color="#FFF6F1" />
-                      <stop offset="35%" stop-color="#FEEDDF" />
-                      <stop offset="75%" stop-color="#FCDDCE" />
-                      <stop offset="100%" stop-color="#F5C4B2" />
+                    <!-- Soft Ceramic Head Shading -->
+                    <linearGradient id="cuteHeadGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#FFFFFF" />
+                      <stop offset="65%" stop-color="#F8FAFC" />
+                      <stop offset="100%" stop-color="#E2E8F0" />
                     </linearGradient>
 
-                    <linearGradient id="skinNeck" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stop-color="#E59B87" />
-                      <stop offset="40%" stop-color="#F5BAA6" />
-                      <stop offset="100%" stop-color="#FDE2D3" />
+                    <!-- Glossy Obsidian Glass Visor -->
+                    <linearGradient id="visorGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#0B0F19" />
+                      <stop offset="55%" stop-color="#141C2E" />
+                      <stop offset="100%" stop-color="#080C14" />
                     </linearGradient>
 
-                    <!-- Hair Tones -->
-                    <linearGradient id="hairDark" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#231713" />
-                      <stop offset="50%" stop-color="#34221A" />
-                      <stop offset="100%" stop-color="#18100D" />
+                    <!-- Visor Gloss Reflection Gradient -->
+                    <linearGradient id="visorGloss" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18" />
+                      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.05" />
+                      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
                     </linearGradient>
 
-                    <linearGradient id="hairWarm" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stop-color="#55382B" />
-                      <stop offset="60%" stop-color="#3A251C" />
-                      <stop offset="100%" stop-color="#20140F" />
+                    <!-- Expressive Luminous Eye Gradient (Cyan Sky Blue) -->
+                    <linearGradient id="eyeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#67E8F9" />
+                      <stop offset="25%" stop-color="#38BDF8" />
+                      <stop offset="70%" stop-color="#0284C7" />
+                      <stop offset="100%" stop-color="#0369A1" />
                     </linearGradient>
 
-                    <!-- Iris Gradient (Radiant Hazel Oceanic Teal) -->
-                    <radialGradient id="irisGrad" cx="44%" cy="38%" r="56%">
-                      <stop offset="0%" stop-color="#38BDF8" />
-                      <stop offset="40%" stop-color="#0284C7" />
-                      <stop offset="80%" stop-color="#0369A1" />
-                      <stop offset="100%" stop-color="#082F49" />
+                    <!-- Cheerful Blush Gradients -->
+                    <radialGradient id="blushGrad" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stop-color="#FB7185" stop-opacity="0.8" />
+                      <stop offset="60%" stop-color="#FDA4AF" stop-opacity="0.4" />
+                      <stop offset="100%" stop-color="#FB7185" stop-opacity="0" />
                     </radialGradient>
 
-                    <!-- Lips -->
-                    <linearGradient id="lipUpper" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stop-color="#D74F65" />
-                      <stop offset="100%" stop-color="#B8344A" />
-                    </linearGradient>
-                    <linearGradient id="lipLower" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stop-color="#E6657B" />
-                      <stop offset="60%" stop-color="#D74F65" />
-                      <stop offset="100%" stop-color="#BA364D" />
-                    </linearGradient>
-
-                    <!-- Clothing (Tailored Slate-Navy Blazer + Inner Silk Top) -->
-                    <linearGradient id="blazerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#1E293B" />
-                      <stop offset="45%" stop-color="#0F172A" />
-                      <stop offset="100%" stop-color="#020617" />
-                    </linearGradient>
-                    <linearGradient id="silkTopGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stop-color="#E2E8F0" />
+                    <!-- Ear Pod Metallic Shading -->
+                    <linearGradient id="earGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#FFFFFF" />
+                      <stop offset="50%" stop-color="#E2E8F0" />
                       <stop offset="100%" stop-color="#CBD5E1" />
                     </linearGradient>
 
-                    <!-- Soft Filters -->
-                    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-                      <feGaussianBlur stdDeviation="10" />
+                    <!-- Antenna Orb Gradient -->
+                    <radialGradient id="orbGrad" cx="35%" cy="30%" r="65%">
+                      <stop offset="0%" stop-color="#A5F3FC" />
+                      <stop offset="45%" stop-color="#38BDF8" />
+                      <stop offset="85%" stop-color="#0284C7" />
+                      <stop offset="100%" stop-color="#0369A1" />
+                    </radialGradient>
+
+                    <!-- Cute Body Pod Gradient -->
+                    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#FFFFFF" />
+                      <stop offset="70%" stop-color="#F1F5F9" />
+                      <stop offset="100%" stop-color="#CBD5E1" />
+                    </linearGradient>
+
+                    <!-- Aura Glow Filter & Shadow Filters -->
+                    <filter id="cuteShadow" x="-20%" y="-20%" width="140%" height="140%">
+                      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#0F172A" flood-opacity="0.08" />
                     </filter>
-                    <filter id="blushFilter" x="-30%" y="-30%" width="160%" height="160%">
-                      <feGaussianBlur stdDeviation="28" />
+                    <filter id="eyeGlow" x="-30%" y="-30%" width="160%" height="160%">
+                      <feGaussianBlur stdDeviation="5" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
                     </filter>
+                    <filter id="auraGlow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="24" />
+                    </filter>
+                    <radialGradient id="auraGrad" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.45" />
+                      <stop offset="65%" stop-color="#38BDF8" stop-opacity="0.15" />
+                      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0" />
+                    </radialGradient>
                   </defs>
 
-                  <!-- ================= LAYER 1: BACK HAIR MASS ================= -->
-                  <g id="back-hair">
-                    <path d="M 235 440
-                             C 230 320, 310 260, 400 260
-                             C 490 260, 570 320, 565 440
-                             C 575 560, 590 680, 580 820
-                             C 540 850, 480 840, 470 760
-                             C 470 660, 490 530, 490 440
-                             C 490 340, 450 300, 400 300
-                             C 350 300, 310 340, 310 440
-                             C 310 530, 330 660, 330 760
-                             C 320 840, 260 850, 220 820
-                             C 210 680, 225 560, 235 440 Z"
-                          fill="url(#hairDark)" />
+                  <!-- ================= 0. INTERACTIVE VOICE AURA RING ================= -->
+                  <!-- Scales up softly when Gemini Live assistant is speaking -->
+                  <circle id="avatar-aura-ring" cx="400" cy="530" r="280" fill="url(#auraGrad)" opacity="0.15" style="transform-origin: 400px 530px; transition: transform 0.15s ease, opacity 0.15s ease;" />
+
+                  <!-- ================= 1. FLOATING GROUND AMBIENT SHADOW ================= -->
+                  <ellipse cx="400" cy="980" rx="210" ry="24" fill="#0F172A" opacity="0.06" filter="url(#cuteShadow)" />
+
+                  <!-- ================= 2. CUTE MINI ROBOT TORSO & COLLAR ================= -->
+                  <g id="cute-robot-body">
+                    <!-- Compact Friendly Torso Pod -->
+                    <path d="M 270 760
+                             C 270 735, 330 725, 400 725
+                             C 470 725, 530 735, 530 760
+                             C 545 810, 555 870, 535 910
+                             C 490 935, 310 935, 265 910
+                             C 245 870, 255 810, 270 760 Z"
+                          fill="url(#bodyGrad)"
+                          stroke="#E2E8F0"
+                          stroke-width="3"
+                          filter="url(#cuteShadow)" />
+
+                    <!-- Sleek Neck Pivot Capsule -->
+                    <rect x="350" y="700" width="100" height="36" rx="18" fill="url(#earGrad)" stroke="#CBD5E1" stroke-width="2.5" />
+
+                    <!-- Cute Chest Core / Heart Emblem (Glows gently) -->
+                    <circle cx="400" cy="815" r="22" fill="#0F172A" />
+                    <circle cx="400" cy="815" r="17" fill="url(#eyeGrad)" filter="url(#eyeGlow)" />
+                    <!-- Subtle Core Sparkle -->
+                    <circle cx="395" cy="810" r="4.5" fill="#FFFFFF" />
                   </g>
 
-                  <!-- ================= LAYER 2: TORSO, CHEST & SHOULDERS ================= -->
-                  <!-- Starting from the bottom of the screen (y=1280) and rising into chest and shoulders -->
-                  <g id="body-and-chest">
-                    <!-- Perfectly Proportioned Neck (Height: 65px, from chin y=650 to collar y=715) -->
-                    <path d="M 348 640
-                             C 348 670, 338 695, 328 720
-                             C 375 730, 425 730, 472 720
-                             C 462 695, 452 670, 452 640 Z"
-                          fill="url(#skinNeck)" />
+                  <!-- ================= 3. CUTE EAR PODS / AUDIO NODES ================= -->
+                  <g id="cute-ears">
+                    <!-- Left Ear Pod -->
+                    <rect x="130" y="475" width="48" height="110" rx="24" fill="url(#earGrad)" stroke="#E2E8F0" stroke-width="3" filter="url(#cuteShadow)" />
+                    <rect x="142" y="495" width="24" height="70" rx="12" fill="#0F172A" />
+                    <rect x="146" y="500" width="16" height="60" rx="8" fill="url(#eyeGrad)" opacity="0.85" />
+                    <circle cx="154" cy="530" r="5" fill="#FFFFFF" opacity="0.9" />
 
-                    <!-- Inner Elegant Silk Top with Soft Scoop Collar -->
-                    <path d="M 326 718
-                             C 368 738, 432 738, 474 718
-                             L 505 820
-                             C 450 845, 350 845, 295 820 Z"
-                          fill="url(#silkTopGrad)"
-                          stroke="#94A3B8"
-                          stroke-width="1.8" />
-
-                    <!-- Tailored Blazer from y=720 Down to Bottom Edge (y=1280) -->
-                    <!-- Left Shoulder & Body -->
-                    <path d="M 0 1280
-                             L 0 860
-                             C 20 790, 110 745, 250 720
-                             C 295 715, 335 745, 370 815
-                             L 395 1280 Z"
-                          fill="url(#blazerGrad)" />
-
-                    <!-- Right Shoulder & Body -->
-                    <path d="M 800 1280
-                             L 800 860
-                             C 780 790, 690 745, 550 720
-                             C 505 715, 465 745, 430 815
-                             L 405 1280 Z"
-                          fill="url(#blazerGrad)" />
-
-                    <!-- Tailored Lapel Seams -->
-                    <path d="M 250 720 L 370 815 L 396 1280" stroke="#334155" stroke-width="3" fill="none" />
-                    <path d="M 550 720 L 430 815 L 404 1280" stroke="#334155" stroke-width="3" fill="none" />
-                    <path d="M 370 815 L 330 945" stroke="#1E293B" stroke-width="2.2" fill="none" />
-                    <path d="M 430 815 L 470 945" stroke="#1E293B" stroke-width="2.2" fill="none" />
+                    <!-- Right Ear Pod -->
+                    <rect x="622" y="475" width="48" height="110" rx="24" fill="url(#earGrad)" stroke="#E2E8F0" stroke-width="3" filter="url(#cuteShadow)" />
+                    <rect x="634" y="495" width="24" height="70" rx="12" fill="#0F172A" />
+                    <rect x="638" y="500" width="16" height="60" rx="8" fill="url(#eyeGrad)" opacity="0.85" />
+                    <circle cx="646" cy="530" r="5" fill="#FFFFFF" opacity="0.9" />
                   </g>
 
-                  <!-- ================= LAYER 3: HEAD & JAWLINE ================= -->
-                  <g id="head-base">
-                    <!-- Chin Ambient Occlusion Shadow -->
-                    <ellipse cx="400" cy="656" rx="64" ry="16" fill="#CF8A77" filter="url(#softShadow)" opacity="0.65" />
-
-                    <!-- Feminine Oval Face with Soft Naturally Rounded Chin -->
-                    <path d="M 282 440
-                             C 278 535, 312 625, 372 654
-                             C 388 660, 412 660, 428 654
-                             C 488 625, 522 535, 518 440
-                             C 518 335, 480 285, 400 285
-                             C 320 285, 282 335, 282 440 Z"
-                          fill="url(#skinFace)" />
-
-                    <!-- Radiant Rosy Cheek Blush -->
-                    <circle cx="330" cy="515" r="48" fill="#F43F5E" filter="url(#blushFilter)" opacity="0.22" />
-                    <circle cx="470" cy="515" r="48" fill="#F43F5E" filter="url(#blushFilter)" opacity="0.22" />
-
-                    <!-- Delicate Profile Ears & Pearl Studs -->
-                    <path d="M 282 445 C 266 465, 264 510, 284 528" fill="#F9D0BF" stroke="#EAA490" stroke-width="1.8" />
-                    <circle cx="278" cy="524" r="5" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
-
-                    <path d="M 518 445 C 534 465, 536 510, 516 528" fill="#F9D0BF" stroke="#EAA490" stroke-width="1.8" />
-                    <circle cx="522" cy="524" r="5" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+                  <!-- ================= 4. CUTE ANTENNA WITH GLOWING LIGHT ORB ================= -->
+                  <g id="cute-antenna">
+                    <!-- Base Socket -->
+                    <path d="M 384 330 C 384 322, 416 322, 416 330 Z" fill="#CBD5E1" />
+                    <!-- Flexible Curved Stem -->
+                    <path d="M 400 324 C 400 290, 404 260, 400 230" stroke="#94A3B8" stroke-width="8" stroke-linecap="round" fill="none" />
+                    <!-- Antenna Orb -->
+                    <circle cx="400" cy="220" r="22" fill="url(#orbGrad)" filter="url(#eyeGlow)" />
+                    <!-- Orb Specular Catchlight -->
+                    <circle cx="393" cy="214" r="6" fill="#FFFFFF" />
                   </g>
 
-                  <!-- ================= LAYER 4: FACIAL FEATURES ================= -->
-                  <!-- Eyebrows -->
-                  <g id="eyebrows">
-                    <path d="M 302 400 C 322 384, 355 384, 376 398" stroke="#311F18" stroke-width="4.5" stroke-linecap="round" fill="none" />
-                    <path d="M 424 398 C 445 384, 478 384, 498 400" stroke="#311F18" stroke-width="4.5" stroke-linecap="round" fill="none" />
+                  <!-- ================= 5. MAIN CUTE HEAD POD ================= -->
+                  <g id="cute-head" filter="url(#cuteShadow)">
+                    <!-- Smooth Ceramic Rounded Head Outer Contour -->
+                    <rect x="160" y="320" width="480" height="420" rx="190" ry="180" fill="url(#cuteHeadGrad)" stroke="#E2E8F0" stroke-width="4" />
+
+                    <!-- High-Tech Glossy Obsidian Visor Display -->
+                    <rect x="210" y="380" width="380" height="290" rx="120" ry="120" fill="url(#visorGrad)" stroke="#334155" stroke-width="2" />
+
+                    <!-- Glossy Curved Glass Reflection Arc -->
+                    <path d="M 230 460
+                             C 240 405, 310 388, 400 388
+                             C 490 388, 560 405, 570 460
+                             C 510 435, 450 425, 400 425
+                             C 350 425, 290 435, 230 460 Z"
+                          fill="url(#visorGloss)" />
                   </g>
 
-                  <!-- Expressive Eyes with Blinking Support -->
-                  <g id="eyes">
-                    <!-- Left Eye -->
-                    <g class="avatar-eye" id="eye-left" style="transform-origin: 338px 438px;">
-                      <path d="M 310 422 C 324 416, 354 416, 368 422" stroke="#DDA190" stroke-width="2" stroke-linecap="round" fill="none" />
-                      <path d="M 306 438 C 320 418, 356 418, 370 438 C 356 456, 320 456, 306 438 Z" fill="#F8FAFC" />
-                      <circle cx="338" cy="438" r="15.5" fill="url(#irisGrad)" />
-                      <circle cx="338" cy="438" r="15.5" fill="none" stroke="#082F49" stroke-width="1.8" />
-                      <circle cx="338" cy="438" r="6" fill="#0A1120" />
-                      <circle cx="342" cy="434" r="3.6" fill="#FFFFFF" />
-                      <circle cx="333" cy="442" r="1.8" fill="#FFFFFF" opacity="0.8" />
-                      <path d="M 302 439 C 318 416, 360 416, 374 437" stroke="#1A1210" stroke-width="4.5" stroke-linecap="round" fill="none" />
+                  <!-- ================= 6. CUTE EXPRESSIVE FACIAL FEATURES ================= -->
+                  <g id="cute-face-features">
+                    <!-- Friendly Arched Eyebrow Indicators -->
+                    <g id="cute-eyebrows">
+                      <path d="M 285 436 Q 315 422, 345 436" stroke="#38BDF8" stroke-width="4.5" stroke-linecap="round" fill="none" opacity="0.8" />
+                      <path d="M 455 436 Q 485 422, 515 436" stroke="#38BDF8" stroke-width="4.5" stroke-linecap="round" fill="none" opacity="0.8" />
                     </g>
 
-                    <!-- Right Eye -->
-                    <g class="avatar-eye" id="eye-right" style="transform-origin: 462px 438px;">
-                      <path d="M 432 422 C 446 416, 476 416, 490 422" stroke="#DDA190" stroke-width="2" stroke-linecap="round" fill="none" />
-                      <path d="M 430 438 C 444 418, 480 418, 494 438 C 480 456, 444 456, 430 438 Z" fill="#F8FAFC" />
-                      <circle cx="462" cy="438" r="15.5" fill="url(#irisGrad)" />
-                      <circle cx="462" cy="438" r="15.5" fill="none" stroke="#082F49" stroke-width="1.8" />
-                      <circle cx="462" cy="438" r="6" fill="#0A1120" />
-                      <circle cx="466" cy="434" r="3.6" fill="#FFFFFF" />
-                      <circle cx="457" cy="442" r="1.8" fill="#FFFFFF" opacity="0.8" />
-                      <path d="M 426 437 C 440 416, 482 416, 498 439" stroke="#1A1210" stroke-width="4.5" stroke-linecap="round" fill="none" />
+                    <!-- Adorable Animated Big Anime-Robot Eyes -->
+                    <!-- Left Eye Group (Blinks vertically around 315px 505px) -->
+                    <g class="avatar-eye" id="eye-left" style="transform-origin: 315px 505px;">
+                      <!-- Soft Visor Ambient Glow Behind Eye -->
+                      <ellipse cx="315" cy="510" rx="55" ry="65" fill="#0284C7" opacity="0.18" filter="url(#auraGlow)" />
+                      <!-- Main Rounded Luminous Eye Capsule -->
+                      <rect x="272" y="445" width="86" height="120" rx="43" fill="url(#eyeGrad)" filter="url(#eyeGlow)" />
+                      <!-- Large Primary Starry Sparkle (Top-Left) -->
+                      <circle cx="298" cy="475" r="16" fill="#FFFFFF" />
+                      <!-- Secondary Cute Sparkle (Bottom-Right) -->
+                      <circle cx="334" cy="530" r="8.5" fill="#FFFFFF" opacity="0.92" />
+                      <!-- Tiny Accent Diamond Catchlight -->
+                      <circle cx="304" cy="538" r="4.2" fill="#FFFFFF" opacity="0.8" />
                     </g>
-                  </g>
 
-                  <!-- Soft Feminine Nose -->
-                  <g id="nose">
-                    <path d="M 391 520 C 396 525, 404 525, 409 520" stroke="#D58370" stroke-width="2.4" stroke-linecap="round" fill="none" />
-                    <ellipse cx="388" cy="521" rx="2.5" ry="1.5" fill="#BA6955" opacity="0.6" />
-                    <ellipse cx="412" cy="521" rx="2.5" ry="1.5" fill="#BA6955" opacity="0.6" />
-                    <circle cx="400" cy="516" r="4.5" fill="#FFFFFF" opacity="0.3" />
-                  </g>
+                    <!-- Right Eye Group (Blinks vertically around 485px 505px) -->
+                    <g class="avatar-eye" id="eye-right" style="transform-origin: 485px 505px;">
+                      <!-- Soft Visor Ambient Glow Behind Eye -->
+                      <ellipse cx="485" cy="510" rx="55" ry="65" fill="#0284C7" opacity="0.18" filter="url(#auraGlow)" />
+                      <!-- Main Rounded Luminous Eye Capsule -->
+                      <rect x="442" y="445" width="86" height="120" rx="43" fill="url(#eyeGrad)" filter="url(#eyeGlow)" />
+                      <!-- Large Primary Starry Sparkle (Top-Left) -->
+                      <circle cx="468" cy="475" r="16" fill="#FFFFFF" />
+                      <!-- Secondary Cute Sparkle (Bottom-Right) -->
+                      <circle cx="504" cy="530" r="8.5" fill="#FFFFFF" opacity="0.92" />
+                      <!-- Tiny Accent Diamond Catchlight -->
+                      <circle cx="474" cy="538" r="4.2" fill="#FFFFFF" opacity="0.8" />
+                    </g>
 
-                  <!-- Dynamic Viseme Mouth & Lips -->
-                  <g id="mouth-group">
-                    <!-- Dynamic Inner Mouth Opening (Responsive to Audio FFT) -->
-                    <path id="avatar-mouth-path"
-                          d="M 365 578 Q 400 592 435 578 Q 400 584 365 578 Z"
-                          fill="#7F1D2B"
-                          stroke="#6B1424"
-                          stroke-width="1.5" />
+                    <!-- Rosy Cheeks / Blushing Kawaii Glow -->
+                    <g id="cute-blush">
+                      <!-- Left Cheek Blush -->
+                      <ellipse cx="254" cy="580" rx="28" ry="16" fill="url(#blushGrad)" />
+                      <!-- Diagonal cute blush accent lines -->
+                      <line x1="246" y1="575" x2="252" y2="585" stroke="#FB7185" stroke-width="2.5" stroke-linecap="round" opacity="0.8" />
+                      <line x1="256" y1="575" x2="262" y2="585" stroke="#FB7185" stroke-width="2.5" stroke-linecap="round" opacity="0.8" />
 
-                    <!-- Upper Lip with Soft Cupids Bow -->
-                    <path d="M 363 578
-                             C 378 567, 391 569, 400 572
-                             C 409 569, 422 567, 437 578
-                             C 418 582, 382 582, 363 578 Z"
-                          fill="url(#lipUpper)" />
+                      <!-- Right Cheek Blush -->
+                      <ellipse cx="546" cy="580" rx="28" ry="16" fill="url(#blushGrad)" />
+                      <!-- Diagonal cute blush accent lines -->
+                      <line x1="538" y1="575" x2="544" y2="585" stroke="#FB7185" stroke-width="2.5" stroke-linecap="round" opacity="0.8" />
+                      <line x1="548" y1="575" x2="554" y2="585" stroke="#FB7185" stroke-width="2.5" stroke-linecap="round" opacity="0.8" />
+                    </g>
 
-                    <!-- Lower Lip -->
-                    <path d="M 363 578
-                             C 380 606, 420 606, 437 578
-                             C 418 586, 382 586, 363 578 Z"
-                          fill="url(#lipLower)" />
-
-                    <!-- Lip Highlight -->
-                    <ellipse cx="400" cy="591" rx="15" ry="3.5" fill="#FFFFFF" opacity="0.45" />
-                  </g>
-
-                  <!-- ================= LAYER 5: FRONT HAIR & STYLING ================= -->
-                  <g id="front-hair">
-                    <!-- Left Soft Face-Framing Wave -->
-                    <path d="M 400 285
-                             C 330 285, 275 330, 260 410
-                             C 250 480, 260 560, 275 640
-                             C 290 710, 275 765, 250 805
-                             C 285 795, 320 755, 325 695
-                             C 330 630, 290 535, 290 440
-                             C 290 365, 345 305, 400 285 Z"
-                          fill="url(#hairWarm)" />
-
-                    <!-- Right Face-Framing Part Wave -->
-                    <path d="M 400 285
-                             C 460 285, 520 320, 535 410
-                             C 545 480, 535 560, 520 640
-                             C 505 710, 520 765, 545 805
-                             C 510 795, 475 755, 470 695
-                             C 465 630, 505 535, 505 440
-                             C 505 365, 455 305, 400 285 Z"
-                          fill="url(#hairWarm)" />
-
-                    <!-- Soft Forehead Parting Strand -->
-                    <path d="M 395 285
-                             C 350 305, 305 355, 290 415
-                             C 310 380, 360 335, 405 308 Z"
-                          fill="#4D3328" />
-
-                    <!-- Highlights -->
-                    <path d="M 330 340 C 290 410, 280 500, 275 590" stroke="#664334" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.6" />
-                    <path d="M 470 340 C 510 410, 520 500, 525 590" stroke="#664334" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.6" />
+                    <!-- Cheerful Viseme Mouth (Dynamically driven by live speech audio) -->
+                    <g id="mouth-group">
+                      <!-- Dynamic Mouth Opening (Receives dynamic d path from gemini_live.js) -->
+                      <path id="avatar-mouth-path"
+                            d="M 374 576 Q 400 596 426 576 Q 400 584 374 576 Z"
+                            fill="#FF4D6D"
+                            stroke="#FF1A4B"
+                            stroke-width="2.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </g>
                   </g>
                 </svg>
               </div>
@@ -1709,18 +1676,18 @@
     </div>
   </div>
 
-  <script src="js/state.js?v=223"></script>
-  <script src="js/clock.js?v=223"></script>
-  <script src="js/audio.js?v=223"></script>
-  <script src="js/keyboard.js?v=223"></script>
-  <script src="js/telemetry.js?v=223"></script>
-  <script src="js/map_viewer.js?v=223"></script>
-  <script src="js/mapping.js?v=223"></script>
-  <script src="js/missions.js?v=223"></script>
-  <script src="js/settings.js?v=223"></script>
-  <script src="js/shortcuts.js?v=223"></script>
-  <script src="js/media_player.js?v=223"></script>
-  <script src="js/gemini_live.js?v=223"></script>
-  <script src="app.js?v=223"></script>
+  <script src="js/state.js?v=224"></script>
+  <script src="js/clock.js?v=224"></script>
+  <script src="js/audio.js?v=224"></script>
+  <script src="js/keyboard.js?v=224"></script>
+  <script src="js/telemetry.js?v=224"></script>
+  <script src="js/map_viewer.js?v=224"></script>
+  <script src="js/mapping.js?v=224"></script>
+  <script src="js/missions.js?v=224"></script>
+  <script src="js/settings.js?v=224"></script>
+  <script src="js/shortcuts.js?v=224"></script>
+  <script src="js/media_player.js?v=224"></script>
+  <script src="js/gemini_live.js?v=224"></script>
+  <script src="app.js?v=224"></script>
 </body>
 </html>

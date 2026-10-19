@@ -5699,6 +5699,16 @@ select.kiosk-select option,
   padding: 12px 18px;
 }
 
+.avatar-titles h2 {
+  color: #f8fafc !important;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.avatar-titles .subtitle {
+  color: #94a3b8 !important;
+}
+
 .avatar-header-meta {
   display: flex;
   align-items: center;

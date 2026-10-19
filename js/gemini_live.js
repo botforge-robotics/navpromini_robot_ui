@@ -57,26 +57,26 @@
     const badgeEl = document.getElementById("ai-banner-scenario-badge");
     const chipsContainer = document.getElementById("avatar-suggestion-chips");
 
-    let scenarioName = "Real Estate Demo Tour";
+    let scenarioName = "AI Voice Assistant";
     let chips = [
-      { label: "🍳 Modular Kitchen", action: "Take me to the kitchen and explain its features" },
-      { label: "🛏️ Master Bedroom", action: "Show me the master bedroom suite" },
-      { label: "🌅 Sunrise Balcony", action: "Let's visit the balcony view" },
-      { label: "📐 Floor Plan", action: "Show me the floor plan layout" },
-      { label: "⚡ Return to Dock", action: "Return to your charging dock" }
+      { label: "🍳 Kitchen Tour", action: "Tell me about the kitchen and guide me there" },
+      { label: "🛏️ Master Suite", action: "Tell me about the master bedroom and guide me there" },
+      { label: "🌅 Balcony View", action: "Tell me about the balcony and guide me there" },
+      { label: "📐 Floor Plan", action: "Show me the floor plan" },
+      { label: "⚡ Base Station", action: "Please return to your charging base" }
     ];
 
     if (currentScenario === 'shopping_mall') {
-      scenarioName = "Shopping Mall Concierge";
+      scenarioName = "AI Voice Assistant";
       chips = [
         { label: "🛍️ Apple Store", action: "Where is the Apple Store? Please guide me" },
-        { label: "☕ Starbucks", action: "Take me to Starbucks" },
-        { label: "🍔 Food Court", action: "Where is the food court and what cuisines are available?" },
+        { label: "☕ Starbucks", action: "Where is Starbucks?" },
+        { label: "🍔 Food Court", action: "Where is the food court and what options are there?" },
         { label: "🚻 Restrooms", action: "Where are the nearest restrooms?" },
-        { label: "⚡ Return to Dock", action: "Please return to your base station" }
+        { label: "⚡ Base Station", action: "Please return to your charging base" }
       ];
     } else if (currentScenario === 'custom') {
-      scenarioName = "NavPro AI Assistant";
+      scenarioName = "AI Voice Assistant";
     }
 
     if (titleEl) titleEl.textContent = scenarioName;
@@ -226,8 +226,8 @@
   // ----------------------------------------------------------------------------
   function connectGeminiLive() {
     if (!aiConfig || !aiConfig.apiKey) {
-      updateStatusBadge("API Key Missing (Set in NavPro GUI)", false);
-      showAssistantMessage("Please configure your Google Gemini API Key in the NavPro Mission Planner GUI app under Settings > Virtual Assistant.");
+      updateStatusBadge("Setup Required", false);
+      showAssistantMessage("AI Voice Assistant setup is required. Please set up the voice assistant in Settings.");
       return;
     }
 
@@ -249,7 +249,7 @@
     ws.onopen = () => {
       console.log("[GeminiLive] WebSocket connected! Sending handshake setup...");
       sendHandshakeSetup();
-      updateStatusBadge("Silent Standby (Tap Mic to Chat)", false);
+      updateStatusBadge("Ready to listen", false);
     };
 
     ws.onmessage = async (event) => {
@@ -583,8 +583,8 @@
     silenceTimer = setTimeout(() => {
       console.log("[GeminiLive] Silence timeout reached (8s) - entering Silent Standby");
       muteAvatarMic();
-      updateStatusBadge("Silent Standby (Tap Mic)", false);
-      showAssistantMessage("I'm resting quietly. Tap the mic button whenever you'd like to chat again!");
+      updateStatusBadge("Ready to listen", false);
+      showAssistantMessage("I'm here whenever you need me. Tap the microphone below to speak.");
     }, SILENCE_TIMEOUT_MS);
   }
 
@@ -615,7 +615,7 @@
   async function wakeAvatarLiveChat() {
     isLiveTalking = true;
     updateMicButtonUI(true);
-    updateStatusBadge("Listening... (Speak Freely)", true);
+    updateStatusBadge("Listening...", true);
 
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       connectGeminiLive();
@@ -630,7 +630,7 @@
     clearSilenceTimer();
     stopMicrophoneCapture();
     updateMicButtonUI(false);
-    updateStatusBadge("Silent Standby (Tap Mic)", false);
+    updateStatusBadge("Ready to listen", false);
   }
 
   function updateMicButtonUI(active) {
@@ -643,7 +643,7 @@
       if (label) label.textContent = "Listening...";
     } else {
       btn.classList.remove("active-live");
-      if (label) label.textContent = "Tap to Chat";
+      if (label) label.textContent = "Tap to Speak";
     }
   }
 

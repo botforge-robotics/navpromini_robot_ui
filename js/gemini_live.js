@@ -75,6 +75,15 @@
         { label: "🚻 Restrooms", action: "Where are the nearest restrooms?" },
         { label: "⚡ Base Station", action: "Please return to your charging base" }
       ];
+    } else if (currentScenario === 'educational_amr') {
+      scenarioName = "AI Voice Assistant";
+      chips = [
+        { label: "🔬 Lab Stations", action: "Tell me about the robotics workstations in this lab" },
+        { label: "🤖 Sensors & LiDAR", action: "How does LiDAR scanning and mapping work? Guide me to the sensor station" },
+        { label: "🦾 Robotic Arm", action: "Tell me about the robotic arm and assembly test bench" },
+        { label: "🧭 Nav2 & SLAM", action: "How do you navigate autonomously without bumping into obstacles?" },
+        { label: "⚡ Base Station", action: "Please return to your charging base" }
+      ];
     } else if (currentScenario === 'custom') {
       scenarioName = "AI Voice Assistant";
     }

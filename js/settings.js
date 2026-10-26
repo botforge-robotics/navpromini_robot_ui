@@ -22,6 +22,11 @@ window.openSetupScreen = function() {
   window.setupSessionStartTime = setupSessionStartTime;
   sessionStorage.removeItem("navpro_setup_dismissed");
   screen.style.display = "flex";
+  fetch(`${API_BASE}/api/v1/system/setup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dismissed: false, completed: false, step: 1 })
+  }).catch(() => {});
   fetchWifiStatus();
 };
 
@@ -49,7 +54,8 @@ window.checkAutoSetupScreen = async function() {
     const setupScreen = document.getElementById("screen-setup");
 
     // Case A: Setup was completed or dismissed remotely (e.g. user clicked "Skip" or completed in Mission Planner app)
-    if (sData && (sData.dismissed || sData.completed)) {
+    const isManuallyOpened = (Date.now() - setupSessionStartTime) < 15000;
+    if (!isManuallyOpened && sData && (sData.dismissed || sData.completed)) {
       sessionStorage.setItem("navpro_setup_dismissed", "true");
       if (setupScreen && setupScreen.style.display !== "none") {
         console.log("[AutoSetup] Setup was dismissed/completed remotely. Advancing robot UI to dashboard.");

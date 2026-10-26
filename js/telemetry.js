@@ -274,19 +274,13 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
   previousDockOperation = dockOp;
 }
 
+let lastSeenChargingTs = 0;
+let lastSeenDockedTs = 0;
+let wasDockedOrCharging = false;
+
 function updatePowerState(pState) {
   if (!pState) return;
   try {
-    if (pState.age_sec !== undefined && pState.age_sec > 5.0) {
-      const cs = document.getElementById("screen-charging");
-      if (cs && cs.style.display !== "none") cs.style.display = "none";
-      const bolt = document.getElementById("charging-bolt");
-      if (bolt) bolt.style.display = "none";
-      isRobotCharging = false;
-      wasCharging = false;
-      return;
-    }
-
     const isMovingOrNav = Boolean(isNavigating || (typeof liveLinearSpeed !== "undefined" && Math.abs(liveLinearSpeed) > 0.02));
     if (isMovingOrNav) {
       const cs = document.getElementById("screen-charging");
@@ -295,25 +289,50 @@ function updatePowerState(pState) {
       if (bolt) bolt.style.display = "none";
       isRobotCharging = false;
       wasCharging = false;
+      wasDockedOrCharging = false;
+      lastSeenChargingTs = 0;
+      lastSeenDockedTs = 0;
+      sessionStorage.removeItem("navpro_charging_dismissed");
+      chargingScreenDismissed = false;
       return;
     }
+
+    if (pState.age_sec !== undefined && pState.age_sec > 10.0) {
+      return;
+    }
+
     const b = pState.data || pState.battery || pState;
-    const notCharging = b.status === "not_charging" || b.status === "discharging" || b.power_supply_status === 2 || b.power_supply_status === 3;
-    const isCharging = !notCharging && Boolean(
+    const notCharging = b.status === "discharging" || b.power_supply_status === 2;
+    const isActivelyCharging = !notCharging && Boolean(
       (b.charging && b.charging !== "false") ||
       b.status === "charging" ||
       b.status === "Charging" ||
       b.power_supply_status === 1 ||
       (pState.detail && pState.detail.charger_connected && pState.detail.charge_state !== "discharging")
     );
+
     const rawPct = b.percentage !== undefined ? b.percentage : (b.soc_percent !== undefined ? b.soc_percent : (b.battery_level !== undefined ? b.battery_level : null));
-    
+    let val = 0;
     if (rawPct !== null && rawPct !== undefined && !isNaN(rawPct)) {
-      let val = Number(rawPct);
+      val = Number(rawPct);
       if (val <= 1.0 && val > 0.0) val *= 100.0;
       val = Math.max(0, Math.min(100, val));
+    }
 
-      // Up to 2 decimal places without trailing zeros (e.g. 99.8%, 99.85%, 100%, 85%)
+    // Battery full / topped off at charging dock
+    const isFullAtDock = (val >= 99.0 || b.status === "full" || b.status === "Full" || b.status === "completed" || b.power_supply_status === 4) && !notCharging;
+
+    const now = Date.now();
+    if (isActivelyCharging || isFullAtDock) {
+      lastSeenChargingTs = now;
+      lastSeenDockedTs = now;
+    }
+
+    // Debounce: Stay "docked/charging" through float charging cutoffs (up to 8s) unless robot moved
+    const isDockedOrCharging = (now - lastSeenDockedTs < 8000) && !isMovingOrNav;
+
+    if (rawPct !== null && rawPct !== undefined && !isNaN(rawPct)) {
+      // Up to 2 decimal places without trailing zeros (e.g. 99.8%, 100%, 85%)
       let displayPct;
       if (val >= 99.95) {
         displayPct = "100";
@@ -328,7 +347,7 @@ function updatePowerState(pState) {
       const pctEl = document.getElementById("battery-pct");
       const boltEl = document.getElementById("charging-bolt");
       if (pctEl) pctEl.textContent = `${displayPct}%`;
-      if (boltEl) boltEl.style.display = isCharging ? "inline" : "none";
+      if (boltEl) boltEl.style.display = isDockedOrCharging ? "inline" : "none";
 
       // Update Power Subpage gauge and stats if present
       const gaugePctEl = document.getElementById("gauge-battery-pct");
@@ -346,12 +365,7 @@ function updatePowerState(pState) {
       const chargingPct = document.getElementById("charging-screen-pct");
       if (chargingPct) chargingPct.textContent = `${displayPct}%`;
 
-      // Truly full ONLY when actively connected/charging AND reported full or topped-off (>= 99.5%)
-      const isFull = isCharging && (
-        b.status === "Full" || b.status === "full" || b.status === "completed" ||
-        b.power_supply_status === "Full" || b.power_supply_status === 4 ||
-        val >= 99.5
-      );
+      const isFull = isDockedOrCharging && (val >= 99.0 || b.status === "Full" || b.status === "full" || b.power_supply_status === 4);
 
       const chargingStateText = document.getElementById("charging-state-text");
       const chargingInfoDesc = document.getElementById("charging-info-desc");
@@ -364,38 +378,43 @@ function updatePowerState(pState) {
           : `Robot is locked on dock and actively charging (${displayPct}%).`;
       }
 
-      // Auto-display charging screen when docked and charging
-      if (isCharging && !wasCharging) {
+      // Auto-display charging screen ONLY when transitioning into docked charging
+      if (isDockedOrCharging && !wasDockedOrCharging) {
+        wasDockedOrCharging = true;
         wasCharging = true;
-        chargingScreenDismissed = false;
-        if (chargingScreen) chargingScreen.style.display = "flex";
-        triggerFaceExpression("sleep");
-      } else if (!isCharging) {
-        if (wasCharging) {
-          // Robot undocked / disconnected
-          wasCharging = false;
-          chargingScreenDismissed = false;
-          if (chargingScreen) chargingScreen.style.display = "none";
-          triggerFaceExpression("wakeup");
+        const isDismissed = chargingScreenDismissed || (sessionStorage.getItem("navpro_charging_dismissed") === "true");
+        if (!isDismissed) {
+          if (chargingScreen) chargingScreen.style.display = "flex";
+          triggerFaceExpression("sleep");
         }
-        if (chargingScreen && !chargingScreenDismissed) {
+      } else if (!isDockedOrCharging && wasDockedOrCharging) {
+        // Robot truly undocked and disconnected from dock
+        wasDockedOrCharging = false;
+        wasCharging = false;
+        chargingScreenDismissed = false;
+        sessionStorage.removeItem("navpro_charging_dismissed");
+        if (chargingScreen) chargingScreen.style.display = "none";
+        triggerFaceExpression("wakeup");
+      }
+
+      // If user dismissed it, ensure it stays hidden
+      if (chargingScreenDismissed || sessionStorage.getItem("navpro_charging_dismissed") === "true") {
+        if (chargingScreen && chargingScreen.style.display !== "none") {
           chargingScreen.style.display = "none";
         }
       }
 
       // Keep static text Dock and Undock on dashboard bottom bar
       const quickDockBtn = document.getElementById("btn-quick-dock");
-      const quickUndockBtn = document.getElementById("btn-quick-undock");
       if (quickDockBtn) {
-        const isChargingOrFull = isCharging || isFull;
-        if (isChargingOrFull) {
+        if (isDockedOrCharging) {
           quickDockBtn.classList.add("is-charging");
         } else {
           quickDockBtn.classList.remove("is-charging");
         }
       }
 
-      isRobotCharging = isCharging;
+      isRobotCharging = isDockedOrCharging;
     }
   } catch (err) {
     console.warn("Power state update error:", err);
@@ -406,6 +425,7 @@ window.dismissChargingScreen = function() {
   const chargingScreen = document.getElementById("screen-charging");
   if (chargingScreen) chargingScreen.style.display = "none";
   chargingScreenDismissed = true;
+  sessionStorage.setItem("navpro_charging_dismissed", "true");
   if (typeof showDashboardView === "function") {
     showDashboardView();
   } else {
@@ -491,10 +511,7 @@ function startPolling() {
         const robotIp = document.getElementById("robot-ip");
         if (robotIp) robotIp.textContent = stateData.ip || (window.location.hostname || "127.0.0.1");
 
-        // Immediately update battery from state if present
-        if (stateData.battery) {
-          updatePowerState(stateData.battery);
-        }
+        // Battery update is handled once per loop from full state/battery call below
 
         // Keep liveRobotPose synchronized for map viewer & lidar rendering
         if (stateData.localization && stateData.localization.x != null && stateData.localization.y != null) {
@@ -601,9 +618,11 @@ function startPolling() {
         updateNavigationState({ is_navigating: isStateNav }, isMissionActive);
       }
 
-      // 2. Battery & Power
+      // 2. Battery & Power (single authoritative update per loop)
       if (batResult.status === "fulfilled" && batResult.value) {
         updatePowerState(batResult.value);
+      } else if (stateData && stateData.battery) {
+        updatePowerState(stateData.battery);
       }
 
       // 3. Missions Status
@@ -630,16 +649,13 @@ function startPolling() {
       const dockData = dockResult.status === "fulfilled" ? dockResult.value : null;
       updateDockingScreen(dockData, stateData, isMissionActive);
 
-      // 6. Wi-Fi & IP (debounced to every 10 seconds, but 1.5 seconds during setup wizard)
+      // 6. Wi-Fi & Setup (polled every 1.5s during setup wizard, 10s otherwise)
       const isSetupVisible = document.getElementById("screen-setup")?.style.display === "flex";
       const wifiInterval = isSetupVisible ? 1500 : 10000;
       if (!window._lastWifiCheck || Date.now() - window._lastWifiCheck > wifiInterval) {
         window._lastWifiCheck = Date.now();
-        fetchWifiStatus().then(st => {
-          if (st && (st.hotspot_active || (!st.connected && !st.ip))) {
-            window.checkAutoSetupScreen?.();
-          }
-        });
+        fetchWifiStatus();
+        window.checkAutoSetupScreen?.();
       }
 
       // 7. Cached Waypoints (debounced to every 20 seconds)

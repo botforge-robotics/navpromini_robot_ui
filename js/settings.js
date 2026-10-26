@@ -46,38 +46,61 @@ window.dismissSetupScreen = function() {
 
 window.checkAutoSetupScreen = async function() {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/system/wifi/status`);
-    if (!res.ok) return;
-    const data = await res.json();
+    const [wifiRes, setupRes] = await Promise.all([
+      fetch(`${API_BASE}/api/v1/system/wifi/status`).catch(() => null),
+      fetch(`${API_BASE}/api/v1/system/setup`).catch(() => null)
+    ]);
+
+    if (!wifiRes || !wifiRes.ok) return;
+    const data = await wifiRes.json();
+    const sData = (setupRes && setupRes.ok) ? await setupRes.json() : null;
+
     const isHotspot = Boolean(data.hotspot_active || (data.ip && data.ip.startsWith("10.42.")));
     const isSiteConnected = !data.hotspot_active && !!(data.connected && data.ip && !data.ip.startsWith("10.42."));
 
-    // Case 1: Hotspot active or not connected to site Wi-Fi -> MUST launch and stay in Setup Screen
+    const setupScreen = document.getElementById("screen-setup");
+
+    // Case A: Setup was completed or dismissed remotely (e.g. user clicked "Skip" or completed in Mission Planner app)
+    if (sData && (sData.dismissed || sData.completed)) {
+      sessionStorage.setItem("navpro_setup_dismissed", "true");
+      if (setupScreen && setupScreen.style.display !== "none") {
+        console.log("[AutoSetup] Setup was dismissed/completed remotely. Advancing robot UI to dashboard.");
+        setupScreen.style.display = "none";
+        if (typeof showDashboardView === "function") {
+          showDashboardView();
+        } else {
+          setSwipeIndex(0);
+        }
+      }
+      return;
+    }
+
+    // Case B: User already dismissed locally in this session
+    if (sessionStorage.getItem("navpro_setup_dismissed") === "true") {
+      if (setupScreen && setupScreen.style.display !== "none") {
+        setupScreen.style.display = "none";
+      }
+      return;
+    }
+
+    // Case C: Hotspot active or not connected to site Wi-Fi -> MUST launch and stay on Setup Step 1
     if (isHotspot || !isSiteConnected) {
       sessionStorage.removeItem("navpro_setup_dismissed");
-      const setupScreen = document.getElementById("screen-setup");
       if (setupScreen && setupScreen.style.display !== "flex") {
-        console.log("[AutoSetup] Robot is unconfigured or in hotspot mode. Launching Setup Screen.");
+        console.log("[AutoSetup] Robot is unconfigured or in hotspot mode. Launching Setup Screen Step 1.");
         openSetupScreen();
       }
+      advanceSetupToStep(1);
       return;
     }
 
-    // Case 2: Site Wi-Fi is connected: check if user already dismissed or completed setup
-    if (sessionStorage.getItem("navpro_setup_dismissed") === "true") {
-      return;
+    // Case D: Site Wi-Fi is connected: determine step from remote state (step 1 or step 2)
+    const targetStep = (sData && sData.step) ? sData.step : 2;
+    if (setupScreen && setupScreen.style.display !== "flex") {
+      console.log(`[AutoSetup] Wi-Fi connected but setup incomplete. Showing Step ${targetStep}.`);
+      openSetupScreen();
     }
-
-    const setupRes = await fetch(`${API_BASE}/api/v1/system/setup`).catch(() => null);
-    if (setupRes && setupRes.ok) {
-      const sData = await setupRes.json();
-      if (!sData.completed && !sData.dismissed) {
-        // Connected to Wi-Fi, but dock setup & first map not yet completed -> show Step 2
-        console.log("[AutoSetup] Wi-Fi connected but setup incomplete. Showing Step 2.");
-        openSetupScreen();
-        advanceSetupToStep(2);
-      }
-    }
+    advanceSetupToStep(targetStep);
   } catch (e) {
     // Backend offline or booting
   }
@@ -172,6 +195,11 @@ async function fetchWifiStatus() {
       if (hsPassEl) hsPassEl.textContent = data.hotspot_password || "navprosetup";
       if (credLabel3) credLabel3.textContent = "PORTAL IP";
       if (hsIpEl) hsIpEl.textContent = "10.42.0.1";
+    }
+
+    const browserPortalEl = document.getElementById("setup-browser-portal-url");
+    if (browserPortalEl) {
+      browserPortalEl.textContent = isConnected ? `http://${liveIp}:8090/ui/` : "http://10.42.0.1:8090/ui/";
     }
 
     // 2. Connected Site Wi-Fi status (Bottom Card: Option 2)

@@ -2233,16 +2233,17 @@ body, html {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--primary);
   text-decoration: none;
   background: rgba(37, 99, 235, 0.08);
-  padding: 4px 10px;
+  padding: 5px 10px;
   border-radius: 8px;
   border: 1px solid rgba(37, 99, 235, 0.2);
   width: fit-content;
   max-width: 100%;
+  line-height: 1.35;
 }
 
 .app-release-link svg {
@@ -2250,9 +2251,8 @@ body, html {
 }
 
 .app-release-link span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-all;
+  white-space: normal;
 }
 
 .app-browser-hint {

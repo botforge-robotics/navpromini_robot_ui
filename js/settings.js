@@ -683,6 +683,13 @@ function showUpdateAvailableModal(info) {
   const modal = document.getElementById("modal-app-update");
   if (!modal) return;
 
+  // Never block onboarding setup or active live mapping with update prompts
+  const setupScreen = document.getElementById("screen-setup");
+  const mappingScreen = document.getElementById("screen-mapping-live");
+  if ((setupScreen && setupScreen.style.display === "flex") || (mappingScreen && mappingScreen.style.display === "flex")) {
+    return;
+  }
+
   // Do not prompt if commits are identical and commits_behind is 0
   if (info.current_commit && info.latest_commit && info.current_commit === info.latest_commit && (!info.commits_behind || info.commits_behind === 0)) {
     return;

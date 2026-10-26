@@ -15,9 +15,15 @@ function initSetupWizard() {
   });
 }
 
+let setupSessionStartTime = 0;
+window.setupSessionStartTime = setupSessionStartTime;
+
 window.openSetupScreen = function() {
   const screen = document.getElementById("screen-setup");
   if (!screen) return;
+  setupSessionStartTime = Date.now();
+  window.setupSessionStartTime = setupSessionStartTime;
+  sessionStorage.removeItem("navpro_setup_dismissed");
   screen.style.display = "flex";
   advanceSetupToStep(1);
 
@@ -39,28 +45,37 @@ window.dismissSetupScreen = function() {
 };
 
 window.checkAutoSetupScreen = async function() {
-  if (sessionStorage.getItem("navpro_setup_dismissed") === "true") {
-    return;
-  }
   try {
-    const setupRes = await fetch(`${API_BASE}/api/v1/system/setup`).catch(() => null);
-    if (setupRes && setupRes.ok) {
-      const sData = await setupRes.json();
-      if (sData.dismissed || sData.completed) {
-        sessionStorage.setItem("navpro_setup_dismissed", "true");
-        return;
-      }
-    }
-
     const res = await fetch(`${API_BASE}/api/v1/system/wifi/status`);
     if (!res.ok) return;
     const data = await res.json();
+    const isHotspot = Boolean(data.hotspot_active || (data.ip && data.ip.startsWith("10.42.")));
     const isSiteConnected = !data.hotspot_active && !!(data.connected && data.ip && !data.ip.startsWith("10.42."));
-    if (data.hotspot_active || !isSiteConnected) {
+
+    // Case 1: Hotspot active or not connected to site Wi-Fi -> MUST launch and stay in Setup Screen
+    if (isHotspot || !isSiteConnected) {
+      sessionStorage.removeItem("navpro_setup_dismissed");
       const setupScreen = document.getElementById("screen-setup");
       if (setupScreen && setupScreen.style.display !== "flex") {
         console.log("[AutoSetup] Robot is unconfigured or in hotspot mode. Launching Setup Screen.");
         openSetupScreen();
+      }
+      return;
+    }
+
+    // Case 2: Site Wi-Fi is connected: check if user already dismissed or completed setup
+    if (sessionStorage.getItem("navpro_setup_dismissed") === "true") {
+      return;
+    }
+
+    const setupRes = await fetch(`${API_BASE}/api/v1/system/setup`).catch(() => null);
+    if (setupRes && setupRes.ok) {
+      const sData = await setupRes.json();
+      if (!sData.completed && !sData.dismissed) {
+        // Connected to Wi-Fi, but dock setup & first map not yet completed -> show Step 2
+        console.log("[AutoSetup] Wi-Fi connected but setup incomplete. Showing Step 2.");
+        openSetupScreen();
+        advanceSetupToStep(2);
       }
     }
   } catch (e) {

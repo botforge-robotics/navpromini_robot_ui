@@ -767,6 +767,8 @@ window.enterMappingLiveScreen = function() {
     setupScreen.style.display = "none";
     sessionStorage.setItem("navpro_setup_dismissed", "true");
   }
+  const setupLoadingOverlay = document.getElementById("setup-loading-overlay");
+  if (setupLoadingOverlay) setupLoadingOverlay.style.display = "none";
 
   liveDockPose = { x: 0, y: 0, theta: 0 };
   liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
@@ -805,17 +807,24 @@ window.exitMappingLiveScreen = function() {
 };
 
 window.startSlamMapping = async function() {
+  const overlay = document.getElementById("setup-loading-overlay");
+  if (overlay) overlay.style.display = "flex";
   try {
     showToast("Initializing SLAM mapping mode...");
 
-    await fetch(`${API_BASE}/api/v1/mode`, {
+    const res = await fetch(`${API_BASE}/api/v1/mode`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "mapping" })
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || `Status ${res.status}`);
+    }
 
     enterMappingLiveScreen();
   } catch (e) {
+    if (overlay) overlay.style.display = "none";
     showToast("Failed to start mapping: " + e.message, true);
   }
 };

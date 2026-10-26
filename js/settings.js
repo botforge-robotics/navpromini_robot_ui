@@ -400,7 +400,14 @@ window.skipMappingSetup = function() {
 };
 
 window.startMappingFromSetup = function() {
-  dismissSetupScreen();
+  const overlay = document.getElementById("setup-loading-overlay");
+  const title = document.getElementById("setup-loading-title");
+  const sub = document.getElementById("setup-loading-sub");
+  if (overlay) {
+    if (title) title.textContent = "Starting SLAM Mapping...";
+    if (sub) sub.textContent = "Initializing LiDAR, SLAM Toolbox, and Nav2 navigation stack...";
+    overlay.style.display = "flex";
+  }
   startSlamMapping();
 };
 

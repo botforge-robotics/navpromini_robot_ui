@@ -521,7 +521,9 @@ function startPolling() {
 
         // 1. Sync SLAM Mapping live screen with robot mode
         const mappingScreen = document.getElementById("screen-mapping-live");
+        const setupLoadingOverlay = document.getElementById("setup-loading-overlay");
         if (stateData.mode === "mapping") {
+          if (setupLoadingOverlay) setupLoadingOverlay.style.display = "none";
           if (!mappingScreen || mappingScreen.style.display !== "flex") {
             window.enterMappingLiveScreen?.();
           }
@@ -534,6 +536,30 @@ function startPolling() {
         // 2. Sync Setup Wizard screen with backend setup state
         const setupScreen = document.getElementById("screen-setup");
         if (setupScreen && setupScreen.style.display === "flex") {
+          // If mapping is starting/transitioning from mobile app or externally, show loading overlay immediately
+          if (stateData.target_mode === "mapping" || (stateData.mode_busy && (stateData.target_mode === "mapping" || stateData.mode === "idle"))) {
+            if (setupLoadingOverlay && setupLoadingOverlay.style.display !== "flex") {
+              const title = document.getElementById("setup-loading-title");
+              const sub = document.getElementById("setup-loading-sub");
+              if (title) title.textContent = "Starting SLAM Mapping...";
+              if (sub) sub.textContent = "Initializing LiDAR, SLAM Toolbox, and Nav2 navigation stack...";
+              setupLoadingOverlay.style.display = "flex";
+            }
+          }
+
+          // If Wi-Fi is actively connecting, show connecting banner immediately
+          const banner = document.getElementById("wifi-connection-banner");
+          const bannerTitle = document.getElementById("wifi-banner-title");
+          const bannerSub = document.getElementById("wifi-banner-sub");
+          if (stateData.lifecycle === "WIFI_CONNECTING" || stateData.wifi_connecting) {
+            if (banner && banner.style.display !== "flex") {
+              banner.style.display = "flex";
+              banner.className = "wifi-connection-banner connecting";
+              if (bannerTitle) bannerTitle.textContent = "Connecting to Wi-Fi...";
+              if (bannerSub) bannerSub.textContent = "Associating with network and obtaining IP address...";
+            }
+          }
+
           const isHotspot = Boolean(stateData.hotspot_active || (stateData.ip && stateData.ip.startsWith("10.42.")));
           if (!isHotspot && stateData.setup) {
             const dismissedAtMs = (stateData.setup.dismissed_at || 0) * 1000;

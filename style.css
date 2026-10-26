@@ -5648,3 +5648,47 @@ select.kiosk-select option,
   justify-content: center;
   gap: 12px;
 }
+
+/* Setup Mode Transition & Loading Overlay */
+.setup-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.setup-loading-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 480px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.setup-loading-modal h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 18px 0 8px 0;
+  color: var(--text-primary);
+}
+
+.setup-loading-modal p {
+  font-size: 15px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}

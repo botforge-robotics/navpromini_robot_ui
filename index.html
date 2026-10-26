@@ -619,6 +619,15 @@
 
     <!-- 5. SETUP WIZARD SCREEN (Wi-Fi + Dock/Map Onboarding) -->
     <div class="kiosk-full-screen" id="screen-setup" style="display: none;">
+      <!-- Transition / Loading Overlay for Wi-Fi & SLAM Mapping -->
+      <div id="setup-loading-overlay" class="setup-loading-overlay" style="display: none;">
+        <div class="setup-loading-modal">
+          <div class="spinner-large"></div>
+          <h2 id="setup-loading-title">Starting SLAM Mapping...</h2>
+          <p id="setup-loading-sub">Initializing LiDAR, SLAM Toolbox, and Nav2 navigation stack</p>
+        </div>
+      </div>
+
       <div class="setup-screen-shell">
         <div class="setup-header">
           <button class="btn btn-secondary btn-sm" id="btn-exit-setup" onclick="dismissSetupScreen()">✕ Exit Setup</button>

@@ -756,15 +756,57 @@ function initMappingControls() {
   });
 }
 
+window.enterMappingLiveScreen = function() {
+  const screen = document.getElementById("screen-mapping-live");
+  if (!screen) return;
+  if (screen.style.display === "flex") return;
+
+  // Dismiss setup screen visually without calling the dismiss API if open
+  const setupScreen = document.getElementById("screen-setup");
+  if (setupScreen && setupScreen.style.display === "flex") {
+    setupScreen.style.display = "none";
+    sessionStorage.setItem("navpro_setup_dismissed", "true");
+  }
+
+  liveDockPose = { x: 0, y: 0, theta: 0 };
+  liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
+  liveTrajectory = [{ x: 0, y: 0 }];
+  liveHasMovedAway = false;
+
+  screen.style.display = "flex";
+  liveMapPan = { x: 0, y: 0, scale: 1.0, userControlled: false };
+  startLiveMapRenderer();
+
+  if (!mappingStartTime) {
+    mappingStartTime = Date.now();
+  }
+  const timerEl = document.getElementById("mapping-timer");
+  clearInterval(mappingTimerInterval);
+  mappingTimerInterval = setInterval(() => {
+    if (!mappingStartTime || !timerEl) return;
+    const elapsed = Math.floor((Date.now() - mappingStartTime) / 1000);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    const s = String(elapsed % 60).padStart(2, "0");
+    timerEl.textContent = `${m}:${s}`;
+  }, 1000);
+
+  if (typeof triggerFaceExpression === "function") {
+    triggerFaceExpression("curios");
+  }
+};
+
+window.exitMappingLiveScreen = function() {
+  const screen = document.getElementById("screen-mapping-live");
+  if (!screen || screen.style.display === "none") return;
+  stopMappingLive();
+  if (typeof showDashboardView === "function") {
+    showDashboardView();
+  }
+};
+
 window.startSlamMapping = async function() {
   try {
     showToast("Initializing SLAM mapping mode...");
-
-    // Mapping begins at the charging dock facing room. Map origin (0,0) defines dock position.
-    liveDockPose = { x: 0, y: 0, theta: 0 };
-    liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
-    liveTrajectory = [{ x: 0, y: 0 }];
-    liveHasMovedAway = false;
 
     await fetch(`${API_BASE}/api/v1/mode`, {
       method: "POST",
@@ -772,24 +814,7 @@ window.startSlamMapping = async function() {
       body: JSON.stringify({ mode: "mapping" })
     });
 
-    const screen = document.getElementById("screen-mapping-live");
-    if (screen) screen.style.display = "flex";
-
-    liveMapPan = { x: 0, y: 0, scale: 1.0, userControlled: false };
-    startLiveMapRenderer();
-
-    mappingStartTime = Date.now();
-    const timerEl = document.getElementById("mapping-timer");
-    clearInterval(mappingTimerInterval);
-    mappingTimerInterval = setInterval(() => {
-      if (!mappingStartTime || !timerEl) return;
-      const elapsed = Math.floor((Date.now() - mappingStartTime) / 1000);
-      const m = String(Math.floor(elapsed / 60)).padStart(2, "0");
-      const s = String(elapsed % 60).padStart(2, "0");
-      timerEl.textContent = `${m}:${s}`;
-    }, 1000);
-
-    triggerFaceExpression("curios");
+    enterMappingLiveScreen();
   } catch (e) {
     showToast("Failed to start mapping: " + e.message, true);
   }
@@ -802,4 +827,5 @@ function stopMappingLive() {
   clearInterval(mappingTimerInterval);
   mappingStartTime = null;
 }
+window.stopMappingLive = stopMappingLive;
 

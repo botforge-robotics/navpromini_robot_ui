@@ -35,6 +35,7 @@ window.dismissSetupScreen = function() {
   const screen = document.getElementById("screen-setup");
   if (screen) screen.style.display = "none";
   sessionStorage.setItem("navpro_setup_dismissed", "true");
+  fetch(`${API_BASE}/api/v1/system/setup/dismiss`, { method: "POST" }).catch(() => {});
 };
 
 window.checkAutoSetupScreen = async function() {
@@ -42,6 +43,15 @@ window.checkAutoSetupScreen = async function() {
     return;
   }
   try {
+    const setupRes = await fetch(`${API_BASE}/api/v1/system/setup`).catch(() => null);
+    if (setupRes && setupRes.ok) {
+      const sData = await setupRes.json();
+      if (sData.dismissed || sData.completed) {
+        sessionStorage.setItem("navpro_setup_dismissed", "true");
+        return;
+      }
+    }
+
     const res = await fetch(`${API_BASE}/api/v1/system/wifi/status`);
     if (!res.ok) return;
     const data = await res.json();
@@ -188,6 +198,16 @@ async function fetchWifiStatus() {
       } else {
         btnContinue.setAttribute("disabled", "true");
         if (gateMsg) gateMsg.style.display = "flex";
+      }
+    }
+
+    // Auto-advance from Step 1 to Step 2 if Wi-Fi is connected and user is on Step 1
+    if (isConnected) {
+      const setupScreen = document.getElementById("screen-setup");
+      const step1 = document.getElementById("setup-step-1");
+      if (setupScreen && setupScreen.style.display === "flex" && step1 && step1.classList.contains("active")) {
+        console.log("[Setup] Robot is connected to site Wi-Fi. Auto-advancing to Step 2 (Dock Setup).");
+        advanceSetupToStep(2);
       }
     }
 

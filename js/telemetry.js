@@ -518,6 +518,32 @@ function startPolling() {
         if (serverMapName && serverMapName !== activeMapName) {
           handleActiveMapChanged(serverMapName);
         }
+
+        // 1. Sync SLAM Mapping live screen with robot mode
+        const mappingScreen = document.getElementById("screen-mapping-live");
+        if (stateData.mode === "mapping") {
+          if (!mappingScreen || mappingScreen.style.display !== "flex") {
+            window.enterMappingLiveScreen?.();
+          }
+        } else {
+          if (mappingScreen && mappingScreen.style.display === "flex") {
+            window.exitMappingLiveScreen?.();
+          }
+        }
+
+        // 2. Sync Setup Wizard screen with backend setup state
+        const setupScreen = document.getElementById("screen-setup");
+        if (setupScreen && setupScreen.style.display === "flex") {
+          if (stateData.setup && (stateData.setup.dismissed || stateData.setup.completed)) {
+            window.dismissSetupScreen?.();
+            window.showDashboardView?.();
+          } else if (stateData.setup && stateData.setup.step === 2) {
+            const step1 = document.getElementById("setup-step-1");
+            if (step1 && step1.classList.contains("active")) {
+              window.advanceSetupToStep?.(2);
+            }
+          }
+        }
       }
 
       // Parallelize status queries for maximum responsiveness and zero UI stutter
@@ -573,8 +599,10 @@ function startPolling() {
       const dockData = dockResult.status === "fulfilled" ? dockResult.value : null;
       updateDockingScreen(dockData, stateData, isMissionActive);
 
-      // 6. Wi-Fi & IP (debounced to every 10 seconds)
-      if (!window._lastWifiCheck || Date.now() - window._lastWifiCheck > 10000) {
+      // 6. Wi-Fi & IP (debounced to every 10 seconds, but 1.5 seconds during setup wizard)
+      const isSetupVisible = document.getElementById("screen-setup")?.style.display === "flex";
+      const wifiInterval = isSetupVisible ? 1500 : 10000;
+      if (!window._lastWifiCheck || Date.now() - window._lastWifiCheck > wifiInterval) {
         window._lastWifiCheck = Date.now();
         fetchWifiStatus().then(st => {
           if (st && (st.hotspot_active || (!st.connected && !st.ip))) {
@@ -694,6 +722,30 @@ function initSdkEventsWebSocket() {
                   state: ev === "mission.completed" ? "completed" : "idle"
                 });
               }
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "mapping.started" || (ev === "mode.changed" && data?.mode === "mapping")) {
+              window.enterMappingLiveScreen?.();
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "mode.changed" && data?.mode !== "mapping") {
+              window.exitMappingLiveScreen?.();
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "setup.dismissed") {
+              window.dismissSetupScreen?.();
+              window.showDashboardView?.();
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "setup.updated" && data) {
+              if (data.dismissed) {
+                window.dismissSetupScreen?.();
+                window.showDashboardView?.();
+              } else if (data.step === 2) {
+                const step1 = document.getElementById("setup-step-1");
+                if (step1 && step1.classList.contains("active")) {
+                  window.advanceSetupToStep?.(2);
+                }
+              }
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "wifi.connected") {
+              window.fetchWifiStatus?.();
               window.triggerFastTelemetryPoll?.();
             } else if (ev && (ev.startsWith("dock.") || ev.startsWith("navigation."))) {
               window.triggerFastTelemetryPoll?.();

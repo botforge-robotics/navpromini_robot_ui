@@ -185,8 +185,10 @@ async function fetchWifiStatus() {
     if (headerIp) {
       if (isConnected && liveIp) {
         headerIp.textContent = liveIp;
+        window.cachedRobotIp = liveIp;
       } else if (isHotspot) {
         headerIp.textContent = "10.42.0.1 (AP)";
+        window.cachedRobotIp = "10.42.0.1";
       } else {
         headerIp.textContent = "Offline";
       }

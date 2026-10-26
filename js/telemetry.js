@@ -516,7 +516,13 @@ function startPolling() {
         if (stateText) stateText.textContent = (stateData.mode || stateData.state || "IDLE").toUpperCase();
 
         const robotIp = document.getElementById("robot-ip");
-        if (robotIp) robotIp.textContent = stateData.ip || (window.location.hostname || "127.0.0.1");
+        if (robotIp) {
+          if (stateData.ip && !stateData.ip.startsWith("127.")) {
+            robotIp.textContent = stateData.ip;
+          } else if (window.cachedRobotIp) {
+            robotIp.textContent = window.cachedRobotIp;
+          }
+        }
 
         // Battery update is handled once per loop from full state/battery call below
 

@@ -378,8 +378,15 @@ function updatePowerState(pState) {
           : `Robot is locked on dock and actively charging (${displayPct}%).`;
       }
 
-      // Auto-display charging screen ONLY when transitioning into docked charging
-      if (isDockedOrCharging && !wasDockedOrCharging) {
+      const setupScreen = document.getElementById("screen-setup");
+      const isSetupActive = setupScreen && setupScreen.style.display === "flex";
+
+      // Auto-display charging screen ONLY when transitioning into docked charging (and not in setup)
+      if (isSetupActive) {
+        if (chargingScreen && chargingScreen.style.display !== "none") {
+          chargingScreen.style.display = "none";
+        }
+      } else if (isDockedOrCharging && !wasDockedOrCharging) {
         wasDockedOrCharging = true;
         wasCharging = true;
         const isDismissed = chargingScreenDismissed || (sessionStorage.getItem("navpro_charging_dismissed") === "true");
@@ -397,8 +404,8 @@ function updatePowerState(pState) {
         triggerFaceExpression("wakeup");
       }
 
-      // If user dismissed it, ensure it stays hidden
-      if (chargingScreenDismissed || sessionStorage.getItem("navpro_charging_dismissed") === "true") {
+      // If user dismissed it or setup is active, ensure it stays hidden
+      if (isSetupActive || chargingScreenDismissed || sessionStorage.getItem("navpro_charging_dismissed") === "true") {
         if (chargingScreen && chargingScreen.style.display !== "none") {
           chargingScreen.style.display = "none";
         }

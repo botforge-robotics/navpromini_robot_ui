@@ -770,11 +770,52 @@ function initSdkEventsWebSocket() {
                 });
               }
               window.triggerFastTelemetryPoll?.();
+            } else if (ev === "mode.transitioning") {
+              if (data?.target === "mapping") {
+                const setupLoadingOverlay = document.getElementById("setup-loading-overlay");
+                if (setupLoadingOverlay) {
+                  const title = document.getElementById("setup-loading-title");
+                  const sub = document.getElementById("setup-loading-sub");
+                  if (title) title.textContent = "Starting SLAM Mapping...";
+                  if (sub) sub.textContent = "Initializing LiDAR, SLAM Toolbox, and Nav2 navigation stack...";
+                  setupLoadingOverlay.style.display = "flex";
+                }
+              }
+              window.triggerFastTelemetryPoll?.();
             } else if (ev === "mapping.started" || (ev === "mode.changed" && data?.mode === "mapping")) {
+              const setupLoadingOverlay = document.getElementById("setup-loading-overlay");
+              if (setupLoadingOverlay) setupLoadingOverlay.style.display = "none";
               window.enterMappingLiveScreen?.();
               window.triggerFastTelemetryPoll?.();
             } else if (ev === "mode.changed" && data?.mode !== "mapping") {
+              const setupLoadingOverlay = document.getElementById("setup-loading-overlay");
+              if (setupLoadingOverlay) setupLoadingOverlay.style.display = "none";
               window.exitMappingLiveScreen?.();
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "wifi.connecting") {
+              const setupLoadingOverlay = document.getElementById("setup-loading-overlay");
+              if (setupLoadingOverlay) {
+                const title = document.getElementById("setup-loading-title");
+                const sub = document.getElementById("setup-loading-sub");
+                if (title) title.textContent = "Connecting to Wi-Fi...";
+                if (sub) sub.textContent = data?.ssid ? `Connecting robot to "${data.ssid}"...` : "Associating with network...";
+                setupLoadingOverlay.style.display = "flex";
+              }
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "wifi.connected") {
+              const setupLoadingOverlay = document.getElementById("setup-loading-overlay");
+              if (setupLoadingOverlay) {
+                const title = document.getElementById("setup-loading-title");
+                const sub = document.getElementById("setup-loading-sub");
+                if (title) title.textContent = "Wi-Fi Connected!";
+                if (sub) sub.textContent = data?.ssid ? `Successfully joined "${data.ssid}"` : "Joined network successfully";
+                setTimeout(() => {
+                  if (setupLoadingOverlay && setupLoadingOverlay.style.display === "flex") {
+                    setupLoadingOverlay.style.display = "none";
+                  }
+                }, 1600);
+              }
+              window.fetchWifiStatus?.();
               window.triggerFastTelemetryPoll?.();
             } else if (ev === "setup.dismissed") {
               window.dismissSetupScreen?.();
@@ -784,14 +825,7 @@ function initSdkEventsWebSocket() {
               if (data.dismissed) {
                 window.dismissSetupScreen?.();
                 window.showDashboardView?.();
-              } else if (data.step === 2) {
-                const step1 = document.getElementById("setup-step-1");
-                if (step1 && step1.classList.contains("active")) {
-                  window.advanceSetupToStep?.(2);
-                }
               }
-              window.triggerFastTelemetryPoll?.();
-            } else if (ev === "wifi.connected") {
               window.fetchWifiStatus?.();
               window.triggerFastTelemetryPoll?.();
             } else if (ev && (ev.startsWith("dock.") || ev.startsWith("navigation."))) {

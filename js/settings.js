@@ -4,14 +4,11 @@
    8. Setup Wizard (Wi-Fi + Place Dock & Create Map)
    -------------------------------------------------------------------------- */
 function initSetupWizard() {
-  document.getElementById("btn-step2-continue")?.addEventListener("click", () => {
-    advanceSetupToStep(2);
+  document.getElementById("btn-skip-setup")?.addEventListener("click", () => {
+    dismissSetupScreen();
   });
-  document.getElementById("btn-skip-mapping")?.addEventListener("click", () => {
-    skipMappingSetup();
-  });
-  document.getElementById("btn-create-map-setup")?.addEventListener("click", () => {
-    startMappingFromSetup();
+  document.getElementById("btn-exit-setup")?.addEventListener("click", () => {
+    dismissSetupScreen();
   });
 }
 
@@ -25,16 +22,7 @@ window.openSetupScreen = function() {
   window.setupSessionStartTime = setupSessionStartTime;
   sessionStorage.removeItem("navpro_setup_dismissed");
   screen.style.display = "flex";
-  advanceSetupToStep(1);
-
-  // Immediately lock continue button until verified by fetchWifiStatus()
-  const btnContinue = document.getElementById("btn-step2-continue");
-  const gateMsg = document.getElementById("setup-gate-msg");
-  if (btnContinue) btnContinue.setAttribute("disabled", "true");
-  if (gateMsg) gateMsg.style.display = "flex";
-
   fetchWifiStatus();
-  scanWifiNetworks();
 };
 
 window.dismissSetupScreen = function() {
@@ -83,48 +71,28 @@ window.checkAutoSetupScreen = async function() {
       return;
     }
 
-    // Case C: Hotspot active or not connected to site Wi-Fi -> MUST launch and stay on Setup Step 1
+    // Case C: Hotspot active or not connected to site Wi-Fi -> MUST launch and stay on Setup Screen
     if (isHotspot || !isSiteConnected) {
       sessionStorage.removeItem("navpro_setup_dismissed");
       if (setupScreen && setupScreen.style.display !== "flex") {
-        console.log("[AutoSetup] Robot is unconfigured or in hotspot mode. Launching Setup Screen Step 1.");
+        console.log("[AutoSetup] Robot is unconfigured or in hotspot mode. Launching Setup Screen.");
         openSetupScreen();
       }
-      advanceSetupToStep(1);
       return;
     }
 
-    // Case D: Site Wi-Fi is connected: determine step from remote state (step 1 or step 2)
-    const targetStep = (sData && sData.step) ? sData.step : 2;
+    // Case D: Site Wi-Fi is connected: if setup is not dismissed/completed, keep Setup Screen visible with updated connection
     if (setupScreen && setupScreen.style.display !== "flex") {
-      console.log(`[AutoSetup] Wi-Fi connected but setup incomplete. Showing Step ${targetStep}.`);
+      console.log("[AutoSetup] Wi-Fi connected but setup incomplete. Showing Wireless Setup Guide.");
       openSetupScreen();
     }
-    advanceSetupToStep(targetStep);
   } catch (e) {
     // Backend offline or booting
   }
 };
 
 window.advanceSetupToStep = function(stepNum) {
-  if (stepNum === 2) {
-    const btnContinue = document.getElementById("btn-step2-continue");
-    if (btnContinue && btnContinue.hasAttribute("disabled")) {
-      showToast("Please connect robot to Wi-Fi before proceeding to Dock setup.", true);
-      return;
-    }
-  }
-  document.querySelectorAll(".setup-step-page").forEach(p => p.classList.remove("active"));
-  const targetPage = document.getElementById(`setup-step-${stepNum}`);
-  if (targetPage) targetPage.classList.add("active");
-
-  const dot1 = document.getElementById("setup-dot-1");
-  const dot2 = document.getElementById("setup-dot-2");
-  const label = document.getElementById("setup-step-label");
-
-  if (dot1) dot1.classList.toggle("active", stepNum === 1);
-  if (dot2) dot2.classList.toggle("active", stepNum === 2);
-  if (label) label.textContent = `Step ${stepNum} of 2`;
+  // Legacy stub for backward compatibility
 };
 
 function sanitizeWifiSsid(ssid) {
@@ -145,9 +113,9 @@ async function fetchWifiStatus() {
     // STRICT RULE: Can only be considered connected if NOT in hotspot mode, data.connected is true, and real non-AP IP is assigned
     const isConnected = !isHotspot && !!(data.connected && cleanSsid && liveIp);
 
-    // 1. Hotspot credentials & state (Top Card: Option 1)
-    const hsTitleEl = document.getElementById("setup-hotspot-title");
-    const hsDescEl = document.getElementById("setup-hotspot-desc");
+    const statusBar = document.getElementById("setup-live-status-bar");
+    const statusTitle = document.getElementById("setup-status-title");
+    const statusSub = document.getElementById("setup-status-sub");
     const hsBadgeEl = document.getElementById("hotspot-live-badge");
     const credLabel1 = document.getElementById("setup-cred-label-1");
     const hsSsidEl = document.getElementById("setup-hotspot-ssid");
@@ -155,14 +123,19 @@ async function fetchWifiStatus() {
     const hsPassEl = document.getElementById("setup-hotspot-pass");
     const credLabel3 = document.getElementById("setup-cred-label-3");
     const hsIpEl = document.getElementById("setup-hotspot-ip");
+    const headerIp = document.getElementById("robot-ip");
+
+    if (statusBar) {
+      statusBar.classList.toggle("connected", isConnected);
+    }
 
     if (isHotspot) {
       if (hsBadgeEl) {
         hsBadgeEl.textContent = "HOTSPOT ACTIVE";
         hsBadgeEl.className = "hotspot-live-pill active";
       }
-      if (hsTitleEl) hsTitleEl.textContent = "Pair via Mobile / Desktop App";
-      if (hsDescEl) hsDescEl.innerHTML = "Connect your phone or PC to this robot's Wi-Fi hotspot, then open the <strong>NavPro Mission Planner</strong> app to set up the robot wirelessly.";
+      if (statusTitle) statusTitle.textContent = "Robot Hotspot Active";
+      if (statusSub) statusSub.textContent = "Connect your phone or computer to the robot's setup network";
       if (credLabel1) credLabel1.textContent = "ROBOT HOTSPOT";
       if (hsSsidEl) hsSsidEl.textContent = data.hotspot_ssid || "NavPro-Setup";
       if (credLabel2) credLabel2.textContent = "PASSWORD";
@@ -174,21 +147,21 @@ async function fetchWifiStatus() {
         hsBadgeEl.textContent = "WI-FI CONNECTED";
         hsBadgeEl.className = "hotspot-live-pill connected";
       }
-      if (hsTitleEl) hsTitleEl.textContent = "Connected to Site Wi-Fi";
-      if (hsDescEl) hsDescEl.innerHTML = `Robot is online on <strong>${escapeHtml(cleanSsid)}</strong>. To manage this robot, connect your phone or PC to the same Wi-Fi network and open <strong>NavPro Mission Planner</strong>.`;
+      if (statusTitle) statusTitle.textContent = `Connected to ${cleanSsid}`;
+      if (statusSub) statusSub.textContent = `Robot IP: ${liveIp} • Open Mission Planner to create map or navigate`;
       if (credLabel1) credLabel1.textContent = "CONNECTED NETWORK";
       if (hsSsidEl) hsSsidEl.textContent = cleanSsid;
       if (credLabel2) credLabel2.textContent = "ROBOT IP ADDRESS";
       if (hsPassEl) hsPassEl.textContent = liveIp;
       if (credLabel3) credLabel3.textContent = "HOTSPOT STATUS";
-      if (hsIpEl) hsIpEl.textContent = "Inactive (Site Wi-Fi Connected)";
+      if (hsIpEl) hsIpEl.textContent = "Disabled (Online)";
     } else {
       if (hsBadgeEl) {
         hsBadgeEl.textContent = "HOTSPOT STANDBY";
         hsBadgeEl.className = "hotspot-live-pill inactive";
       }
-      if (hsTitleEl) hsTitleEl.textContent = "Pair via Mobile / Desktop App";
-      if (hsDescEl) hsDescEl.innerHTML = "Connect your phone or PC to this robot's hotspot or connect direct from this screen below.";
+      if (statusTitle) statusTitle.textContent = "Waiting for Network Connection";
+      if (statusSub) statusSub.textContent = "Connect phone to hotspot or wait for network";
       if (credLabel1) credLabel1.textContent = "HOTSPOT SSID";
       if (hsSsidEl) hsSsidEl.textContent = data.hotspot_ssid || "NavPro-Setup";
       if (credLabel2) credLabel2.textContent = "PASSWORD";
@@ -200,58 +173,6 @@ async function fetchWifiStatus() {
     const browserPortalEl = document.getElementById("setup-browser-portal-url");
     if (browserPortalEl) {
       browserPortalEl.textContent = isConnected ? `http://${liveIp}:8090/ui/` : "http://10.42.0.1:8090/ui/";
-    }
-
-    // 2. Connected Site Wi-Fi status (Bottom Card: Option 2)
-    const nameEl = document.getElementById("wifi-current-name");
-    const ipEl = document.getElementById("wifi-current-ip");
-    const badgeEl = document.getElementById("wifi-connected-badge");
-    const headerIp = document.getElementById("robot-ip");
-    const btnContinue = document.getElementById("btn-step2-continue");
-    const gateMsg = document.getElementById("setup-gate-msg");
-
-    if (nameEl) {
-      nameEl.textContent = isConnected ? cleanSsid : "No Wi-Fi Connected";
-    }
-    if (ipEl) {
-      ipEl.textContent = isConnected ? `IP: ${liveIp}` : (isHotspot ? "Hotspot Mode (10.42.0.1)" : "Offline");
-    }
-
-    if (badgeEl) {
-      if (isConnected) {
-        badgeEl.textContent = `Connected (${cleanSsid})`;
-        badgeEl.className = "wifi-connected-pill connected";
-      } else if (isHotspot) {
-        badgeEl.textContent = "Hotspot Mode";
-        badgeEl.className = "wifi-connected-pill disconnected";
-      } else if (data.connected && !liveIp) {
-        badgeEl.textContent = "Obtaining IP...";
-        badgeEl.className = "wifi-connected-pill";
-      } else {
-        badgeEl.textContent = "Not Connected";
-        badgeEl.className = "wifi-connected-pill disconnected";
-      }
-    }
-
-    // Gate Step 2 Continue Button: strictly enabled only when connected to site Wi-Fi
-    if (btnContinue) {
-      if (isConnected) {
-        btnContinue.removeAttribute("disabled");
-        if (gateMsg) gateMsg.style.display = "none";
-      } else {
-        btnContinue.setAttribute("disabled", "true");
-        if (gateMsg) gateMsg.style.display = "flex";
-      }
-    }
-
-    // Auto-advance from Step 1 to Step 2 if Wi-Fi is connected and user is on Step 1
-    if (isConnected) {
-      const setupScreen = document.getElementById("screen-setup");
-      const step1 = document.getElementById("setup-step-1");
-      if (setupScreen && setupScreen.style.display === "flex" && step1 && step1.classList.contains("active")) {
-        console.log("[Setup] Robot is connected to site Wi-Fi. Auto-advancing to Step 2 (Dock Setup).");
-        advanceSetupToStep(2);
-      }
     }
 
     // Top status bar robot IP

@@ -146,43 +146,43 @@ async function fetchWifiStatus() {
 
     if (isHotspot) {
       if (hsBadgeEl) {
-        hsBadgeEl.textContent = "HOTSPOT ACTIVE";
+        hsBadgeEl.textContent = "● READY FOR APP PAIRING";
         hsBadgeEl.className = "hotspot-live-pill active";
       }
-      if (statusTitle) statusTitle.textContent = "Robot Hotspot Active";
-      if (statusSub) statusSub.textContent = "Connect your phone or computer to the robot's setup network";
-      if (credLabel1) credLabel1.textContent = "ROBOT HOTSPOT";
-      if (hsSsidEl) hsSsidEl.textContent = data.hotspot_ssid || "NavPro-Setup";
-      if (credLabel2) credLabel2.textContent = "PASSWORD";
+      if (statusTitle) statusTitle.textContent = "Set up with NavPro Mini App";
+      if (statusSub) statusSub.textContent = "Scan the QR code with your phone camera to download the app and complete setup.";
+      if (credLabel1) credLabel1.textContent = "ROBOT ID";
+      if (hsSsidEl) hsSsidEl.textContent = data.hotspot_ssid || "NavPro Mini";
+      if (credLabel2) credLabel2.textContent = "PAIRING PIN";
       if (hsPassEl) hsPassEl.textContent = data.hotspot_password || "navprosetup";
-      if (credLabel3) credLabel3.textContent = "PORTAL IP";
-      if (hsIpEl) hsIpEl.textContent = data.hotspot_ip || "10.42.0.1";
+      if (credLabel3) credLabel3.textContent = "STATUS";
+      if (hsIpEl) hsIpEl.textContent = "Waiting for App";
     } else if (isConnected) {
       if (hsBadgeEl) {
-        hsBadgeEl.textContent = "WI-FI CONNECTED";
+        hsBadgeEl.textContent = "✓ WI-FI CONNECTED";
         hsBadgeEl.className = "hotspot-live-pill connected";
       }
-      if (statusTitle) statusTitle.textContent = `Connected to ${cleanSsid}`;
-      if (statusSub) statusSub.textContent = `Robot IP: ${liveIp} • Open Mission Planner to create map or navigate`;
-      if (credLabel1) credLabel1.textContent = "CONNECTED NETWORK";
+      if (statusTitle) statusTitle.textContent = "Set up with NavPro Mini App";
+      if (statusSub) statusSub.textContent = `Connected to "${cleanSsid}". Open NavPro Mini App to create map or navigate.`;
+      if (credLabel1) credLabel1.textContent = "CONNECTED WI-FI";
       if (hsSsidEl) hsSsidEl.textContent = cleanSsid;
-      if (credLabel2) credLabel2.textContent = "ROBOT IP ADDRESS";
-      if (hsPassEl) hsPassEl.textContent = liveIp;
-      if (credLabel3) credLabel3.textContent = "HOTSPOT STATUS";
-      if (hsIpEl) hsIpEl.textContent = "Disabled (Online)";
+      if (credLabel2) credLabel2.textContent = "DEVICE STATUS";
+      if (hsPassEl) hsPassEl.textContent = "Online";
+      if (credLabel3) credLabel3.textContent = "APP SYNC";
+      if (hsIpEl) hsIpEl.textContent = "Ready in App";
     } else {
       if (hsBadgeEl) {
-        hsBadgeEl.textContent = "HOTSPOT STANDBY";
+        hsBadgeEl.textContent = "● READY FOR SETUP";
         hsBadgeEl.className = "hotspot-live-pill inactive";
       }
-      if (statusTitle) statusTitle.textContent = "Waiting for Network Connection";
-      if (statusSub) statusSub.textContent = "Connect phone to hotspot or wait for network";
-      if (credLabel1) credLabel1.textContent = "HOTSPOT SSID";
-      if (hsSsidEl) hsSsidEl.textContent = data.hotspot_ssid || "NavPro-Setup";
-      if (credLabel2) credLabel2.textContent = "PASSWORD";
+      if (statusTitle) statusTitle.textContent = "Set up with NavPro Mini App";
+      if (statusSub) statusSub.textContent = "Open NavPro Mini App on your phone to connect and start.";
+      if (credLabel1) credLabel1.textContent = "ROBOT ID";
+      if (hsSsidEl) hsSsidEl.textContent = data.hotspot_ssid || "NavPro Mini";
+      if (credLabel2) credLabel2.textContent = "PAIRING PIN";
       if (hsPassEl) hsPassEl.textContent = data.hotspot_password || "navprosetup";
-      if (credLabel3) credLabel3.textContent = "PORTAL IP";
-      if (hsIpEl) hsIpEl.textContent = "10.42.0.1";
+      if (credLabel3) credLabel3.textContent = "STATUS";
+      if (hsIpEl) hsIpEl.textContent = "Standby";
     }
 
     const browserPortalEl = document.getElementById("setup-browser-portal-url");

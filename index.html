@@ -637,95 +637,84 @@
           <button class="btn btn-secondary btn-sm" id="btn-exit-setup" onclick="dismissSetupScreen()">✕ Exit to Dashboard</button>
         </div>
 
-        <!-- Single Comprehensive Wireless Setup Guide Page -->
-        <div class="setup-content-card setup-single-card">
-          <div class="setup-card-title-group">
-            <h1>Pair via NavPro Mini App</h1>
-            <p class="setup-desc">Initial Wi-Fi setup and autonomous mapping are driven remotely from your phone or PC.</p>
-          </div>
-
-          <!-- Live Status Bar -->
-          <div class="setup-live-status-bar" id="setup-live-status-bar">
-            <div class="status-pulse-dot" id="setup-status-dot"></div>
-            <div class="status-text-wrap">
-              <strong id="setup-status-title">Robot Hotspot Active</strong>
-              <span id="setup-status-sub">Connect your phone or computer to the robot's setup network</span>
+        <!-- Single Clean Consumer Setup Guide Page -->
+        <div class="setup-content-card setup-single-card setup-consumer-card">
+          <!-- Hero Header -->
+          <div class="setup-hero-header">
+            <div class="setup-status-pill-wrap" id="setup-live-status-bar">
+              <span class="hotspot-live-pill active" id="hotspot-live-badge">● READY FOR APP PAIRING</span>
             </div>
-            <span class="hotspot-live-pill active" id="hotspot-live-badge">HOTSPOT ACTIVE</span>
+            <h1 id="setup-status-title">Set up with NavPro Mini App</h1>
+            <p class="setup-hero-desc" id="setup-status-sub">
+              Scan the QR code with your phone camera to download the app and complete setup.
+            </p>
           </div>
 
-          <!-- STEP 1 CARD: Download & Open NavPro Mini App -->
-          <div class="setup-guide-card">
-            <div class="guide-step-number">1</div>
-            <div class="guide-card-body">
-              <div class="guide-card-header">
-                <h2>Install NavPro Mini App</h2>
-                <span class="guide-card-tag">Required for Setup & Mapping</span>
+          <!-- Hero QR & App Download Box -->
+          <div class="setup-app-hero-box">
+            <div class="setup-qr-card">
+              <img src="assets/app_releases_qr.svg" alt="Scan QR Code to Download NavPro Mini App" class="setup-qr-img">
+              <span class="qr-scan-label">Scan with Camera</span>
+            </div>
+            <div class="setup-app-hero-details">
+              <div class="setup-platform-badges">
+                <span class="platform-chip">Android APK</span>
+                <span class="platform-chip">iOS</span>
+                <span class="platform-chip">Desktop</span>
               </div>
-              <p class="guide-card-desc">
-                Scan the QR code with your phone camera to download the mobile app (APK for Android, iOS, or Desktop), then open the app:
+              <h2 class="setup-app-title">NavPro Mini App</h2>
+              <p class="setup-app-desc">
+                Use your smartphone to configure Wi-Fi, control the robot with a virtual joystick, and generate your first autonomous map.
               </p>
-
-              <div class="setup-app-download-row">
-                <div class="setup-qr-card">
-                  <img src="assets/app_releases_qr.svg" alt="NavPro Mini App Download QR" class="setup-qr-img">
-                  <span class="qr-scan-label">Scan App QR</span>
-                </div>
-                <div class="setup-app-info">
-                  <div class="app-info-title">NavPro Mini App</div>
-                  <div class="app-info-desc">Download Android APK, iOS, or Desktop app to control robot remotely:</div>
-                  <a href="https://github.com/botforge-robotics/nav2_mission_planner_gui/releases" target="_blank" class="app-release-link">
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                    <span>https://github.com/botforge-robotics/nav2_mission_planner_gui/releases</span>
-                  </a>
-                  <div class="app-browser-hint">
-                    Or in browser: <strong id="setup-browser-portal-url">http://10.42.0.1:8090/ui/</strong>
-                  </div>
-                </div>
-              </div>
+              <a href="https://github.com/botforge-robotics/nav2_mission_planner_gui/releases" target="_blank" class="app-release-link">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                <span>github.com/botforge-robotics/nav2_mission_planner_gui/releases</span>
+              </a>
             </div>
           </div>
 
-          <!-- STEP 2 CARD: Connect via Robot Hotspot & Configure Wi-Fi -->
-          <div class="setup-guide-card">
-            <div class="guide-step-number">2</div>
-            <div class="guide-card-body">
-              <div class="guide-card-header">
-                <h2>Connect to Robot's Wi-Fi Hotspot</h2>
-                <span class="guide-card-tag hotspot-tag">Direct Wi-Fi Pairing</span>
+          <!-- 3 Simple Consumer Steps Timeline -->
+          <div class="setup-steps-timeline">
+            <div class="timeline-step">
+              <div class="timeline-step-badge">1</div>
+              <div class="timeline-step-content">
+                <strong>Install App</strong>
+                <span>Scan the QR code to install NavPro Mini on your device.</span>
               </div>
-              <p class="guide-card-desc">
-                Open your device's Wi-Fi settings and connect to this robot's hotspot:
-              </p>
-
-              <div class="hotspot-credentials-grid">
-                <div class="cred-cell">
-                  <span class="cred-label" id="setup-cred-label-1">ROBOT HOTSPOT</span>
-                  <strong class="cred-value" id="setup-hotspot-ssid">NavPro-Setup-XXXX</strong>
-                </div>
-                <div class="cred-cell">
-                  <span class="cred-label" id="setup-cred-label-2">PASSWORD</span>
-                  <strong class="cred-value" id="setup-hotspot-pass">navprosetup</strong>
-                </div>
-                <div class="cred-cell">
-                  <span class="cred-label" id="setup-cred-label-3">PORTAL IP</span>
-                  <strong class="cred-value" id="setup-hotspot-ip">10.42.0.1</strong>
-                </div>
+            </div>
+            <div class="timeline-step-divider"></div>
+            <div class="timeline-step">
+              <div class="timeline-step-badge">2</div>
+              <div class="timeline-step-content">
+                <strong>Open & Connect</strong>
+                <span>Open the app on your phone. It automatically pairs with this robot.</span>
+              </div>
+            </div>
+            <div class="timeline-step-divider"></div>
+            <div class="timeline-step">
+              <div class="timeline-step-badge">3</div>
+              <div class="timeline-step-content">
+                <strong>Wi-Fi & Map</strong>
+                <span>Choose your Wi-Fi, then tap <em>Start Mapping</em> to see the live SLAM map!</span>
               </div>
             </div>
           </div>
 
-          <!-- STEP 3 CARD: Follow In-App Wizard to Connect Wi-Fi & Build Map -->
-          <div class="setup-guide-card setup-guide-card-app">
-            <div class="guide-step-number">3</div>
-            <div class="guide-card-body">
-              <div class="guide-card-header">
-                <h2>Continue Setup in NavPro Mini App</h2>
-                <span class="guide-card-tag complete-tag">Autonomous Mapping</span>
-              </div>
-              <p class="guide-card-desc">
-                Follow the Wi-Fi setup in the app. When you tap <strong>Start Mapping</strong> in NavPro Mini App, this screen will automatically switch to the real-time SLAM map view.
-              </p>
+          <!-- Subtle Pairing Identity Bar (Clean & Essential, Non-Technical) -->
+          <div class="setup-identity-card">
+            <div class="setup-identity-item">
+              <span class="setup-identity-label" id="setup-cred-label-1">ROBOT ID</span>
+              <strong class="setup-identity-val" id="setup-hotspot-ssid">NavPro-Setup-XXXX</strong>
+            </div>
+            <div class="setup-identity-sep"></div>
+            <div class="setup-identity-item">
+              <span class="setup-identity-label" id="setup-cred-label-2">PAIRING PIN</span>
+              <strong class="setup-identity-val" id="setup-hotspot-pass">navprosetup</strong>
+            </div>
+            <div class="setup-identity-sep"></div>
+            <div class="setup-identity-item">
+              <span class="setup-identity-label" id="setup-cred-label-3">STATUS</span>
+              <strong class="setup-identity-val status-val" id="setup-hotspot-ip">Waiting for App</strong>
             </div>
           </div>
 

@@ -49,13 +49,28 @@ window.checkAutoSetupScreen = async function() {
     const sData = (setupRes && setupRes.ok) ? await setupRes.json() : null;
 
     const isHotspot = Boolean(data.hotspot_active || (data.ip && data.ip.startsWith("10.42.")));
-    const isSiteConnected = !data.hotspot_active && !!(data.connected && data.ip && !data.ip.startsWith("10.42."));
-
     const setupScreen = document.getElementById("screen-setup");
+    const mappingScreen = document.getElementById("screen-mapping-live");
+
+    // Guard 1: If mapping is running or active, NEVER show setup screen
+    if (mappingScreen && mappingScreen.style.display === "flex") {
+      if (setupScreen && setupScreen.style.display !== "none") {
+        setupScreen.style.display = "none";
+      }
+      return;
+    }
+
+    // Guard 2: If user recently tapped "Setup" manually on robot touchscreen, keep it open
+    const isManuallyOpened = (Date.now() - setupSessionStartTime) < 15000;
+    if (isManuallyOpened) {
+      if (setupScreen && setupScreen.style.display !== "flex") {
+        openSetupScreen();
+      }
+      return;
+    }
 
     // Case A: Setup was completed or dismissed remotely (e.g. user clicked "Skip" or completed in Mission Planner app)
-    const isManuallyOpened = (Date.now() - setupSessionStartTime) < 15000;
-    if (!isManuallyOpened && sData && (sData.dismissed || sData.completed)) {
+    if (sData && (sData.dismissed || sData.completed)) {
       sessionStorage.setItem("navpro_setup_dismissed", "true");
       if (setupScreen && setupScreen.style.display !== "none") {
         console.log("[AutoSetup] Setup was dismissed/completed remotely. Advancing robot UI to dashboard.");
@@ -69,28 +84,22 @@ window.checkAutoSetupScreen = async function() {
       return;
     }
 
-    // Case B: User already dismissed locally in this session
-    if (sessionStorage.getItem("navpro_setup_dismissed") === "true") {
+    // Case B: User already dismissed locally in this session (only if not in hotspot mode)
+    if (!isHotspot && sessionStorage.getItem("navpro_setup_dismissed") === "true") {
       if (setupScreen && setupScreen.style.display !== "none") {
         setupScreen.style.display = "none";
       }
       return;
     }
 
-    // Case C: Hotspot active or not connected to site Wi-Fi -> MUST launch and stay on Setup Screen
-    if (isHotspot || !isSiteConnected) {
+    // Case C: Hotspot active OR setup in progress (!dismissed && !completed) -> MUST launch and stay on Setup Screen!
+    if (isHotspot || (sData && !sData.dismissed && !sData.completed)) {
       sessionStorage.removeItem("navpro_setup_dismissed");
       if (setupScreen && setupScreen.style.display !== "flex") {
-        console.log("[AutoSetup] Robot is unconfigured or in hotspot mode. Launching Setup Screen.");
+        console.log("[AutoSetup] Robot is unconfigured or in setup mode. Showing Setup Screen.");
         openSetupScreen();
       }
       return;
-    }
-
-    // Case D: Site Wi-Fi is connected: if setup is not dismissed/completed, keep Setup Screen visible with updated connection
-    if (setupScreen && setupScreen.style.display !== "flex") {
-      console.log("[AutoSetup] Wi-Fi connected but setup incomplete. Showing Wireless Setup Guide.");
-      openSetupScreen();
     }
   } catch (e) {
     // Backend offline or booting

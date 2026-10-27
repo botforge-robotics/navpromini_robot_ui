@@ -553,7 +553,7 @@ window.stopPowerHealthPolling = stopPowerHealthPolling;
    14. SOFTWARE UPDATE SYSTEM (GitHub Releases + SDK Updater)
    -------------------------------------------------------------------------- */
 const APP_CURRENT_VERSION = "2.1.0";
-const updateChannel = "main";
+const updateChannel = "dev";
 let latestReleaseData = null;
 let updatePollingTimer = null;
 
@@ -564,11 +564,11 @@ async function checkAppUpdates(silent = true) {
     return;
   }
 
-  const branch = "main";
+  const branch = "dev";
   try {
     let updateInfo = null;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/system/app/update/check?branch=main`, {
+      const res = await fetch(`${API_BASE}/api/v1/system/app/update/check?branch=${branch}`, {
         signal: AbortSignal.timeout(6000)
       });
       if (res.ok) {
@@ -652,7 +652,7 @@ function showUpdateAvailableModal(info) {
   // Never block onboarding setup or active live mapping with update prompts
   const setupScreen = document.getElementById("screen-setup");
   const mappingScreen = document.getElementById("screen-mapping-live");
-  if ((setupScreen && setupScreen.style.display === "flex") || (mappingScreen && mappingScreen.style.display === "flex")) {
+  if ((setupScreen && setupScreen.style.display !== "none") || (mappingScreen && mappingScreen.style.display !== "none")) {
     return;
   }
 

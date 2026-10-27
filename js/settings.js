@@ -16,6 +16,8 @@ let setupSessionStartTime = 0;
 window.setupSessionStartTime = setupSessionStartTime;
 
 window.openSetupScreen = function() {
+  const modal = document.getElementById("modal-app-update");
+  if (modal) modal.style.display = "none";
   const screen = document.getElementById("screen-setup");
   if (!screen) return;
   setupSessionStartTime = Date.now();
@@ -652,7 +654,8 @@ function showUpdateAvailableModal(info) {
   // Never block onboarding setup or active live mapping with update prompts
   const setupScreen = document.getElementById("screen-setup");
   const mappingScreen = document.getElementById("screen-mapping-live");
-  if ((setupScreen && setupScreen.style.display !== "none") || (mappingScreen && mappingScreen.style.display !== "none")) {
+  const isSetupDismissed = sessionStorage.getItem("navpro_setup_dismissed") === "true";
+  if (!isSetupDismissed || (setupScreen && setupScreen.style.display !== "none") || (mappingScreen && mappingScreen.style.display !== "none")) {
     return;
   }
 

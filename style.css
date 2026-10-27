@@ -2017,6 +2017,8 @@ body, html {
 .setup-single-card {
   width: 100%;
   max-width: 740px;
+  flex: 1;
+  min-height: 0;
   margin: 0 auto;
   background: #FFFFFF;
   border: 1.5px solid var(--border);
@@ -2024,7 +2026,7 @@ body, html {
   padding: 28px 30px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   box-shadow: 0 4px 24px rgba(15, 23, 42, 0.05);
   box-sizing: border-box;
 }
@@ -2444,7 +2446,8 @@ body, html {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .setup-gate-warning {

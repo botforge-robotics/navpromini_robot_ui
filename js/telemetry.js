@@ -572,7 +572,10 @@ function startPolling() {
               const title = document.getElementById("setup-loading-title");
               const sub = document.getElementById("setup-loading-sub");
               if (title) title.textContent = "Starting SLAM Mapping...";
-              if (sub) sub.textContent = "Initializing LiDAR, SLAM Toolbox, and Nav2 navigation stack...";
+              if (sub) {
+                sub.textContent = "";
+                sub.style.display = "none";
+              }
               setupLoadingOverlay.style.display = "flex";
             }
           }
@@ -790,7 +793,10 @@ function initSdkEventsWebSocket() {
                   const title = document.getElementById("setup-loading-title");
                   const sub = document.getElementById("setup-loading-sub");
                   if (title) title.textContent = "Starting SLAM Mapping...";
-                  if (sub) sub.textContent = "Initializing LiDAR, SLAM Toolbox, and Nav2 navigation stack...";
+                  if (sub) {
+                    sub.textContent = "";
+                    sub.style.display = "none";
+                  }
                   setupLoadingOverlay.style.display = "flex";
                 }
               }

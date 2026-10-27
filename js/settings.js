@@ -373,7 +373,10 @@ window.startMappingFromSetup = function() {
   const sub = document.getElementById("setup-loading-sub");
   if (overlay) {
     if (title) title.textContent = "Starting SLAM Mapping...";
-    if (sub) sub.textContent = "Initializing LiDAR, SLAM Toolbox, and Nav2 navigation stack...";
+    if (sub) {
+      sub.textContent = "";
+      sub.style.display = "none";
+    }
     overlay.style.display = "flex";
   }
   startSlamMapping();

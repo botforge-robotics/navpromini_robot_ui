@@ -372,7 +372,7 @@ function startLiveMapRenderer() {
       const stateRes = await fetch(`${API_BASE}/api/v1/state`);
       if (stateRes.ok) {
         const s = await stateRes.json();
-        if (s.mode === "mapping" && s.localization && s.localization.x !== undefined && s.localization.x !== null) {
+        if (s.mode === "mapping" && s.localization && s.localization.status === "LOCALIZED" && s.localization.x !== undefined && s.localization.x !== null) {
           targetRobotPose = {
             x: s.localization.x,
             y: s.localization.y,

@@ -594,10 +594,11 @@ function startPolling() {
           }
 
           const isHotspot = Boolean(stateData.hotspot_active || (stateData.ip && stateData.ip.startsWith("10.42.")));
-          if (!isHotspot && stateData.setup && !window.isSetupManuallyOpen) {
+          if (!isHotspot && stateData.setup) {
             const dismissedAtMs = (stateData.setup.dismissed_at || 0) * 1000;
             const startTime = window.setupSessionStartTime || 0;
-            if (stateData.setup.dismissed && dismissedAtMs > startTime) {
+            if ((stateData.setup.dismissed || stateData.setup.completed) && dismissedAtMs > startTime) {
+              window.isSetupManuallyOpen = false;
               window.dismissSetupScreen?.(false);
               window.showDashboardView?.();
             } else if (stateData.setup.step === 2) {
@@ -837,13 +838,13 @@ function initSdkEventsWebSocket() {
               window.fetchWifiStatus?.();
               window.triggerFastTelemetryPoll?.();
             } else if (ev === "setup.dismissed") {
-              if (!window.isSetupManuallyOpen) {
-                window.dismissSetupScreen?.(false);
-                window.showDashboardView?.();
-              }
+              window.isSetupManuallyOpen = false;
+              window.dismissSetupScreen?.(false);
+              window.showDashboardView?.();
               window.triggerFastTelemetryPoll?.();
             } else if (ev === "setup.updated" && data) {
-              if (data.dismissed && !window.isSetupManuallyOpen) {
+              if (data.dismissed || data.completed) {
+                window.isSetupManuallyOpen = false;
                 window.dismissSetupScreen?.(false);
                 window.showDashboardView?.();
               }

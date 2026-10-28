@@ -59,9 +59,13 @@ window.checkAutoSetupScreen = async function() {
       return;
     }
 
-    // Guard 2: If user explicitly opened setup screen manually on touchscreen, KEEP IT OPEN!
-    // Never let background auto-check force close it back to dashboard.
-    if (window.isSetupManuallyOpen && setupScreen && setupScreen.style.display === "flex") {
+    // Guard 2: If user recently tapped "Setup" on the robot touchscreen within the last 5s,
+    // let the setup request settle so stale responses don't prematurely close it.
+    const justTappedSetup = (Date.now() - setupSessionStartTime) < 5000;
+    if (justTappedSetup) {
+      if (setupScreen && setupScreen.style.display !== "flex") {
+        openSetupScreen();
+      }
       return;
     }
 
@@ -76,19 +80,11 @@ window.checkAutoSetupScreen = async function() {
 
     const isHotspot = Boolean(data.hotspot_active || (data.ip && data.ip.startsWith("10.42.")));
 
-    // Guard 3: If user recently tapped "Setup" manually within 30s, keep it open
-    const isManuallyOpened = (Date.now() - setupSessionStartTime) < 30000;
-    if (isManuallyOpened || window.isSetupManuallyOpen) {
-      if (setupScreen && setupScreen.style.display !== "flex") {
-        openSetupScreen();
-      }
-      return;
-    }
-
     // Case A: Setup was completed or dismissed remotely (e.g. user clicked "Skip" or completed in Mission Planner app)
     if (sData && (sData.dismissed || sData.completed)) {
       sessionStorage.setItem("navpro_setup_dismissed", "true");
-      if (setupScreen && setupScreen.style.display !== "none" && !window.isSetupManuallyOpen) {
+      window.isSetupManuallyOpen = false;
+      if (setupScreen && setupScreen.style.display !== "none") {
         console.log("[AutoSetup] Setup was dismissed/completed remotely. Advancing robot UI to dashboard.");
         setupScreen.style.display = "none";
         if (typeof showDashboardView === "function") {
@@ -102,7 +98,7 @@ window.checkAutoSetupScreen = async function() {
 
     // Case B: User already dismissed locally in this session (only if not in hotspot mode)
     if (!isHotspot && sessionStorage.getItem("navpro_setup_dismissed") === "true") {
-      if (setupScreen && setupScreen.style.display !== "none" && !window.isSetupManuallyOpen) {
+      if (setupScreen && setupScreen.style.display !== "none") {
         setupScreen.style.display = "none";
       }
       return;

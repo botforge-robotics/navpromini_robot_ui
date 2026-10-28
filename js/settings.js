@@ -14,12 +14,14 @@ function initSetupWizard() {
 
 let setupSessionStartTime = 0;
 window.setupSessionStartTime = setupSessionStartTime;
+window.isSetupManuallyOpen = false;
 
 window.openSetupScreen = function() {
   const modal = document.getElementById("modal-app-update");
   if (modal) modal.style.display = "none";
   const screen = document.getElementById("screen-setup");
   if (!screen) return;
+  window.isSetupManuallyOpen = true;
   setupSessionStartTime = Date.now();
   window.setupSessionStartTime = setupSessionStartTime;
   sessionStorage.removeItem("navpro_setup_dismissed");
@@ -32,25 +34,20 @@ window.openSetupScreen = function() {
   fetchWifiStatus();
 };
 
-window.dismissSetupScreen = function() {
+window.dismissSetupScreen = function(callApi = true) {
+  window.isSetupManuallyOpen = false;
+  setupSessionStartTime = 0;
+  window.setupSessionStartTime = 0;
   const screen = document.getElementById("screen-setup");
   if (screen) screen.style.display = "none";
   sessionStorage.setItem("navpro_setup_dismissed", "true");
-  fetch(`${API_BASE}/api/v1/system/setup/dismiss`, { method: "POST" }).catch(() => {});
+  if (callApi) {
+    fetch(`${API_BASE}/api/v1/system/setup/dismiss`, { method: "POST" }).catch(() => {});
+  }
 };
 
 window.checkAutoSetupScreen = async function() {
   try {
-    const [wifiRes, setupRes] = await Promise.all([
-      fetch(`${API_BASE}/api/v1/system/wifi/status`).catch(() => null),
-      fetch(`${API_BASE}/api/v1/system/setup`).catch(() => null)
-    ]);
-
-    if (!wifiRes || !wifiRes.ok) return;
-    const data = await wifiRes.json();
-    const sData = (setupRes && setupRes.ok) ? await setupRes.json() : null;
-
-    const isHotspot = Boolean(data.hotspot_active || (data.ip && data.ip.startsWith("10.42.")));
     const setupScreen = document.getElementById("screen-setup");
     const mappingScreen = document.getElementById("screen-mapping-live");
 
@@ -62,9 +59,26 @@ window.checkAutoSetupScreen = async function() {
       return;
     }
 
-    // Guard 2: If user recently tapped "Setup" manually on robot touchscreen, keep it open
-    const isManuallyOpened = (Date.now() - setupSessionStartTime) < 15000;
-    if (isManuallyOpened) {
+    // Guard 2: If user explicitly opened setup screen manually on touchscreen, KEEP IT OPEN!
+    // Never let background auto-check force close it back to dashboard.
+    if (window.isSetupManuallyOpen && setupScreen && setupScreen.style.display === "flex") {
+      return;
+    }
+
+    const [wifiRes, setupRes] = await Promise.all([
+      fetch(`${API_BASE}/api/v1/system/wifi/status`).catch(() => null),
+      fetch(`${API_BASE}/api/v1/system/setup`).catch(() => null)
+    ]);
+
+    if (!wifiRes || !wifiRes.ok) return;
+    const data = await wifiRes.json();
+    const sData = (setupRes && setupRes.ok) ? await setupRes.json() : null;
+
+    const isHotspot = Boolean(data.hotspot_active || (data.ip && data.ip.startsWith("10.42.")));
+
+    // Guard 3: If user recently tapped "Setup" manually within 30s, keep it open
+    const isManuallyOpened = (Date.now() - setupSessionStartTime) < 30000;
+    if (isManuallyOpened || window.isSetupManuallyOpen) {
       if (setupScreen && setupScreen.style.display !== "flex") {
         openSetupScreen();
       }
@@ -74,7 +88,7 @@ window.checkAutoSetupScreen = async function() {
     // Case A: Setup was completed or dismissed remotely (e.g. user clicked "Skip" or completed in Mission Planner app)
     if (sData && (sData.dismissed || sData.completed)) {
       sessionStorage.setItem("navpro_setup_dismissed", "true");
-      if (setupScreen && setupScreen.style.display !== "none") {
+      if (setupScreen && setupScreen.style.display !== "none" && !window.isSetupManuallyOpen) {
         console.log("[AutoSetup] Setup was dismissed/completed remotely. Advancing robot UI to dashboard.");
         setupScreen.style.display = "none";
         if (typeof showDashboardView === "function") {
@@ -88,7 +102,7 @@ window.checkAutoSetupScreen = async function() {
 
     // Case B: User already dismissed locally in this session (only if not in hotspot mode)
     if (!isHotspot && sessionStorage.getItem("navpro_setup_dismissed") === "true") {
-      if (setupScreen && setupScreen.style.display !== "none") {
+      if (setupScreen && setupScreen.style.display !== "none" && !window.isSetupManuallyOpen) {
         setupScreen.style.display = "none";
       }
       return;

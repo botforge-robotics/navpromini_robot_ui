@@ -532,25 +532,6 @@ function startLiveMapRenderer() {
       ctx.restore();
     }
 
-    // Draw Standoff Marker
-    if (liveStandoffPose) {
-      const sp = worldToCanvas(liveStandoffPose.x, liveStandoffPose.y);
-      ctx.save();
-      ctx.translate(sp.x, sp.y);
-      ctx.fillStyle = "rgba(6, 182, 212, 0.85)";
-      ctx.beginPath();
-      ctx.arc(0, 0, 10, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.strokeStyle = "#FFFFFF";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.font = "bold 11px system-ui, sans-serif";
-      ctx.fillStyle = "#A5F3FC";
-      ctx.textAlign = "center";
-      ctx.fillText("STANDOFF (0.7m)", 0, 22);
-      ctx.restore();
-    }
-
     // Draw Charging Dock Marker
     if (liveDockPose) {
       const dp = worldToCanvas(liveDockPose.x, liveDockPose.y);
@@ -577,7 +558,7 @@ function startLiveMapRenderer() {
       ctx.font = "bold 12px system-ui, sans-serif";
       ctx.fillStyle = "#6EE7B7";
       ctx.textAlign = "center";
-      ctx.fillText("DOCK (ORIGIN)", dp.x, dp.y - 20);
+      ctx.fillText("Charging Dock", dp.x, dp.y - 20);
       ctx.restore();
     }
 
@@ -621,20 +602,6 @@ function startLiveMapRenderer() {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
-
-    // Label
-    ctx.save();
-    ctx.font = "bold 13px system-ui, sans-serif";
-    ctx.fillStyle = "#FDBA74";
-    ctx.textAlign = "center";
-    ctx.fillText("ROBOT", rp.x, rp.y + 30);
-    ctx.restore();
-
-    // Update live coordinates chip in top HUD
-    const coordsEl = document.getElementById("mapping-pose-coords");
-    if (coordsEl) {
-      coordsEl.textContent = `X: ${smoothRobotPose.x.toFixed(2)}m  Y: ${smoothRobotPose.y.toFixed(2)}m`;
-    }
   };
 
   renderFrameLoop();

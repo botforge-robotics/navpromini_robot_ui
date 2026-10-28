@@ -733,8 +733,14 @@
       <!-- 100% Fullscreen Interactive Map Canvas -->
       <canvas id="mapping-live-canvas"></canvas>
       <div class="mapping-canvas-loading" id="mapping-canvas-loading">
-        <div class="spinner-large"></div>
-        <span>Generating real-time SLAM map...</span>
+        <div class="mapping-loading-card">
+          <div class="radar-scan-anim">
+            <div class="radar-ring"></div>
+            <div class="radar-dot"></div>
+          </div>
+          <h3 class="mapping-loading-title">Creating Fresh SLAM Map</h3>
+          <p class="mapping-loading-sub">Wiping previous session • Starting LiDAR mapping</p>
+        </div>
       </div>
 
       <!-- Floating Map Zoom & Recenter Controls -->
@@ -752,18 +758,24 @@
 
       <!-- Floating Top Header (Positioned on top of map) -->
       <div class="mapping-floating-header">
-        <div class="mapping-badge">
-          <span class="pulse-red"></span>
-          <span>SLAM MAPPING ACTIVE</span>
+        <div class="mapping-header-left">
+          <div class="mapping-badge badge-creating">
+            <span class="pulse-emerald"></span>
+            <span>CREATING NEW MAP</span>
+          </div>
+          <div class="mapping-pose-chip" id="mapping-pose-coords">X: 0.00m  Y: 0.00m</div>
         </div>
         <div class="mapping-timer" id="mapping-timer">00:00</div>
-        <button class="btn btn-danger btn-sm" id="btn-abort-mapping">Cancel Mapping</button>
+        <button class="btn btn-danger btn-sm mapping-abort-btn" id="btn-abort-mapping">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <span>Cancel Mapping</span>
+        </button>
       </div>
 
       <!-- Floating Bottom Footer (Positioned on top of map) -->
       <div class="mapping-floating-footer">
         <div class="mapping-status-pill">
-          <span>📡 Real-time occupancy grid • Pan/pinch to explore • Drive robot via teleop</span>
+          <span>📡 Real-time LiDAR occupancy grid • Pan/pinch to explore • Drive robot via teleop</span>
         </div>
         <button class="btn btn-primary btn-xl mapping-finish-btn" id="btn-save-finish-map">Finish & Save Map</button>
       </div>

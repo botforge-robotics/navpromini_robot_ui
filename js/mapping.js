@@ -10,8 +10,9 @@ let liveMapCamera = { worldX: 0.0, worldY: 0.0, scale: 1.0, userControlled: fals
 let liveMapMetadata = null; // { width, height, resolution, origin: { x, y } }
 let targetRobotPose = { x: 0, y: 0, yaw: 0 };
 let smoothRobotPose = { x: 0, y: 0, yaw: 0 };
-let liveDockPose = { x: 0, y: 0, theta: 0 };
-let liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
+let liveDockPose = null;
+let liveStandoffPose = null;
+let liveMapStartPose = null;
 let liveTrajectory = [];
 let liveLaserScan = null; // { angle_min, angle_max, angle_increment, ranges, range_min, range_max }
 let liveHasMovedAway = false;
@@ -155,10 +156,20 @@ function startLiveMapRenderer() {
   if (loadingEl) loadingEl.style.display = "flex";
   if (!canvas) return;
 
+  // Immediately clear canvas with radar background
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    canvas.width = window.innerWidth || 800;
+    canvas.height = window.innerHeight || 1280;
+    ctx.fillStyle = "#0B0F19";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
   initMappingViewportInteractivity();
 
   let firstFrameLoaded = false;
   latestMapImage = null;
+  liveMapMetadata = null;
 
   // 1. Map Image & Metadata fetcher (every 1200ms)
   const fetchMapData = async () => {
@@ -170,10 +181,20 @@ function startLiveMapRenderer() {
 
       if (infoRes.ok) {
         const info = await infoRes.json();
-        if (info.loaded) liveMapMetadata = info;
+        if (info.loaded) {
+          liveMapMetadata = info;
+        } else {
+          liveMapMetadata = null;
+          latestMapImage = null;
+          if (loadingEl) loadingEl.style.display = "flex";
+        }
+      } else {
+        liveMapMetadata = null;
+        latestMapImage = null;
+        if (loadingEl) loadingEl.style.display = "flex";
       }
 
-      if (imgRes.ok) {
+      if (imgRes.ok && liveMapMetadata && liveMapMetadata.loaded) {
         const blob = await imgRes.blob();
         const img = new Image();
         img.onload = () => {
@@ -193,6 +214,9 @@ function startLiveMapRenderer() {
           URL.revokeObjectURL(img.src);
         };
         img.src = URL.createObjectURL(blob);
+      } else if (!imgRes.ok) {
+        latestMapImage = null;
+        if (loadingEl) loadingEl.style.display = "flex";
       }
     } catch (_) {}
   };
@@ -263,17 +287,18 @@ function startLiveMapRenderer() {
               const oy = pos.y;
               const odomYaw = quatToEulerYaw(orient);
 
-              let mx = ox;
-              let my = oy;
-              let myaw = odomYaw;
-
-              if (liveMapOdomTf) {
-                const c = Math.cos(liveMapOdomTf.theta);
-                const s = Math.sin(liveMapOdomTf.theta);
-                mx = liveMapOdomTf.x + c * ox - s * oy;
-                my = liveMapOdomTf.y + s * ox + c * oy;
-                myaw = liveMapOdomTf.theta + odomYaw;
+              // In mapping mode, map frame origin is the starting robot pose.
+              // If liveMapOdomTf is not yet available, robot is at (0, 0, 0) in map frame.
+              if (!liveMapOdomTf) {
+                targetRobotPose = { x: 0, y: 0, yaw: 0 };
+                return;
               }
+
+              const c = Math.cos(liveMapOdomTf.theta);
+              const s = Math.sin(liveMapOdomTf.theta);
+              const mx = liveMapOdomTf.x + c * ox - s * oy;
+              const my = liveMapOdomTf.y + s * ox + c * oy;
+              const myaw = liveMapOdomTf.theta + odomYaw;
 
               targetRobotPose = { x: mx, y: my, yaw: myaw };
 
@@ -283,23 +308,37 @@ function startLiveMapRenderer() {
                 smoothRobotPose.yaw = myaw;
               }
 
-              // Update dock heading and standoff once robot moves >= 0.20m from starting dock position
-              const distFromDock = Math.hypot(targetRobotPose.x - liveDockPose.x, targetRobotPose.y - liveDockPose.y);
-              if (!liveHasMovedAway && distFromDock >= 0.20) {
-                const depAngle = Math.atan2(targetRobotPose.y - liveDockPose.y, targetRobotPose.x - liveDockPose.x);
-                liveDockPose.theta = depAngle;
+              // Initialize dock pose at robot's starting position in the new map
+              if (liveDockPose === null) {
+                liveMapStartPose = { x: mx, y: my, yaw: myaw };
+                liveDockPose = { x: mx, y: my, theta: myaw };
                 liveStandoffPose = {
-                  x: liveDockPose.x + 0.70 * Math.cos(depAngle),
-                  y: liveDockPose.y + 0.70 * Math.sin(depAngle),
-                  theta: depAngle
+                  x: mx + 0.70 * Math.cos(myaw),
+                  y: my + 0.70 * Math.sin(myaw),
+                  theta: myaw
                 };
-                liveHasMovedAway = true;
+                liveTrajectory = [{ x: mx, y: my }];
+              } else if (!liveHasMovedAway && liveMapStartPose) {
+                // Update dock heading and standoff once robot moves >= 0.20m from starting dock position
+                const distFromDock = Math.hypot(mx - liveMapStartPose.x, my - liveMapStartPose.y);
+                if (distFromDock >= 0.20) {
+                  const depAngle = Math.atan2(my - liveMapStartPose.y, mx - liveMapStartPose.x);
+                  liveDockPose.theta = depAngle;
+                  liveStandoffPose = {
+                    x: liveDockPose.x + 0.70 * Math.cos(depAngle),
+                    y: liveDockPose.y + 0.70 * Math.sin(depAngle),
+                    theta: depAngle
+                  };
+                  liveHasMovedAway = true;
+                }
               }
 
-              // Record trajectory point
-              const lastPt = liveTrajectory[liveTrajectory.length - 1];
-              if (!lastPt || Math.hypot(targetRobotPose.x - lastPt.x, targetRobotPose.y - lastPt.y) >= 0.06) {
-                liveTrajectory.push({ x: targetRobotPose.x, y: targetRobotPose.y });
+              // Record trajectory point (only after dock is initialized)
+              if (liveDockPose !== null) {
+                const lastPt = liveTrajectory[liveTrajectory.length - 1];
+                if (!lastPt || Math.hypot(mx - lastPt.x, my - lastPt.y) >= 0.06) {
+                  liveTrajectory.push({ x: mx, y: my });
+                }
               }
             }
           } else if (payload.topic === "/scan_filtered" || payload.topic === "/scan") {
@@ -333,7 +372,7 @@ function startLiveMapRenderer() {
       const stateRes = await fetch(`${API_BASE}/api/v1/state`);
       if (stateRes.ok) {
         const s = await stateRes.json();
-        if (s.localization && s.localization.x !== undefined) {
+        if (s.mode === "mapping" && s.localization && s.localization.x !== undefined && s.localization.x !== null) {
           targetRobotPose = {
             x: s.localization.x,
             y: s.localization.y,
@@ -343,6 +382,16 @@ function startLiveMapRenderer() {
             smoothRobotPose.x = targetRobotPose.x;
             smoothRobotPose.y = targetRobotPose.y;
             smoothRobotPose.yaw = targetRobotPose.yaw;
+          }
+          if (liveDockPose === null) {
+            liveMapStartPose = { x: targetRobotPose.x, y: targetRobotPose.y, yaw: targetRobotPose.yaw };
+            liveDockPose = { x: targetRobotPose.x, y: targetRobotPose.y, theta: targetRobotPose.yaw };
+            liveStandoffPose = {
+              x: targetRobotPose.x + 0.70 * Math.cos(targetRobotPose.yaw),
+              y: targetRobotPose.y + 0.70 * Math.sin(targetRobotPose.yaw),
+              theta: targetRobotPose.yaw
+            };
+            liveTrajectory = [{ x: targetRobotPose.x, y: targetRobotPose.y }];
           }
         }
       }
@@ -580,6 +629,12 @@ function startLiveMapRenderer() {
     ctx.textAlign = "center";
     ctx.fillText("ROBOT", rp.x, rp.y + 30);
     ctx.restore();
+
+    // Update live coordinates chip in top HUD
+    const coordsEl = document.getElementById("mapping-pose-coords");
+    if (coordsEl) {
+      coordsEl.textContent = `X: ${smoothRobotPose.x.toFixed(2)}m  Y: ${smoothRobotPose.y.toFixed(2)}m`;
+    }
   };
 
   renderFrameLoop();
@@ -604,6 +659,15 @@ function stopLiveMapRenderer() {
   clearInterval(liveMapFastPoller);
   liveMapFastPoller = null;
   latestMapImage = null;
+  liveMapMetadata = null;
+  liveTrajectory = [];
+  liveLaserScan = null;
+  liveDockPose = null;
+  liveStandoffPose = null;
+  liveMapStartPose = null;
+  liveHasMovedAway = false;
+  smoothRobotPose = { x: 0, y: 0, yaw: 0 };
+  targetRobotPose = { x: 0, y: 0, yaw: 0 };
   const loadingEl = document.getElementById("mapping-canvas-loading");
   if (loadingEl) loadingEl.style.display = "flex";
 }
@@ -667,15 +731,22 @@ function initMappingControls() {
       }
 
       try {
+        const dockToSave = liveDockPose || { x: 0, y: 0, theta: 0 };
+        const standoffToSave = liveStandoffPose || {
+          x: dockToSave.x + 0.70 * Math.cos(dockToSave.theta),
+          y: dockToSave.y + 0.70 * Math.sin(dockToSave.theta),
+          theta: dockToSave.theta
+        };
+
         // 1. Save Dock Pose to /api/v1/dock/pose
         try {
           await fetch(`${API_BASE}/api/v1/dock/pose`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              x: liveDockPose.x,
-              y: liveDockPose.y,
-              theta: liveDockPose.theta
+              x: dockToSave.x,
+              y: dockToSave.y,
+              theta: dockToSave.theta
             })
           });
         } catch (err) {
@@ -690,9 +761,9 @@ function initMappingControls() {
             body: JSON.stringify({
               name: "Dock Standoff",
               type: "dock",
-              x: liveStandoffPose.x,
-              y: liveStandoffPose.y,
-              theta: liveStandoffPose.theta,
+              x: standoffToSave.x,
+              y: standoffToSave.y,
+              theta: standoffToSave.theta,
               map: targetName
             })
           });
@@ -708,9 +779,9 @@ function initMappingControls() {
             body: JSON.stringify({
               name: "Charging Dock",
               type: "dock",
-              x: liveDockPose.x,
-              y: liveDockPose.y,
-              theta: liveDockPose.theta,
+              x: dockToSave.x,
+              y: dockToSave.y,
+              theta: dockToSave.theta,
               map: targetName
             })
           });
@@ -770,19 +841,42 @@ window.enterMappingLiveScreen = function() {
   const setupLoadingOverlay = document.getElementById("setup-loading-overlay");
   if (setupLoadingOverlay) setupLoadingOverlay.style.display = "none";
 
-  liveDockPose = { x: 0, y: 0, theta: 0 };
-  liveStandoffPose = { x: 0.70, y: 0, theta: 0 };
-  liveTrajectory = [{ x: 0, y: 0 }];
+  // Completely wipe previous map session state
+  latestMapImage = null;
+  liveMapMetadata = null;
+  liveTrajectory = [];
+  liveLaserScan = null;
+  liveMapOdomTf = null;
+  liveMapStartPose = null;
+  liveDockPose = null;
+  liveStandoffPose = null;
   liveHasMovedAway = false;
+  smoothRobotPose = { x: 0, y: 0, yaw: 0 };
+  targetRobotPose = { x: 0, y: 0, yaw: 0 };
+  liveMapCamera = { worldX: 0.0, worldY: 0.0, scale: 1.0, userControlled: false };
 
   screen.style.display = "flex";
-  liveMapPan = { x: 0, y: 0, scale: 1.0, userControlled: false };
+
+  // Immediately clear canvas with radar background
+  const canvas = document.getElementById("mapping-live-canvas");
+  if (canvas) {
+    canvas.width = window.innerWidth || 800;
+    canvas.height = window.innerHeight || 1280;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "#0B0F19";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  const loadingEl = document.getElementById("mapping-canvas-loading");
+  if (loadingEl) loadingEl.style.display = "flex";
+
   startLiveMapRenderer();
 
-  if (!mappingStartTime) {
-    mappingStartTime = Date.now();
-  }
+  mappingStartTime = Date.now();
   const timerEl = document.getElementById("mapping-timer");
+  if (timerEl) timerEl.textContent = "00:00";
   clearInterval(mappingTimerInterval);
   mappingTimerInterval = setInterval(() => {
     if (!mappingStartTime || !timerEl) return;

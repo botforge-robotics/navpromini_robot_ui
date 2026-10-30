@@ -326,6 +326,9 @@
       liveMuted = !!data.muted;
       liveConnecting = !!data.connecting;
       hasGeminiKey = !!data.has_gemini_key;
+      if (data.speaking !== undefined) {
+        isSpeaking = !!data.speaking;
+      }
       updateLiveButtonUI();
     } catch (e) {
       console.warn("checkLiveStatus error:", e);
@@ -618,7 +621,7 @@
       pollInterval = setInterval(() => {
         fetchDialog();
         checkLiveStatus();
-      }, 4000);
+      }, 1500);
     }
   };
 

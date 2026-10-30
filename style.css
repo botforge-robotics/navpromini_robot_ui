@@ -6547,6 +6547,13 @@ select.kiosk-select option,
   animation: pulseRecordingClean 1.2s infinite alternate ease-in-out;
 }
 
+.btn-clean-tap-to-talk.is-connecting {
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  color: #ffffff;
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.55);
+  animation: pulseRecordingClean 1.2s infinite alternate ease-in-out;
+}
+
 .btn-clean-tap-to-talk.is-live-streaming {
   background: linear-gradient(135deg, #047857, #10b981);
   color: #ffffff;

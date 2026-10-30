@@ -309,6 +309,7 @@
 
   let liveActive = false;
   let liveMuted = false;
+  let liveConnecting = false;
   let hasGeminiKey = false;
 
   async function checkLiveStatus() {
@@ -317,6 +318,7 @@
       const data = await res.json();
       liveActive = !!data.active;
       liveMuted = !!data.muted;
+      liveConnecting = !!data.connecting;
       hasGeminiKey = !!data.has_gemini_key;
       updateLiveButtonUI();
     } catch (e) {
@@ -326,6 +328,15 @@
 
   function updateLiveButtonUI() {
     if (!btnTapToTalk) return;
+    if (liveConnecting) {
+      btnTapToTalk.className = "btn-clean-tap-to-talk is-connecting";
+      btnTapToTalk.innerHTML = `
+        <span class="talk-mic-anim"></span>
+        <span id="btn-voice-talk-label">Connecting Live...</span>
+      `;
+      isListening = true;
+      return;
+    }
     if (liveActive && !liveMuted) {
       btnTapToTalk.className = "btn-clean-tap-to-talk is-live-streaming";
       btnTapToTalk.innerHTML = `
@@ -376,6 +387,12 @@
       fetch("/api/v1/voice/interrupt", { method: "POST" });
     } catch (e) {}
 
+    // Instant UI reaction if starting
+    if (!liveActive && !liveConnecting) {
+      liveConnecting = true;
+      updateLiveButtonUI();
+    }
+
     try {
       const res = await fetch("/api/v1/voice/live/toggle", {
         method: "POST",
@@ -384,8 +401,13 @@
       });
       const data = await res.json();
 
-      if (res.status === 400 && data.code === "gemini_key_missing") {
-        showToast("⚠️ Google Gemini API key required for Live voice-to-voice stream. Set key in Settings.");
+      if (!res.ok) {
+        liveConnecting = false;
+        if (res.status === 400 && data.code === "gemini_key_missing") {
+          showToast("⚠️ Google Gemini API key required for Live voice-to-voice stream. Set key in Settings.");
+        } else {
+          showToast("⚠️ " + (data.message || data.error || "Failed to start live stream"));
+        }
         triggerMicListenFallback();
         return;
       }
@@ -393,6 +415,7 @@
       if (data.active !== undefined) {
         liveActive = !!data.active;
         liveMuted = !!data.muted;
+        liveConnecting = false;
         updateLiveButtonUI();
         if (data.message) {
           showToast(data.message);
@@ -400,6 +423,7 @@
       }
     } catch (err) {
       console.warn("handleLiveButtonTap error:", err);
+      liveConnecting = false;
       triggerMicListenFallback();
     }
   }

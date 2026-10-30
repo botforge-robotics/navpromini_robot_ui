@@ -86,38 +86,57 @@
       ctx.clearRect(0, 0, width, height);
 
       const centerY = height / 2;
-      wavePhase += isListening ? 0.08 : (isSpeaking ? 0.06 : 0.02);
+      wavePhase += isListening ? 0.08 : (isSpeaking ? 0.06 : 0.025);
 
       // Determine colors and amplitude based on active state
-      let baseAmp = 4;
+      let baseAmp = 6;
       let strokeColor1 = "rgba(100, 116, 139, 0.4)";
-      let strokeColor2 = "rgba(148, 163, 184, 0.3)";
+      let strokeColor2 = "rgba(148, 163, 184, 0.25)";
+      let strokeColor3 = "rgba(203, 213, 225, 0.2)";
       let glowColor = "transparent";
 
       if (isMuted) {
-        baseAmp = 1.5;
-        strokeColor1 = "rgba(239, 68, 68, 0.5)";
+        baseAmp = 2;
+        strokeColor1 = "rgba(239, 68, 68, 0.45)";
         strokeColor2 = "rgba(220, 38, 38, 0.2)";
+        strokeColor3 = "transparent";
       } else if (isListening) {
-        baseAmp = 22 + Math.random() * 14;
+        baseAmp = 34 + Math.random() * 18;
         strokeColor1 = "rgba(16, 185, 129, 0.95)";
-        strokeColor2 = "rgba(52, 211, 153, 0.6)";
-        glowColor = "rgba(16, 185, 129, 0.4)";
+        strokeColor2 = "rgba(52, 211, 153, 0.55)";
+        strokeColor3 = "rgba(110, 231, 183, 0.35)";
+        glowColor = "rgba(16, 185, 129, 0.35)";
       } else if (isSpeaking) {
-        baseAmp = 18 + Math.sin(wavePhase * 2) * 10;
-        strokeColor1 = "rgba(139, 92, 246, 0.95)";
-        strokeColor2 = "rgba(167, 139, 250, 0.6)";
-        glowColor = "rgba(139, 92, 246, 0.4)";
+        baseAmp = 28 + Math.sin(wavePhase * 2.2) * 14;
+        strokeColor1 = "rgba(99, 102, 241, 0.95)";
+        strokeColor2 = "rgba(129, 140, 248, 0.55)";
+        strokeColor3 = "rgba(165, 180, 252, 0.35)";
+        glowColor = "rgba(99, 102, 241, 0.35)";
+      }
+
+      // Draw tertiary harmonic wave
+      if (strokeColor3 !== "transparent") {
+        ctx.beginPath();
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = strokeColor3;
+        for (let x = 0; x < width; x += 3) {
+          const norm = (x / width) * Math.PI * 4;
+          const env = Math.sin((x / width) * Math.PI);
+          const y = centerY + Math.sin(norm + wavePhase * 0.7) * (baseAmp * 0.4) * env;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
       }
 
       // Draw secondary background wave
       ctx.beginPath();
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.4;
       ctx.strokeStyle = strokeColor2;
       for (let x = 0; x < width; x += 3) {
-        const norm = (x / width) * Math.PI * 4;
-        const env = Math.sin((x / width) * Math.PI); // Window envelope
-        const y = centerY + Math.sin(norm - wavePhase * 1.2) * (baseAmp * 0.6) * env;
+        const norm = (x / width) * Math.PI * 3.5;
+        const env = Math.sin((x / width) * Math.PI);
+        const y = centerY + Math.sin(norm - wavePhase * 1.1) * (baseAmp * 0.65) * env;
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -125,10 +144,10 @@
 
       // Draw primary main wave
       ctx.beginPath();
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = 3.6;
       ctx.strokeStyle = strokeColor1;
       if (glowColor !== "transparent") {
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 14;
         ctx.shadowColor = glowColor;
       } else {
         ctx.shadowBlur = 0;
@@ -136,7 +155,7 @@
 
       for (let x = 0; x < width; x += 2) {
         const norm = (x / width) * Math.PI * 3;
-        const env = Math.sin((x / width) * Math.PI); // Window envelope
+        const env = Math.sin((x / width) * Math.PI);
         const y = centerY + Math.sin(norm + wavePhase) * baseAmp * env;
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
@@ -229,7 +248,7 @@
       btnTapToTalk.classList.add("recording");
       btnTapToTalk.innerHTML = `
         <span class="talk-mic-anim"></span>
-        <span>Listening (4s)...</span>
+        <span>Listening...</span>
       `;
     }
 
@@ -263,13 +282,13 @@
       if (btnTapToTalk) {
         btnTapToTalk.classList.remove("recording");
         btnTapToTalk.innerHTML = `
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
             <line x1="12" y1="19" x2="12" y2="23"></line>
             <line x1="8" y1="23" x2="16" y2="23"></line>
           </svg>
-          <span>Tap to Speak</span>
+          <span id="btn-voice-talk-label">Tap to Speak</span>
         `;
       }
     }

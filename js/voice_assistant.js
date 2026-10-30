@@ -240,6 +240,13 @@
       showToast("Microphone is currently muted. Unmute to listen.");
       return;
     }
+
+    // Instant Barge-In: immediately interrupt any currently playing audio on touch
+    try {
+      fetch("/api/v1/voice/interrupt", { method: "POST" });
+    } catch (e) {}
+    isSpeaking = false;
+
     if (isListening) return;
 
     isListening = true;
@@ -270,6 +277,8 @@
         }
       } else if (data.status === "silence") {
         updateStatus("No clear speech detected. Try speaking closer to robot.", "idle");
+      } else if (data.status === "ignored") {
+        updateStatus("Filtered out background noise / chatter.", "idle");
       } else {
         updateStatus("Microphone listening finished.", "idle");
       }

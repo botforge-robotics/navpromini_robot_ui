@@ -49,7 +49,7 @@ function initSwipeGestures() {
     const touchDeltaY = (e.changedTouches && e.changedTouches[0]) ? (e.changedTouches[0].clientY - touchStartY) : 0;
     if (Math.abs(touchDeltaX) > 40 && Math.abs(touchDeltaX) > Math.abs(touchDeltaY)) {
       if (touchDeltaX < 0) {
-        setSwipeIndex(Math.min(2, currentSwipeIndex + 1));
+        setSwipeIndex(Math.min(3, currentSwipeIndex + 1));
       } else {
         setSwipeIndex(Math.max(0, currentSwipeIndex - 1));
       }
@@ -67,20 +67,23 @@ function initSwipeGestures() {
     if (!isMouseDown) return;
     isMouseDown = false;
     const deltaX = e.clientX - mouseStartX;
-    if (deltaX < -40) setSwipeIndex(Math.min(2, currentSwipeIndex + 1));
+    if (deltaX < -40) setSwipeIndex(Math.min(3, currentSwipeIndex + 1));
     if (deltaX > 40) setSwipeIndex(Math.max(0, currentSwipeIndex - 1));
   });
 
   // Explicit click handlers for navigation buttons
   document.getElementById("dash-swipe-to-shortcuts")?.addEventListener("click", () => setSwipeIndex(1));
   document.getElementById("dash-swipe-to-media")?.addEventListener("click", () => setSwipeIndex(2));
+  document.getElementById("dash-swipe-to-voice")?.addEventListener("click", () => setSwipeIndex(3));
 
   // Keyboard navigation shortcuts
   window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight") {
-      setSwipeIndex(Math.min(2, currentSwipeIndex + 1));
+      setSwipeIndex(Math.min(3, currentSwipeIndex + 1));
     } else if (e.key === "ArrowLeft") {
       setSwipeIndex(Math.max(0, currentSwipeIndex - 1));
+    } else if (e.key === "4" || e.key.toLowerCase() === "v") {
+      setSwipeIndex(3);
     } else if (e.key === "3" || e.key.toLowerCase() === "m") {
       setSwipeIndex(2);
     } else if (e.key === "2" || e.key.toLowerCase() === "s") {
@@ -94,7 +97,7 @@ function initSwipeGestures() {
 }
 
 window.setSwipeIndex = function(index) {
-  currentSwipeIndex = Math.max(0, Math.min(2, index));
+  currentSwipeIndex = Math.max(0, Math.min(3, index));
   const track = document.getElementById("swipe-track");
 
   if (track) {
@@ -105,7 +108,7 @@ window.setSwipeIndex = function(index) {
   }
 
   // Update header slide indicator pills
-  for (let i = 0; i <= 2; i++) {
+  for (let i = 0; i <= 3; i++) {
     const pill = document.getElementById(`pill-slide-${i}`);
     if (pill) pill.classList.toggle("active", i === currentSwipeIndex);
   }
@@ -128,6 +131,12 @@ window.setSwipeIndex = function(index) {
     // Initialize/refresh media player
     if (window.initMediaPlayer) {
       window.initMediaPlayer();
+    }
+  } else if (currentSwipeIndex === 3) {
+    window.isDndActive = false;
+    if (dndPill) dndPill.style.display = "none";
+    if (window.initVoiceAssistant) {
+      window.initVoiceAssistant();
     }
   } else {
     window.isDndActive = false;

@@ -6510,6 +6510,41 @@ select.kiosk-select option,
   animation: pulseRecordingClean 1.2s infinite alternate ease-in-out;
 }
 
+.btn-clean-tap-to-talk.is-live-streaming {
+  background: linear-gradient(135deg, #047857, #10b981);
+  color: #ffffff;
+  box-shadow: 0 0 28px rgba(16, 185, 129, 0.55), 0 10px 20px -5px rgba(16, 185, 129, 0.3);
+  animation: pulseLiveStreamClean 1.8s infinite ease-in-out;
+}
+
+.btn-clean-tap-to-talk.is-live-muted {
+  background: #0f172a;
+  color: #f87171;
+  border: 1.5px solid rgba(239, 68, 68, 0.45);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.live-indicator-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 10px #ffffff;
+  display: inline-block;
+  animation: liveDotPulse 1.2s infinite alternate ease-in-out;
+}
+
+@keyframes pulseLiveStreamClean {
+  0% { transform: scale(1); box-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
+  50% { transform: scale(1.025); box-shadow: 0 0 34px rgba(16, 185, 129, 0.7); }
+  100% { transform: scale(1); box-shadow: 0 0 20px rgba(16, 185, 129, 0.4); }
+}
+
+@keyframes liveDotPulse {
+  0% { opacity: 0.6; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1.2); }
+}
+
 @keyframes pulseRecordingClean {
   0% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
   100% { transform: scale(1.04); box-shadow: 0 0 34px rgba(239, 68, 68, 0.7); }

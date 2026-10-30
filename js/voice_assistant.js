@@ -43,7 +43,7 @@
 
     // Event listeners
     btnMuteToggle?.addEventListener("click", toggleMute);
-    btnTapToTalk?.addEventListener("click", triggerMicListen);
+    btnTapToTalk?.addEventListener("click", handleLiveButtonTap);
     document.getElementById("btn-voice-send-text")?.addEventListener("click", sendTextMessage);
     document.getElementById("btn-voice-clear-chat")?.addEventListener("click", clearChatDialog);
 
@@ -56,8 +56,9 @@
     // Start waveform animation loop
     startWaveformAnimation();
 
-    // Fetch initial dialog history
+    // Fetch initial dialog history & live stream state
     fetchDialog();
+    checkLiveStatus();
   }
 
   function resizeCanvas() {
@@ -270,22 +271,113 @@
     }
   }
 
-  async function triggerMicListen() {
-    if (isMuted) {
-      showToast("Microphone is currently muted. Unmute to listen.");
-      return;
-    }
+  let liveActive = false;
+  let liveMuted = false;
+  let hasGeminiKey = false;
 
-    // Instant Barge-In: immediately interrupt any currently playing audio on touch
+  async function checkLiveStatus() {
+    try {
+      const res = await fetch("/api/v1/voice/live/status");
+      const data = await res.json();
+      liveActive = !!data.active;
+      liveMuted = !!data.muted;
+      hasGeminiKey = !!data.has_gemini_key;
+      updateLiveButtonUI();
+    } catch (e) {
+      console.warn("checkLiveStatus error:", e);
+    }
+  }
+
+  function updateLiveButtonUI() {
+    if (!btnTapToTalk) return;
+    if (liveActive && !liveMuted) {
+      btnTapToTalk.className = "btn-clean-tap-to-talk is-live-streaming";
+      btnTapToTalk.innerHTML = `
+        <span class="live-indicator-dot"></span>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <span id="btn-voice-talk-label">LIVE ASSISTANT • TAP TO MUTE</span>
+      `;
+      isListening = true;
+      isMuted = false;
+    } else if (liveActive && liveMuted) {
+      btnTapToTalk.className = "btn-clean-tap-to-talk is-live-muted";
+      btnTapToTalk.innerHTML = `
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+          <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <span id="btn-voice-talk-label">MUTED • TAP TO GO LIVE</span>
+      `;
+      isListening = false;
+      isMuted = true;
+    } else {
+      btnTapToTalk.className = "btn-clean-tap-to-talk";
+      btnTapToTalk.innerHTML = `
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <span id="btn-voice-talk-label">TAP TO START LIVE ASSISTANT</span>
+      `;
+      isListening = false;
+      isMuted = false;
+    }
+  }
+
+  async function handleLiveButtonTap() {
+    // Instant Barge-In: immediately interrupt any playing speech
     try {
       fetch("/api/v1/voice/interrupt", { method: "POST" });
     } catch (e) {}
-    isSpeaking = false;
+
+    try {
+      const res = await fetch("/api/v1/voice/live/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+
+      if (res.status === 400 && data.code === "gemini_key_missing") {
+        showToast("⚠️ Google Gemini API key required for Live voice-to-voice stream. Set key in Settings.");
+        triggerMicListenFallback();
+        return;
+      }
+
+      if (data.active !== undefined) {
+        liveActive = !!data.active;
+        liveMuted = !!data.muted;
+        updateLiveButtonUI();
+        if (data.message) {
+          showToast(data.message);
+        }
+      }
+    } catch (err) {
+      console.warn("handleLiveButtonTap error:", err);
+      triggerMicListenFallback();
+    }
+  }
+
+  async function triggerMicListenFallback() {
+    if (isMuted) {
+      showToast("Microphone is currently muted.");
+      return;
+    }
 
     if (isListening) return;
 
     isListening = true;
-    updateStatus("Listening to your voice...", "listening");
+    updateStatus("Listening...", "listening");
     if (btnTapToTalk) {
       btnTapToTalk.classList.add("recording");
       btnTapToTalk.innerHTML = `
@@ -305,17 +397,15 @@
       isListening = false;
 
       if (data.status === "success") {
-        updateStatus("Heard speech successfully", "success");
+        updateStatus("Speech processed", "success");
         if (data.reply) {
           isSpeaking = true;
           setTimeout(() => { isSpeaking = false; }, 3500);
         }
       } else if (data.status === "silence") {
-        updateStatus("No clear speech detected. Try speaking closer to robot.", "idle");
+        updateStatus("No speech detected.", "idle");
       } else if (data.status === "ignored") {
-        updateStatus("Filtered out background noise / chatter.", "idle");
-      } else {
-        updateStatus("Microphone listening finished.", "idle");
+        updateStatus("Filtered ambient chatter.", "idle");
       }
 
       fetchDialog();
@@ -323,18 +413,7 @@
       isListening = false;
       updateStatus("Audio capture error: " + err.message, "error");
     } finally {
-      if (btnTapToTalk) {
-        btnTapToTalk.classList.remove("recording");
-        btnTapToTalk.innerHTML = `
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-            <line x1="12" y1="19" x2="12" y2="23"></line>
-            <line x1="8" y1="23" x2="16" y2="23"></line>
-          </svg>
-          <span id="btn-voice-talk-label">Tap to Speak</span>
-        `;
-      }
+      updateLiveButtonUI();
     }
   }
 
@@ -446,13 +525,17 @@
   // Public hooks
   window.initVoiceAssistant = function () {
     fetchDialog();
+    checkLiveStatus();
     resizeCanvas();
     if (!pollInterval) {
-      pollInterval = setInterval(fetchDialog, 4000);
+      pollInterval = setInterval(() => {
+        fetchDialog();
+        checkLiveStatus();
+      }, 4000);
     }
   };
 
-  window.toggleVoiceListening = triggerMicListen;
+  window.toggleVoiceListening = handleLiveButtonTap;
   window.toggleVoiceMute = toggleMute;
 
   // Auto-init on DOMContentLoaded

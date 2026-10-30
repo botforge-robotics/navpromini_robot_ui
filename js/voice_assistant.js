@@ -41,14 +41,8 @@
     textInput = document.getElementById("voice-text-input");
     statusBadge = document.getElementById("voice-status-badge");
 
-    // Event listeners: fast pointerup for touch, inline onclick handles standard clicks
+    // Event listeners: inline onclick on button handles clicks with debounce
     btnMuteToggle?.addEventListener("click", toggleMute);
-
-    if (btnTapToTalk) {
-      btnTapToTalk.addEventListener("pointerup", (e) => {
-        handleLiveButtonTap(e);
-      });
-    }
 
     document.getElementById("btn-voice-send-text")?.addEventListener("click", sendTextMessage);
     document.getElementById("btn-voice-clear-chat")?.addEventListener("click", clearChatDialog);
@@ -317,11 +311,14 @@
   let liveMuted = false;
   let liveConnecting = false;
   let hasGeminiKey = false;
+  let isTogglingLive = false;
 
   async function checkLiveStatus() {
+    if (isTogglingLive) return; // Do not overwrite user tap state while toggle is in flight
     try {
       const res = await fetch("/api/v1/voice/live/status");
       const data = await res.json();
+      if (isTogglingLive) return;
       liveActive = !!data.active;
       liveMuted = !!data.muted;
       liveConnecting = !!data.connecting;
@@ -397,7 +394,7 @@
       e.stopPropagation();
     }
     const now = Date.now();
-    if (now - lastLiveTapTs < 450) return;
+    if (now - lastLiveTapTs < 450 || isTogglingLive) return;
     lastLiveTapTs = now;
 
     if (liveConnecting) return;
@@ -407,13 +404,16 @@
       fetch("/api/v1/voice/interrupt", { method: "POST" });
     } catch (e) {}
 
+    isTogglingLive = true;
+    let targetMuted = false;
     // Immediate optimistic tactile feedback
     if (!liveActive && !liveConnecting) {
       liveConnecting = true;
       updateLiveButtonUI();
     } else if (liveActive) {
-      // Instant toggle between Muted and Live on finger tap
-      liveMuted = !liveMuted;
+      // Instant deterministic toggle between Muted and Live on finger tap
+      targetMuted = !liveMuted;
+      liveMuted = targetMuted;
       updateLiveButtonUI();
     }
 
@@ -421,7 +421,7 @@
       const res = await fetch("/api/v1/voice/live/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({})
+        body: JSON.stringify(liveActive ? { muted: targetMuted } : {})
       });
       const data = await res.json();
 
@@ -432,7 +432,7 @@
         } else {
           showToast("⚠️ " + (data.message || data.error || "Failed to toggle live stream"));
         }
-        checkLiveStatus();
+        await checkLiveStatus();
         return;
       }
 
@@ -448,7 +448,11 @@
     } catch (err) {
       console.warn("handleLiveButtonTap error:", err);
       liveConnecting = false;
-      checkLiveStatus();
+      await checkLiveStatus();
+    } finally {
+      setTimeout(() => {
+        isTogglingLive = false;
+      }, 400);
     }
   }
 

@@ -6289,16 +6289,29 @@ select.kiosk-select option,
   box-sizing: border-box;
 }
 
-/* Center Acoustic Waves Visualizer (Edge-to-edge white, fluid curves) */
+/* Upper Half: Free Stage Space (Clean empty canvas reserved for future widgets, avatar, camera) */
+.voice-upper-stage {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: transparent;
+  pointer-events: none;
+}
+
+/* Center Acoustic Waves Visualizer (Positioned in the exact vertical center of the screen) */
 .voice-waves-wrapper {
   flex-shrink: 0;
   width: 100%;
-  height: 180px;
+  height: 110px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
-  padding: 10px 0;
+  padding: 0;
   position: relative;
   z-index: 2;
 }
@@ -6309,7 +6322,7 @@ select.kiosk-select option,
   display: block;
 }
 
-/* Floating Chat Dialogs (Disappears gently near the center waves via gradient mask) */
+/* Lower Half: Floating Chat Dialogs (Below center waves, scrolling downward towards bottom button) */
 .voice-clean-chat-container {
   flex: 1;
   min-height: 0;
@@ -6320,9 +6333,9 @@ select.kiosk-select option,
   flex-direction: column;
   position: relative;
   overflow: hidden;
-  /* Mask gradient: fully transparent at the top near waves, fades in smoothly downwards */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.25) 12%, rgba(0, 0, 0, 1) 32%, rgba(0, 0, 0, 1) 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.25) 12%, rgba(0, 0, 0, 1) 32%, rgba(0, 0, 0, 1) 100%);
+  /* Mask gradient: smoothly transparent at top near center waves, solid below */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.25) 8%, rgba(0, 0, 0, 1) 24%, rgba(0, 0, 0, 1) 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.25) 8%, rgba(0, 0, 0, 1) 24%, rgba(0, 0, 0, 1) 100%);
 }
 
 .voice-chat-messages {
@@ -6330,9 +6343,9 @@ select.kiosk-select option,
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding-top: 36px;
-  padding-bottom: 12px;
+  gap: 14px;
+  padding-top: 14px;
+  padding-bottom: 8px;
   scrollbar-width: none;
 }
 
@@ -6423,7 +6436,7 @@ select.kiosk-select option,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px 24px 38px 24px;
+  padding: 14px 24px 24px 24px;
   background: #ffffff;
   position: relative;
   z-index: 10;

@@ -6303,6 +6303,43 @@ select.kiosk-select option,
   pointer-events: none;
 }
 
+.voice-avatar-name-badge {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 9999px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.voice-avatar-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.65);
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+
+.voice-avatar-name {
+  font-family: var(--font-primary, inherit);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #0F172A;
+  text-transform: uppercase;
+}
+
 .voice-avatar-stage {
   height: 94%;
   max-height: 440px;

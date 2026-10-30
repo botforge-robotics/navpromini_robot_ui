@@ -192,12 +192,48 @@
   }
 
   let lastMessagesSignature = "";
+  let sessionOpenedTimestamp = 0;
 
   function renderMessages(messages) {
     if (!chatContainer || !Array.isArray(messages)) return;
 
+    // Filter to only messages exchanged in this active session
+    const sessionMessages = messages.filter(m => {
+      if (!m) return false;
+      const ts = typeof m.timestamp === "number" ? m.timestamp : 0;
+      return ts >= sessionOpenedTimestamp;
+    });
+
+    // If no messages yet in this session, show a welcoming greeting from Aria
+    if (sessionMessages.length === 0) {
+      chatContainer.innerHTML = `
+        <div class="voice-chat-row row-robot" data-msg-id="aria-welcome">
+          <div class="chat-avatar avatar-robot" title="Aria">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="10" rx="2"></rect>
+              <circle cx="12" cy="5" r="2"></circle>
+              <path d="M12 7v4"></path>
+              <line x1="8" y1="16" x2="8" y2="16"></line>
+              <line x1="16" y1="16" x2="16" y2="16"></line>
+            </svg>
+          </div>
+          <div class="chat-bubble bubble-robot">
+            <div class="bubble-text">Hi! I'm Aria. How can I help you?</div>
+          </div>
+        </div>
+      `;
+      lastMessagesSignature = "aria-welcome";
+      return;
+    }
+
+    // Remove welcome placeholder if actual messages exist
+    const welcomeEl = chatContainer.querySelector('[data-msg-id="aria-welcome"]');
+    if (welcomeEl) {
+      welcomeEl.remove();
+    }
+
     // Fast fingerprint comparison to eliminate flickering when messages have not changed
-    const currentSignature = messages.map(m => `${m.id || ""}_${m.text || ""}_${m.action || ""}`).join("|");
+    const currentSignature = sessionMessages.map(m => `${m.id || ""}_${m.text || ""}_${m.action || ""}`).join("|");
     if (currentSignature === lastMessagesSignature) {
       // Zero change: DO NOT touch DOM, preventing periodic re-render flicker
       return;
@@ -212,13 +248,13 @@
     });
 
     // If chat was cleared or reset, wipe and rebuild
-    if (messages.length < existingIds.size) {
+    if (sessionMessages.length < existingIds.size) {
       chatContainer.innerHTML = "";
       existingIds.clear();
     }
 
     let appendedNew = false;
-    messages.forEach((msg) => {
+    sessionMessages.forEach((msg) => {
       const msgId = String(msg.id || "");
       if (msgId && existingIds.has(msgId)) {
         // Message is already cleanly in DOM, do not rebuild or re-animate
@@ -232,7 +268,7 @@
 
       if (isRobot) {
         row.innerHTML = `
-          <div class="chat-avatar avatar-robot" title="NavPro Mini">
+          <div class="chat-avatar avatar-robot" title="Aria">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="11" width="18" height="10" rx="2"></rect>
               <circle cx="12" cy="5" r="2"></circle>
@@ -300,7 +336,7 @@
           <line x1="12" y1="19" x2="12" y2="23"></line>
           <line x1="8" y1="23" x2="16" y2="23"></line>
         </svg>
-        <span id="btn-voice-talk-label">LIVE ASSISTANT • TAP TO MUTE</span>
+        <span id="btn-voice-talk-label">Live • Tap to Mute</span>
       `;
       isListening = true;
       isMuted = false;
@@ -314,7 +350,7 @@
           <line x1="12" y1="19" x2="12" y2="23"></line>
           <line x1="8" y1="23" x2="16" y2="23"></line>
         </svg>
-        <span id="btn-voice-talk-label">MUTED • TAP TO GO LIVE</span>
+        <span id="btn-voice-talk-label">Muted • Tap to Speak</span>
       `;
       isListening = false;
       isMuted = true;
@@ -327,7 +363,7 @@
           <line x1="12" y1="19" x2="12" y2="23"></line>
           <line x1="8" y1="23" x2="16" y2="23"></line>
         </svg>
-        <span id="btn-voice-talk-label">TAP TO START LIVE ASSISTANT</span>
+        <span id="btn-voice-talk-label">Tap to Speak</span>
       `;
       isListening = false;
       isMuted = false;
@@ -524,6 +560,12 @@
 
   // Public hooks
   window.initVoiceAssistant = function () {
+    // Whenever assistant is opened, clear previous chat bubbles so view starts fresh
+    sessionOpenedTimestamp = (Date.now() / 1000) - 0.5;
+    if (chatContainer) {
+      chatContainer.innerHTML = "";
+    }
+    lastMessagesSignature = "";
     fetchDialog();
     checkLiveStatus();
     resizeCanvas();

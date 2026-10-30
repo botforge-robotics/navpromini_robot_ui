@@ -6289,17 +6289,49 @@ select.kiosk-select option,
   box-sizing: border-box;
 }
 
-/* Upper Half: Free Stage Space (Clean empty canvas reserved for future widgets, avatar, camera) */
+/* Upper Half: Free Stage Space (AI Assistant Avatar Stage) */
 .voice-upper-stage {
   flex: 1;
   min-height: 0;
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   position: relative;
   background: transparent;
+  overflow: hidden;
   pointer-events: none;
+}
+
+.voice-avatar-stage {
+  height: 94%;
+  max-height: 440px;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  position: relative;
+}
+
+.voice-avatar-img {
+  max-height: 100%;
+  max-width: 86%;
+  object-fit: contain;
+  display: block;
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 82%, transparent 100%);
+  filter: drop-shadow(0 10px 30px rgba(15, 23, 42, 0.07));
+  animation: avatarFloat 5.5s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes avatarFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
 }
 
 /* Center Acoustic Waves Visualizer (Positioned in the exact vertical center of the screen) */

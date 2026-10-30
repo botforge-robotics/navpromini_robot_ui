@@ -190,14 +190,44 @@
     }
   }
 
-  function renderMessages(messages) {
-    if (!chatContainer) return;
-    chatContainer.innerHTML = "";
+  let lastMessagesSignature = "";
 
+  function renderMessages(messages) {
+    if (!chatContainer || !Array.isArray(messages)) return;
+
+    // Fast fingerprint comparison to eliminate flickering when messages have not changed
+    const currentSignature = messages.map(m => `${m.id || ""}_${m.text || ""}_${m.action || ""}`).join("|");
+    if (currentSignature === lastMessagesSignature) {
+      // Zero change: DO NOT touch DOM, preventing periodic re-render flicker
+      return;
+    }
+    lastMessagesSignature = currentSignature;
+
+    // Smart reconciliation: find existing message rows by data-msg-id
+    const existingRows = chatContainer.querySelectorAll(".voice-chat-row");
+    const existingIds = new Set();
+    existingRows.forEach(row => {
+      if (row.dataset.msgId) existingIds.add(row.dataset.msgId);
+    });
+
+    // If chat was cleared or reset, wipe and rebuild
+    if (messages.length < existingIds.size) {
+      chatContainer.innerHTML = "";
+      existingIds.clear();
+    }
+
+    let appendedNew = false;
     messages.forEach((msg) => {
+      const msgId = String(msg.id || "");
+      if (msgId && existingIds.has(msgId)) {
+        // Message is already cleanly in DOM, do not rebuild or re-animate
+        return;
+      }
+
       const isRobot = msg.sender === "robot";
       const row = document.createElement("div");
       row.className = `voice-chat-row ${isRobot ? "row-robot" : "row-user"}`;
+      if (msgId) row.dataset.msgId = msgId;
 
       if (isRobot) {
         row.innerHTML = `
@@ -228,11 +258,16 @@
           </div>
         `;
       }
+
       chatContainer.appendChild(row);
+      if (msgId) existingIds.add(msgId);
+      appendedNew = true;
     });
 
-    // Auto-scroll to bottom
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    // Auto-scroll only when new messages were actually appended
+    if (appendedNew) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
   }
 
   async function triggerMicListen() {

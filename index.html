@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>NavPro Mini — Onboard Screen UI</title>
-  <link rel="stylesheet" href="style.css?v=227">
+  <link rel="stylesheet" href="style.css?v=228">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -314,8 +314,12 @@
           <!-- ============================================================= -->
           <div class="swipe-slide" id="slide-voice">
             <div class="voice-clean-container">
-              <!-- Upper Free Space Stage (Reserved for future visual widgets, avatar, camera) -->
-              <div class="voice-upper-stage" id="voice-upper-stage"></div>
+              <!-- Upper Free Space Stage (AI Assistant Avatar) -->
+              <div class="voice-upper-stage" id="voice-upper-stage">
+                <div class="voice-avatar-stage">
+                  <img src="assets/avatar_assistant.png?v=228" alt="AI Assistant" class="voice-avatar-img" id="voice-avatar-img">
+                </div>
+              </div>
 
               <!-- Center Acoustic Waves (Vertically centered across the screen) -->
               <div class="voice-waves-wrapper">
@@ -1433,7 +1437,7 @@
   <script src="js/settings.js?v=224"></script>
   <script src="js/shortcuts.js?v=224"></script>
   <script src="js/media_player.js?v=224"></script>
-  <script src="js/voice_assistant.js?v=227"></script>
+  <script src="js/voice_assistant.js?v=228"></script>
   <script src="app.js?v=224"></script>
 </body>
 </html>

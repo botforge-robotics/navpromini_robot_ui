@@ -41,25 +41,13 @@
     textInput = document.getElementById("voice-text-input");
     statusBadge = document.getElementById("voice-status-badge");
 
-    // Event listeners: responsive pointerup/touchend/click with debounce for touchscreen
+    // Event listeners: fast pointerup for touch, inline onclick handles standard clicks
     btnMuteToggle?.addEventListener("click", toggleMute);
 
-    let lastTapTs = 0;
-    const onLiveTap = (e) => {
-      if (e) {
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
-      }
-      const now = Date.now();
-      if (now - lastTapTs < 350) return;
-      lastTapTs = now;
-      handleLiveButtonTap();
-    };
-
     if (btnTapToTalk) {
-      btnTapToTalk.addEventListener("pointerup", onLiveTap);
-      btnTapToTalk.addEventListener("touchend", onLiveTap);
-      btnTapToTalk.addEventListener("click", onLiveTap);
+      btnTapToTalk.addEventListener("pointerup", (e) => {
+        handleLiveButtonTap(e);
+      });
     }
 
     document.getElementById("btn-voice-send-text")?.addEventListener("click", sendTextMessage);
@@ -399,7 +387,18 @@
     }
   }
 
-  async function handleLiveButtonTap() {
+  let lastLiveTapTs = 0;
+  async function handleLiveButtonTap(e) {
+    if (e) {
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    }
+    const now = Date.now();
+    if (now - lastLiveTapTs < 450) return;
+    lastLiveTapTs = now;
+
+    if (liveConnecting) return;
+
     // Instant Barge-In: immediately interrupt any playing speech
     try {
       fetch("/api/v1/voice/interrupt", { method: "POST" });

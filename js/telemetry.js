@@ -213,9 +213,14 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
   const cameraCard = document.getElementById("dock-camera-card");
   const tagStatusEl = document.getElementById("dock-camera-tag-status");
   const radarAnim = document.getElementById("docking-target-animation");
+  const isVoiceAssistantActive = Boolean(
+    (typeof currentSwipeIndex !== "undefined" && currentSwipeIndex === 3) ||
+    document.getElementById("subpage-voice")?.classList.contains("active")
+  );
 
   if (isDockActive) {
-    if (dockScreen.style.display !== "flex") dockScreen.style.display = "flex";
+    if (!isVoiceAssistantActive && dockScreen.style.display !== "flex") dockScreen.style.display = "flex";
+    if (isVoiceAssistantActive && dockScreen.style.display !== "none") dockScreen.style.display = "none";
     if (cameraCard) cameraCard.style.display = "none";
     if (radarAnim) radarAnim.style.display = "flex";
 
@@ -239,7 +244,8 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
       : "Aligning robot heading and searching for charging station marker...";
     if (cancelBtn) cancelBtn.textContent = "Cancel Docking";
   } else if (isUndockActive) {
-    if (dockScreen.style.display !== "flex") dockScreen.style.display = "flex";
+    if (!isVoiceAssistantActive && dockScreen.style.display !== "flex") dockScreen.style.display = "flex";
+    if (isVoiceAssistantActive && dockScreen.style.display !== "none") dockScreen.style.display = "none";
     if (cameraCard) cameraCard.style.display = "none";
     if (radarAnim) radarAnim.style.display = "flex";
     stopDockCamStream();
@@ -380,9 +386,13 @@ function updatePowerState(pState) {
 
       const setupScreen = document.getElementById("screen-setup");
       const isSetupActive = setupScreen && setupScreen.style.display === "flex";
+      const isVoiceAssistantActive = Boolean(
+        (typeof currentSwipeIndex !== "undefined" && currentSwipeIndex === 3) ||
+        document.getElementById("subpage-voice")?.classList.contains("active")
+      );
 
-      // Auto-display charging screen ONLY when transitioning into docked charging (and not in setup)
-      if (isSetupActive) {
+      // Auto-display charging screen ONLY when transitioning into docked charging (and not in setup or voice assistant)
+      if (isSetupActive || isVoiceAssistantActive) {
         if (chargingScreen && chargingScreen.style.display !== "none") {
           chargingScreen.style.display = "none";
         }

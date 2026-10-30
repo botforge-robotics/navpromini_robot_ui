@@ -41,9 +41,27 @@
     textInput = document.getElementById("voice-text-input");
     statusBadge = document.getElementById("voice-status-badge");
 
-    // Event listeners
+    // Event listeners: responsive pointerup/touchend/click with debounce for touchscreen
     btnMuteToggle?.addEventListener("click", toggleMute);
-    btnTapToTalk?.addEventListener("click", handleLiveButtonTap);
+
+    let lastTapTs = 0;
+    const onLiveTap = (e) => {
+      if (e) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+      }
+      const now = Date.now();
+      if (now - lastTapTs < 350) return;
+      lastTapTs = now;
+      handleLiveButtonTap();
+    };
+
+    if (btnTapToTalk) {
+      btnTapToTalk.addEventListener("pointerup", onLiveTap);
+      btnTapToTalk.addEventListener("touchend", onLiveTap);
+      btnTapToTalk.addEventListener("click", onLiveTap);
+    }
+
     document.getElementById("btn-voice-send-text")?.addEventListener("click", sendTextMessage);
     document.getElementById("btn-voice-clear-chat")?.addEventListener("click", clearChatDialog);
 
@@ -387,9 +405,13 @@
       fetch("/api/v1/voice/interrupt", { method: "POST" });
     } catch (e) {}
 
-    // Instant UI reaction if starting
+    // Immediate optimistic tactile feedback
     if (!liveActive && !liveConnecting) {
       liveConnecting = true;
+      updateLiveButtonUI();
+    } else if (liveActive) {
+      // Instant toggle between Muted and Live on finger tap
+      liveMuted = !liveMuted;
       updateLiveButtonUI();
     }
 
@@ -406,9 +428,9 @@
         if (res.status === 400 && data.code === "gemini_key_missing") {
           showToast("⚠️ Google Gemini API key required for Live voice-to-voice stream. Set key in Settings.");
         } else {
-          showToast("⚠️ " + (data.message || data.error || "Failed to start live stream"));
+          showToast("⚠️ " + (data.message || data.error || "Failed to toggle live stream"));
         }
-        triggerMicListenFallback();
+        checkLiveStatus();
         return;
       }
 
@@ -424,7 +446,7 @@
     } catch (err) {
       console.warn("handleLiveButtonTap error:", err);
       liveConnecting = false;
-      triggerMicListenFallback();
+      checkLiveStatus();
     }
   }
 

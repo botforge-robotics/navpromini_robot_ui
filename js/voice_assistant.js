@@ -432,16 +432,24 @@
       return;
     }
 
-    // In Full-Duplex mode: tapping the button performs instant barge-in and keeps listening
-    liveMuted = false;
-    updateLiveButtonUI();
-    showToast("🎤 Aria is listening to you...");
+    // In Full-Duplex mode: tapping the button toggles mute/unmute
+    if (liveActive && !liveMuted) {
+      // Currently listening → mute
+      liveMuted = true;
+      updateLiveButtonUI();
+      showToast("🔇 Aria muted. Tap again to unmute.");
+    } else {
+      // Currently muted → unmute and barge-in
+      liveMuted = false;
+      updateLiveButtonUI();
+      showToast("🎤 Aria is listening to you...");
+    }
 
     try {
       const res = await fetch("/api/v1/voice/live/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ muted: false })
+        body: JSON.stringify({ muted: liveMuted })
       });
       const data = await res.json();
 

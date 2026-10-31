@@ -353,7 +353,7 @@
           <line x1="12" y1="19" x2="12" y2="23"></line>
           <line x1="8" y1="23" x2="16" y2="23"></line>
         </svg>
-        <span id="btn-voice-talk-label">Live • Tap to Mute</span>
+        <span id="btn-voice-talk-label">Aria Listening • Speak Freely</span>
       `;
       isListening = true;
       isMuted = false;
@@ -367,7 +367,7 @@
           <line x1="12" y1="19" x2="12" y2="23"></line>
           <line x1="8" y1="23" x2="16" y2="23"></line>
         </svg>
-        <span id="btn-voice-talk-label">Muted • Tap to Speak</span>
+        <span id="btn-voice-talk-label">Tap to Unmute</span>
       `;
       isListening = false;
       isMuted = true;
@@ -394,43 +394,60 @@
       e.stopPropagation();
     }
     const now = Date.now();
-    if (now - lastLiveTapTs < 450 || isTogglingLive) return;
+    if (now - lastLiveTapTs < 350 || isTogglingLive) return;
     lastLiveTapTs = now;
 
     if (liveConnecting) return;
 
-    // Instant Barge-In: immediately interrupt any playing speech
+    // Instant Barge-In: immediately interrupt any playing speech so Aria listens
     try {
       fetch("/api/v1/voice/interrupt", { method: "POST" });
     } catch (e) {}
 
     isTogglingLive = true;
-    let targetMuted = false;
-    // Immediate optimistic tactile feedback
+
+    // If not active, start the live session
     if (!liveActive && !liveConnecting) {
       liveConnecting = true;
       updateLiveButtonUI();
-    } else if (liveActive) {
-      // Instant deterministic toggle between Muted and Live on finger tap
-      targetMuted = !liveMuted;
-      liveMuted = targetMuted;
-      updateLiveButtonUI();
+      try {
+        const res = await fetch("/api/v1/voice/live/start", { method: "POST" });
+        const data = await res.json();
+        if (res.ok) {
+          liveActive = true;
+          liveMuted = false;
+          liveConnecting = false;
+          updateLiveButtonUI();
+          showToast("✨ Aria is listening! Speak naturally in full-duplex.");
+        } else {
+          liveConnecting = false;
+          showToast("⚠️ " + (data.message || data.error || "Could not start Live assistant"));
+        }
+      } catch (err) {
+        liveConnecting = false;
+        console.warn("live start error:", err);
+      } finally {
+        isTogglingLive = false;
+      }
+      return;
     }
+
+    // In Full-Duplex mode: tapping the button performs instant barge-in and keeps listening
+    liveMuted = false;
+    updateLiveButtonUI();
+    showToast("🎤 Aria is listening to you...");
 
     try {
       const res = await fetch("/api/v1/voice/live/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(liveActive ? { muted: targetMuted } : {})
+        body: JSON.stringify({ muted: false })
       });
       const data = await res.json();
 
       if (!res.ok) {
-        liveConnecting = false;
         if (res.status === 400 && data.code === "gemini_key_missing") {
-          showToast("⚠️ Google Gemini API key required for Live voice-to-voice stream. Set key in Settings.");
-        } else {
-          showToast("⚠️ " + (data.message || data.error || "Failed to toggle live stream"));
+          showToast("⚠️ Google Gemini API key required for Live voice stream.");
         }
         await checkLiveStatus();
         return;
@@ -439,20 +456,15 @@
       if (data.active !== undefined) {
         liveActive = !!data.active;
         liveMuted = !!data.muted;
-        liveConnecting = false;
         updateLiveButtonUI();
-        if (data.message) {
-          showToast(data.message);
-        }
       }
     } catch (err) {
       console.warn("handleLiveButtonTap error:", err);
-      liveConnecting = false;
       await checkLiveStatus();
     } finally {
       setTimeout(() => {
         isTogglingLive = false;
-      }, 400);
+      }, 300);
     }
   }
 

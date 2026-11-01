@@ -6340,6 +6340,37 @@ select.kiosk-select option,
   text-transform: uppercase;
 }
 
+.voice-badge-divider {
+  color: #CBD5E1;
+  font-weight: 700;
+  font-size: 14px;
+  margin: 0 1px;
+}
+
+.voice-mic-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  transition: all 0.25s ease;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.voice-mic-badge.is-aria-sense {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.voice-mic-badge.is-chassis {
+  background: rgba(148, 163, 184, 0.15);
+  color: #64748B;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
 .voice-avatar-stage {
   height: 94%;
   max-height: 440px;

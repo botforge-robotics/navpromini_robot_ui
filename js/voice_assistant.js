@@ -182,6 +182,7 @@
         isMuted = !!data.muted;
         isListening = !!data.listening;
         updateMuteButtonUI();
+        updateMicSourceBadge(data);
         if (Array.isArray(data.messages)) {
           renderMessages(data.messages);
         }
@@ -313,6 +314,36 @@
   let hasGeminiKey = false;
   let isTogglingLive = false;
 
+  let currentMicSource = "aria_sense";
+
+  function updateMicSourceBadge(data) {
+    const micBadge = document.getElementById("voice-mic-source-label");
+    if (!micBadge || !data) return;
+    const isAriaSense = data.aria_sense_active || data.audio_source === "aria_sense";
+    currentMicSource = isAriaSense ? "aria_sense" : "chassis_mic";
+    if (isAriaSense) {
+      micBadge.textContent = "🎙️ Aria Sense Mic";
+      micBadge.className = "voice-mic-badge is-aria-sense";
+      micBadge.title = "Aria Sense Top Microphone (Active 16kHz Studio Audio)";
+    } else {
+      micBadge.textContent = "🎙️ Chassis Mic";
+      micBadge.className = "voice-mic-badge is-chassis";
+      micBadge.title = "Chassis Microphone (Aria Sense Offline)";
+    }
+  }
+
+  window.onVoiceMicBadgeClick = function (e) {
+    if (e) {
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    }
+    if (currentMicSource === "aria_sense") {
+      showToast("🎙️ Using Aria Sense Top Microphone (16kHz Studio Audio)");
+    } else {
+      showToast("ℹ️ Chassis Mic active. Tap Aria Sense icon in top bar to connect.");
+    }
+  };
+
   async function checkLiveStatus() {
     if (isTogglingLive) return; // Do not overwrite user tap state while toggle is in flight
     try {
@@ -327,6 +358,7 @@
         isSpeaking = !!data.speaking;
       }
       updateLiveButtonUI();
+      updateMicSourceBadge(data);
     } catch (e) {
       console.warn("checkLiveStatus error:", e);
     }

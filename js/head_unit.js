@@ -6,6 +6,7 @@
  * - Sliding Bottom Sheet modal for 1-tap BLE Wi-Fi provisioning
  * - Network scanner & editable Wi-Fi password with show/hide toggle
  * - Live camera preview & microphone VU activity meter
+ * - Robust 2-step pairing state management with error recovery
  */
 
 (function () {
@@ -14,6 +15,7 @@
   let discoveredDevices = [];
   let isConnected = false;
   let manualPairingMode = false;
+  let activePairInterval = null;
   let savedRobotPassword = "";
   let robotSsid = "";
 
@@ -56,6 +58,42 @@
     setInterval(pollHeadUnitStatus, 2500);
   }
 
+  // ============================================================================
+  // State Machine for Pairing & Status
+  // ============================================================================
+  function setPairingState(state, info) {
+    if (!btnPair) return;
+
+    if (state === "PAIRING_BLE") {
+      btnPair.disabled = true;
+      btnPair.innerHTML = `<span class="spinner-inline"></span> Step 1/2: Sending Wi-Fi via BLE...`;
+      if (scanMsg) scanMsg.innerHTML = `📡 <b>Step 1/2:</b> Connecting to Aria Sense over Bluetooth and transferring credentials...`;
+      if (wifiSelectEl) wifiSelectEl.disabled = true;
+      if (wifiPassEl) wifiPassEl.disabled = true;
+      if (btnTogglePass) btnTogglePass.disabled = true;
+    } else if (state === "PAIRING_WIFI") {
+      btnPair.disabled = true;
+      btnPair.innerHTML = `<span class="spinner-inline"></span> Step 2/2: Connecting to ${escapeHtml(info)}...`;
+      if (scanMsg) scanMsg.innerHTML = `📶 <b>Step 2/2:</b> Credentials received! Aria Sense is connecting to <b>${escapeHtml(info)}</b>...`;
+      if (wifiSelectEl) wifiSelectEl.disabled = true;
+      if (wifiPassEl) wifiPassEl.disabled = true;
+      if (btnTogglePass) btnTogglePass.disabled = true;
+    } else if (state === "ERROR") {
+      btnPair.disabled = !selectedDeviceMac;
+      btnPair.textContent = "Connect & Pair Aria Sense";
+      if (scanMsg) scanMsg.innerHTML = `⚠️ <span style="color:#ef4444; font-weight:600;">${escapeHtml(info)}</span>`;
+      if (wifiSelectEl) wifiSelectEl.disabled = false;
+      if (wifiPassEl) wifiPassEl.disabled = false;
+      if (btnTogglePass) btnTogglePass.disabled = false;
+    } else { // "IDLE"
+      btnPair.disabled = !selectedDeviceMac;
+      btnPair.textContent = "Connect & Pair Aria Sense";
+      if (wifiSelectEl) wifiSelectEl.disabled = false;
+      if (wifiPassEl) wifiPassEl.disabled = false;
+      if (btnTogglePass) btnTogglePass.disabled = false;
+    }
+  }
+
   async function pollHeadUnitStatus() {
     try {
       const res = await fetch("/api/v1/head_unit/status");
@@ -73,11 +111,11 @@
         }
       }
 
-      // If sheet is open and status changed, update view (unless user manually entered pairing mode)
-      if (isSheetOpen && !manualPairingMode) {
-        if (isConnected) {
+      // If sheet is open and status changed, update view (unless user actively re-pairing)
+      if (isSheetOpen) {
+        if (isConnected && !manualPairingMode) {
           showConnectedView(data);
-        } else if (connectedView && connectedView.style.display !== "none") {
+        } else if (!isConnected && connectedView && connectedView.style.display !== "none") {
           showUnpairedView();
         }
       }
@@ -88,6 +126,7 @@
 
   window.openHeadUnitSheet = async function () {
     isSheetOpen = true;
+    manualPairingMode = false;
     if (backdrop) backdrop.style.display = "block";
     if (sheet) sheet.classList.add("is-open");
 
@@ -107,8 +146,12 @@
   };
 
   window.closeHeadUnitSheet = function () {
-    manualPairingMode = false;
     isSheetOpen = false;
+    manualPairingMode = false;
+    if (activePairInterval) {
+      clearInterval(activePairInterval);
+      activePairInterval = null;
+    }
     if (sheet) sheet.classList.remove("is-open");
     if (backdrop) backdrop.style.display = "none";
   };
@@ -323,10 +366,13 @@
       return;
     }
 
-    if (btnPair) {
-      btnPair.disabled = true;
-      btnPair.innerHTML = `<span class="spinner-inline"></span> Connecting Aria Sense to ${escapeHtml(chosenSsid)}...`;
+    if (activePairInterval) {
+      clearInterval(activePairInterval);
+      activePairInterval = null;
     }
+
+    // Step 1: Sending Wi-Fi credentials via Bluetooth
+    setPairingState("PAIRING_BLE", chosenSsid);
 
     try {
       const res = await fetch("/api/v1/head_unit/pair", {
@@ -340,53 +386,51 @@
       });
       const data = await res.json();
 
-      if (res.ok) {
-        if (scanMsg) scanMsg.textContent = `✅ Transmitted Wi-Fi credentials! Connecting to ${chosenSsid}...`;
-        
-        // Fast polling for connection confirmation
-        let checks = 0;
-        const checkConn = setInterval(async () => {
-          checks++;
-          const stRes = await fetch("/api/v1/head_unit/status").catch(() => null);
-          if (stRes && stRes.ok) {
-            const stData = await stRes.json();
-            if (stData.connected) {
-              clearInterval(checkConn);
-              manualPairingMode = false;
-              showToast("✨ Aria Sense Connected! High-fidelity mic and camera active.");
-              showConnectedView(stData);
-              return;
-            }
-          }
-          if (checks > 15) {
-            clearInterval(checkConn);
-            if (btnPair) {
-              btnPair.disabled = false;
-              btnPair.textContent = "Connect & Pair Aria Sense";
-            }
-            if (scanMsg) scanMsg.textContent = "Pairing timed out. Verify Wi-Fi password and try again.";
-          }
-        }, 1500);
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "BLE pairing failed");
+      }
 
-      } else {
-        showToast("⚠️ " + (data.message || "Pairing failed"));
-        if (btnPair) {
-          btnPair.disabled = false;
-          btnPair.textContent = "Connect & Pair Aria Sense";
+      // Step 2: Credentials sent! Now waiting for Wi-Fi association & robot audio pipeline
+      setPairingState("PAIRING_WIFI", chosenSsid);
+
+      let checks = 0;
+      const maxChecks = 18; // 18 * 1.5s = 27s total timeout
+      activePairInterval = setInterval(async () => {
+        checks++;
+        const stRes = await fetch("/api/v1/head_unit/status").catch(() => null);
+        if (stRes && stRes.ok) {
+          const stData = await stRes.json();
+          if (stData.connected) {
+            clearInterval(activePairInterval);
+            activePairInterval = null;
+            manualPairingMode = false;
+            setPairingState("IDLE");
+            showToast("✨ Aria Sense Connected! High-fidelity mic and camera active.");
+            showConnectedView(stData);
+            return;
+          }
         }
-      }
+        if (checks >= maxChecks) {
+          clearInterval(activePairInterval);
+          activePairInterval = null;
+          setPairingState("ERROR", "Pairing timed out. Verify Wi-Fi password and try again.");
+        }
+      }, 1500);
+
     } catch (err) {
-      showToast("⚠️ Pairing error: " + err.message);
-      if (btnPair) {
-        btnPair.disabled = false;
-        btnPair.textContent = "Connect & Pair Aria Sense";
-      }
+      setPairingState("ERROR", err.message || "Failed to transmit credentials.");
+      showToast("⚠️ " + (err.message || "Pairing failed"));
     }
   };
 
   window.disconnectHeadUnit = function () {
     manualPairingMode = true;
+    if (activePairInterval) {
+      clearInterval(activePairInterval);
+      activePairInterval = null;
+    }
     selectedDeviceMac = null;
+    setPairingState("IDLE");
     showUnpairedView();
     loadAvailableWifi();
     startDeviceScan();
@@ -404,6 +448,7 @@
 
   window.startDeviceScan = startDeviceScan;
   window.selectDevice = selectDevice;
+  window.showHeadUnitUnpairedView = showUnpairedView;
 
   // Auto-init on DOMContentLoaded
   if (document.readyState === "loading") {

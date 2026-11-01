@@ -111,11 +111,15 @@
         }
       }
 
-      // If sheet is open and status changed, update view (unless user actively re-pairing)
+      // If sheet is open and status changed, update view
       if (isSheetOpen) {
-        if (isConnected && !manualPairingMode) {
-          showConnectedView(data);
-        } else if (!isConnected && connectedView && connectedView.style.display !== "none") {
+        if (isConnected) {
+          // If device is actively connected and not in the middle of active pairing transmission
+          if (!activePairInterval) {
+            manualPairingMode = false;
+            showConnectedView(data);
+          }
+        } else if (connectedView && connectedView.style.display !== "none") {
           showUnpairedView();
         }
       }

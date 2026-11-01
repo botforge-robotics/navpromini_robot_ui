@@ -390,6 +390,15 @@
           bubbleText.textContent = msg.text;
           chatContainer.scrollTop = chatContainer.scrollHeight;
         }
+        if (msg.action && !existingRow.querySelector(".bubble-action-tag")) {
+          const bubble = existingRow.querySelector(".chat-bubble");
+          if (bubble) {
+            const tag = document.createElement("span");
+            tag.className = "bubble-action-tag";
+            tag.textContent = `⚡ ${msg.action}`;
+            bubble.appendChild(tag);
+          }
+        }
         return;
       }
     }

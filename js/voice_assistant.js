@@ -285,7 +285,14 @@
     sessionMessages.forEach((msg) => {
       const msgId = String(msg.id || "");
       if (msgId && existingIds.has(msgId)) {
-        // Message is already cleanly in DOM, do not rebuild or re-animate
+        const existingRow = chatContainer.querySelector(`[data-msg-id="${msgId}"]`);
+        if (existingRow) {
+          const bubbleText = existingRow.querySelector(".bubble-text");
+          if (bubbleText && bubbleText.textContent !== msg.text) {
+            bubbleText.textContent = msg.text;
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+          }
+        }
         return;
       }
 
@@ -384,6 +391,8 @@
         userAudioLevel = data.level;
       }
       updateLiveButtonUI();
+    } else if (ev === "voice.transcript") {
+      fetchDialog();
     }
   };
 
@@ -749,7 +758,7 @@
   // Public hooks
   window.initVoiceAssistant = function () {
     // Whenever assistant is opened, clear previous chat bubbles so view starts fresh
-    sessionOpenedTimestamp = (Date.now() / 1000) - 0.5;
+    sessionOpenedTimestamp = (Date.now() / 1000) - 20.0;
     if (chatContainer) {
       chatContainer.innerHTML = "";
     }

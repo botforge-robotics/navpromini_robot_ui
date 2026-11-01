@@ -116,7 +116,7 @@
         strokeColor2 = "rgba(251, 146, 60, 0.65)";
         strokeColor3 = "rgba(253, 186, 116, 0.40)";
         glowColor = "rgba(249, 115, 22, 0.55)";
-      } else if (isListening) {
+      } else if (isListening || (liveActive && !liveMuted)) {
         // Listening / User Speaking: Vibrant Green waves
         if (isUserSpeaking || userAudioLevel > 0.05) {
           // User is actively speaking: dynamic high amplitude emerald green waves
@@ -225,12 +225,7 @@
   function renderMessages(messages) {
     if (!chatContainer || !Array.isArray(messages)) return;
 
-    // Filter to only messages exchanged in this active session
-    const sessionMessages = messages.filter(m => {
-      if (!m) return false;
-      const ts = typeof m.timestamp === "number" ? m.timestamp : 0;
-      return ts >= sessionOpenedTimestamp;
-    });
+    const sessionMessages = messages;
 
     // If no messages yet in this session, show a welcoming greeting from Aria
     if (sessionMessages.length === 0) {
@@ -378,6 +373,65 @@
     }
   };
 
+  function appendOrUpdateMessage(msg) {
+    if (!chatContainer || !msg || !msg.text) return;
+    const welcomeEl = chatContainer.querySelector('[data-msg-id="aria-welcome"]');
+    if (welcomeEl) {
+      welcomeEl.remove();
+    }
+    const msgId = String(msg.id || "");
+    const isRobot = msg.sender === "robot";
+
+    if (msgId) {
+      const existingRow = chatContainer.querySelector(`[data-msg-id="${msgId}"]`);
+      if (existingRow) {
+        const bubbleText = existingRow.querySelector(".bubble-text");
+        if (bubbleText && bubbleText.textContent !== msg.text) {
+          bubbleText.textContent = msg.text;
+          chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        return;
+      }
+    }
+
+    const row = document.createElement("div");
+    row.className = `voice-chat-row ${isRobot ? "row-robot" : "row-user"}`;
+    if (msgId) row.dataset.msgId = msgId;
+
+    if (isRobot) {
+      row.innerHTML = `
+        <div class="chat-avatar avatar-robot" title="Aria">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="10" rx="2"></rect>
+            <circle cx="12" cy="5" r="2"></circle>
+            <path d="M12 7v4"></path>
+            <line x1="8" y1="16" x2="8" y2="16"></line>
+            <line x1="16" y1="16" x2="16" y2="16"></line>
+          </svg>
+        </div>
+        <div class="chat-bubble bubble-robot">
+          <div class="bubble-text">${escapeHtml(msg.text)}</div>
+          ${msg.action ? `<span class="bubble-action-tag">⚡ ${escapeHtml(msg.action)}</span>` : ""}
+        </div>
+      `;
+    } else {
+      row.innerHTML = `
+        <div class="chat-bubble bubble-user">
+          <div class="bubble-text">${escapeHtml(msg.text)}</div>
+        </div>
+        <div class="chat-avatar avatar-user" title="You">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </div>
+      `;
+    }
+
+    chatContainer.appendChild(row);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+
   window.handleVoiceEvent = function (ev, data) {
     if (ev === "voice.speaking") {
       isSpeaking = !!(data && data.speaking);
@@ -390,8 +444,14 @@
       if (data && typeof data.level === "number") {
         userAudioLevel = data.level;
       }
+      if (liveActive && !liveMuted) {
+        isListening = true;
+      }
       updateLiveButtonUI();
     } else if (ev === "voice.transcript") {
+      if (data && data.sender && data.text) {
+        appendOrUpdateMessage(data);
+      }
       fetchDialog();
     }
   };
@@ -406,6 +466,13 @@
       liveMuted = !!data.muted;
       liveConnecting = !!data.connecting;
       hasGeminiKey = !!data.has_gemini_key;
+      if (liveActive && !liveMuted) {
+        isListening = true;
+        isMuted = false;
+      } else if (liveMuted) {
+        isMuted = true;
+        isListening = false;
+      }
       if (data.speaking !== undefined) {
         isSpeaking = !!data.speaking;
       }

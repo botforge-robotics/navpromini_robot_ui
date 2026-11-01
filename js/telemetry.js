@@ -111,12 +111,12 @@ function updateNavigationState(navData, isMissionActive = false) {
         }
       }
     } else {
-      if (navScreen.style.display === "flex") {
+      if (navScreen) {
         navScreen.style.display = "none";
-        if (wasNav && (navData.state === "succeeded" || navData.status === "succeeded")) {
-          showToast("Reached destination successfully!");
-          triggerFaceExpression("happy");
-        }
+      }
+      if (wasNav && (navData.state === "succeeded" || navData.status === "succeeded")) {
+        showToast("Reached destination successfully!");
+        triggerFaceExpression("happy");
       }
     }
   } catch (err) {
@@ -863,6 +863,34 @@ function initSdkEventsWebSocket() {
                 window.showDashboardView?.();
               }
               window.fetchWifiStatus?.();
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "navigation.started") {
+              const navScreen = document.getElementById("screen-nav-progress");
+              const destEl = document.getElementById("nav-screen-destination");
+              if (destEl) {
+                let targetName = "";
+                if (data && data.target) {
+                  targetName = data.target.waypoint || data.target.name || "";
+                  if (!targetName && data.target.x !== undefined && data.target.y !== undefined) {
+                    targetName = `Location (${Number(data.target.x).toFixed(1)}, ${Number(data.target.y).toFixed(1)})`;
+                  }
+                }
+                if (!targetName) targetName = "Target Location";
+                destEl.innerHTML = `Navigating to <span class="nav-target-highlight">${escapeHtml(targetName)}</span>`;
+              }
+              if (navScreen && !window.isDndActive) {
+                navScreen.style.display = "flex";
+              }
+              window.triggerFastTelemetryPoll?.();
+            } else if (ev === "navigation.completed" || ev === "navigation.cancelled" || ev === "navigation.failed") {
+              const navScreen = document.getElementById("screen-nav-progress");
+              if (navScreen) {
+                navScreen.style.display = "none";
+              }
+              if (ev === "navigation.completed") {
+                window.showToast?.("Reached destination successfully!");
+                window.triggerFaceExpression?.("happy");
+              }
               window.triggerFastTelemetryPoll?.();
             } else if (ev && (ev.startsWith("dock.") || ev.startsWith("navigation."))) {
               window.triggerFastTelemetryPoll?.();

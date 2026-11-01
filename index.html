@@ -54,6 +54,18 @@
           </div>
         </div>
 
+        <!-- Head Unit (Wireless Mic & Camera) Quick Button -->
+        <button class="head-unit-quick-btn" id="btn-open-head-unit" onclick="openHeadUnitSheet()" title="Aria Head Unit (Top Mic & Camera)">
+          <span class="head-unit-status-dot" id="head-unit-status-dot"></span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align: -2px;">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+          <span class="head-unit-btn-label">Head</span>
+        </button>
+
         <!-- Wi-Fi & Setup Quick Button -->
         <button class="setup-quick-btn" id="btn-open-setup" onclick="openSetupScreen()">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px;">
@@ -1430,6 +1442,67 @@
     </div>
   </div>
 
+  <!-- Aria Wireless Head Unit (Top Mic & Camera) Bottom Sheet Modal -->
+  <div class="bottom-sheet-backdrop" id="head-unit-backdrop" onclick="closeHeadUnitSheet()"></div>
+  <div class="bottom-sheet" id="head-unit-sheet">
+    <div class="sheet-handle-bar"></div>
+    <div class="sheet-header">
+      <div class="sheet-title-group">
+        <div class="sheet-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </div>
+        <div>
+          <h3>Aria Head Unit (Top Mic & Camera)</h3>
+          <p class="sheet-subtitle" id="head-unit-subtitle">Seeed Studio XIAO ESP32-S3 Sense</p>
+        </div>
+      </div>
+      <button class="sheet-close-btn" onclick="closeHeadUnitSheet()">✕</button>
+    </div>
+
+    <!-- View A: Unpaired / Scanning -->
+    <div id="head-unit-view-unpaired" class="sheet-content">
+      <div class="head-unit-scan-status">
+        <div class="scanning-pulse-circle"></div>
+        <span id="head-unit-scan-msg">Scanning for nearby Head Units via BLE...</span>
+      </div>
+
+      <div class="head-unit-device-list" id="head-unit-device-list">
+        <!-- Populated dynamically via BLE scan: Aria-Head-42E8 -->
+      </div>
+
+      <div class="head-unit-wifi-info">
+        <span class="wifi-info-label">Sync with Robot Wi-Fi:</span>
+        <span class="wifi-info-val" id="head-unit-target-wifi">Detecting robot Wi-Fi...</span>
+      </div>
+
+      <button class="btn btn-primary btn-block btn-pair-head" id="btn-pair-head-unit" onclick="pairSelectedHeadUnit()" disabled>
+        Pair & Sync Wi-Fi
+      </button>
+    </div>
+
+    <!-- View B: Connected & Streaming -->
+    <div id="head-unit-view-connected" class="sheet-content" style="display: none;">
+      <div class="head-unit-live-card">
+        <div class="live-card-badge">● STREAMING 16KHZ AUDIO TO ARIA</div>
+        <div class="camera-preview-box">
+          <img id="head-unit-cam-img" src="" alt="Top Camera Stream" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'320\' height=\'240\' fill=\'%23334155\'><rect width=\'100%25\' height=\'100%25\'/><text x=\'50%25\' y=\'50%25\' fill=\'%2394a3b8\' text-anchor=\'middle\'>Camera Connecting...</text></svg>'" />
+        </div>
+        <div class="head-unit-audio-meter">
+          <span class="meter-label">Microphone Activity:</span>
+          <div class="meter-bar-track">
+            <div class="meter-bar-fill" id="head-unit-meter-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-block" style="margin-top: 14px;" onclick="disconnectHeadUnit()">Disconnect / Re-pair</button>
+    </div>
+  </div>
+
   <script src="js/state.js?v=224"></script>
   <script src="js/clock.js?v=224"></script>
   <script src="js/audio.js?v=224"></script>
@@ -1442,6 +1515,7 @@
   <script src="js/shortcuts.js?v=224"></script>
   <script src="js/media_player.js?v=224"></script>
   <script src="js/voice_assistant.js?v=233"></script>
+  <script src="js/head_unit.js?v=1"></script>
   <script src="app.js?v=224"></script>
 </body>
 </html>

@@ -13,6 +13,7 @@
   let selectedDeviceMac = null;
   let discoveredDevices = [];
   let isConnected = false;
+  let manualPairingMode = false;
   let savedRobotPassword = "";
   let robotSsid = "";
 
@@ -72,8 +73,8 @@
         }
       }
 
-      // If sheet is open and status changed, update view
-      if (isSheetOpen) {
+      // If sheet is open and status changed, update view (unless user manually entered pairing mode)
+      if (isSheetOpen && !manualPairingMode) {
         if (isConnected) {
           showConnectedView(data);
         } else if (connectedView && connectedView.style.display !== "none") {
@@ -106,6 +107,7 @@
   };
 
   window.closeHeadUnitSheet = function () {
+    manualPairingMode = false;
     isSheetOpen = false;
     if (sheet) sheet.classList.remove("is-open");
     if (backdrop) backdrop.style.display = "none";
@@ -350,6 +352,7 @@
             const stData = await stRes.json();
             if (stData.connected) {
               clearInterval(checkConn);
+              manualPairingMode = false;
               showToast("✨ Aria Sense Connected! High-fidelity mic and camera active.");
               showConnectedView(stData);
               return;
@@ -382,6 +385,7 @@
   };
 
   window.disconnectHeadUnit = function () {
+    manualPairingMode = true;
     selectedDeviceMac = null;
     showUnpairedView();
     loadAvailableWifi();

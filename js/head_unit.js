@@ -1,20 +1,20 @@
 /**
- * NavPro Mini - Aria Head Unit (Top Mic & Camera) Controller
+ * NavPro Mini - Aria Sense (Top Mic & Camera) Controller
  * 
  * Provides:
  * - Top header bar indicator button & live status polling
  * - Sliding Bottom Sheet modal for 1-tap BLE Wi-Fi provisioning
- * - Automatic 2.4GHz network sync from robot's active credentials
+ * - Network scanner & editable Wi-Fi password with show/hide toggle
  * - Live camera preview & microphone VU activity meter
  */
 
 (function () {
   let isSheetOpen = false;
-  let pollInterval = null;
   let selectedDeviceMac = null;
   let discoveredDevices = [];
   let isConnected = false;
-  let targetSsid = "";
+  let savedRobotPassword = "";
+  let robotSsid = "";
 
   // DOM Elements
   let btnOpenSheet = null;
@@ -25,7 +25,10 @@
   let connectedView = null;
   let scanMsg = null;
   let deviceListEl = null;
-  let targetWifiEl = null;
+  let wifiSelectEl = null;
+  let wifiPassEl = null;
+  let btnTogglePass = null;
+  let wifiHintEl = null;
   let btnPair = null;
   let camImg = null;
   let meterFill = null;
@@ -39,7 +42,10 @@
     connectedView = document.getElementById("head-unit-view-connected");
     scanMsg = document.getElementById("head-unit-scan-msg");
     deviceListEl = document.getElementById("head-unit-device-list");
-    targetWifiEl = document.getElementById("head-unit-target-wifi");
+    wifiSelectEl = document.getElementById("head-unit-wifi-select");
+    wifiPassEl = document.getElementById("head-unit-wifi-pass");
+    btnTogglePass = document.getElementById("btn-toggle-wifi-pass");
+    wifiHintEl = document.getElementById("head-unit-wifi-hint");
     btnPair = document.getElementById("btn-pair-head-unit");
     camImg = document.getElementById("head-unit-cam-img");
     meterFill = document.getElementById("head-unit-meter-fill");
@@ -84,9 +90,6 @@
     if (backdrop) backdrop.style.display = "block";
     if (sheet) sheet.classList.add("is-open");
 
-    // Fetch robot Wi-Fi info
-    fetchWifiInfo();
-
     // Check status
     const res = await fetch("/api/v1/head_unit/status").catch(() => null);
     if (res && res.ok) {
@@ -98,6 +101,7 @@
     }
 
     showUnpairedView();
+    loadAvailableWifi();
     startDeviceScan();
   };
 
@@ -105,26 +109,106 @@
     isSheetOpen = false;
     if (sheet) sheet.classList.remove("is-open");
     if (backdrop) backdrop.style.display = "none";
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
+  };
+
+  window.toggleHeadUnitPassVisibility = function () {
+    if (!wifiPassEl) return;
+    if (wifiPassEl.type === "password") {
+      wifiPassEl.type = "text";
+      if (btnTogglePass) btnTogglePass.textContent = "🙈";
+    } else {
+      wifiPassEl.type = "password";
+      if (btnTogglePass) btnTogglePass.textContent = "👁️";
     }
   };
 
-  async function fetchWifiInfo() {
+  window.onWifiSelectChange = function () {
+    if (!wifiSelectEl || !wifiPassEl) return;
+    const selectedSsid = wifiSelectEl.value;
+
+    // Check if the selected SSID matches robot's SSID
+    if (robotSsid && (selectedSsid === robotSsid || selectedSsid.startsWith(robotSsid.replace(/[-_]5GH?Z?$/i, "")))) {
+      if (savedRobotPassword) {
+        wifiPassEl.value = savedRobotPassword;
+        if (wifiHintEl) wifiHintEl.textContent = "Auto-detected password from robot Wi-Fi.";
+      }
+    } else {
+      // Different network selected: clear password so user enters the correct password
+      if (selectedSsid) {
+        wifiPassEl.value = "";
+        wifiPassEl.placeholder = `Enter password for ${selectedSsid}`;
+        if (wifiHintEl) wifiHintEl.textContent = `Enter password for "${selectedSsid}".`;
+      }
+    }
+  };
+
+  window.loadAvailableWifi = async function (forceRefresh = false) {
+    if (!wifiSelectEl) return;
+
+    if (forceRefresh) {
+      wifiSelectEl.innerHTML = '<option value="">Scanning Wi-Fi networks...</option>';
+      if (wifiHintEl) wifiHintEl.textContent = "Scanning nearby networks...";
+    }
+
     try {
-      const res = await fetch("/api/v1/head_unit/wifi_info");
-      if (res.ok) {
-        const info = await res.json();
-        targetSsid = info.target_ssid_24ghz || info.current_ssid || "Unknown";
-        if (targetWifiEl) {
-          targetWifiEl.textContent = targetSsid + (info.has_password ? " 🔒 (Password auto-synced)" : "");
+      // 1. Fetch current robot credentials
+      const infoRes = await fetch("/api/v1/head_unit/wifi_info").catch(() => null);
+      let targetSsid24 = "";
+      if (infoRes && infoRes.ok) {
+        const info = await infoRes.json();
+        robotSsid = info.current_ssid || "";
+        targetSsid24 = info.target_ssid_24ghz || robotSsid;
+        savedRobotPassword = info.saved_password || "";
+      }
+
+      // 2. Fetch scanned Wi-Fi networks
+      const scanRes = await fetch("/api/v1/head_unit/wifi_scan").catch(() => null);
+      let networks = [];
+      if (scanRes && scanRes.ok) {
+        const scanData = await scanRes.json();
+        networks = scanData.networks || [];
+      }
+
+      wifiSelectEl.innerHTML = "";
+
+      if (networks.length === 0) {
+        // Fallback to active SSID if scan is empty
+        const opt = document.createElement("option");
+        opt.value = targetSsid24 || robotSsid || "Robot-Network";
+        opt.textContent = `${opt.value} (Robot Network)`;
+        wifiSelectEl.appendChild(opt);
+      } else {
+        let selected = false;
+        networks.forEach((net) => {
+          const opt = document.createElement("option");
+          opt.value = net.ssid;
+          const bandLabel = net.is_24ghz ? "2.4 GHz" : "5 GHz";
+          opt.textContent = `${net.ssid} (${bandLabel} • ${net.signal}%)`;
+
+          // Auto-select target 2.4 GHz or matching robot SSID
+          if (!selected && net.is_24ghz && (net.ssid === targetSsid24 || net.ssid.toLowerCase().includes(robotSsid.toLowerCase().replace(/[-_]5gh?z?$/i, "")))) {
+            opt.selected = true;
+            selected = true;
+          }
+          wifiSelectEl.appendChild(opt);
+        });
+
+        // If none selected yet, select first 2.4GHz option
+        if (!selected && wifiSelectEl.options.length > 0) {
+          wifiSelectEl.selectedIndex = 0;
         }
       }
+
+      // Pre-fill password if available
+      if (savedRobotPassword && wifiPassEl) {
+        wifiPassEl.value = savedRobotPassword;
+        if (wifiHintEl) wifiHintEl.textContent = "Auto-detected password from robot Wi-Fi.";
+      }
     } catch (e) {
-      if (targetWifiEl) targetWifiEl.textContent = "Unable to read robot Wi-Fi";
+      console.warn("loadAvailableWifi error:", e);
+      if (wifiHintEl) wifiHintEl.textContent = "Could not scan networks. Enter SSID manually.";
     }
-  }
+  };
 
   function showUnpairedView() {
     if (unpairedView) unpairedView.style.display = "block";
@@ -147,24 +231,34 @@
   }
 
   async function startDeviceScan() {
-    if (scanMsg) scanMsg.textContent = "Scanning for nearby Aria Head Units via BLE...";
-    if (deviceListEl) deviceListEl.innerHTML = '<div class="head-unit-scanning-loader">Looking for XIAO ESP32-S3 Sense...</div>';
+    if (scanMsg) scanMsg.textContent = "Scanning for nearby Aria Sense units via BLE...";
+    if (deviceListEl) deviceListEl.innerHTML = '<div class="head-unit-scanning-loader">Scanning for nearby Aria Sense units...</div>';
     if (btnPair) btnPair.disabled = true;
 
     try {
       const res = await fetch("/api/v1/head_unit/scan");
       const data = await res.json();
-      discoveredDevices = data.devices || [];
+      const rawDevices = data.devices || [];
+
+      // Clean device names to ensure no raw hardware branding is shown
+      discoveredDevices = rawDevices.map((dev) => {
+        let name = dev.name || "Aria Sense";
+        if (name.includes("Aria-Head")) {
+          name = name.replace("Aria-Head", "Aria-Sense");
+        } else if (name.includes("XIAO") || name.includes("Seeed") || name === "Head") {
+          name = `Aria-Sense-${(dev.mac || "").replace(/:/g, "").slice(-4).toUpperCase()}`;
+        }
+        return { ...dev, name };
+      });
 
       if (discoveredDevices.length === 0) {
-        // Show demo item or ready prompt if BLE didn't catch in 2s
-        if (scanMsg) scanMsg.textContent = "Turn on XIAO ESP32-S3 Sense to auto-discover.";
+        if (scanMsg) scanMsg.textContent = "Power on your Aria Sense unit to discover.";
         if (deviceListEl) {
           deviceListEl.innerHTML = `
             <div class="head-unit-card is-placeholder">
               <div class="card-icon">📡</div>
               <div class="card-info">
-                <div class="card-name">Aria-Head-Auto</div>
+                <div class="card-name">Aria Sense Unit</div>
                 <div class="card-mac">Waiting for device advertising...</div>
               </div>
               <button class="btn btn-sm btn-secondary" onclick="startDeviceScan()">Retry Scan</button>
@@ -174,7 +268,7 @@
         return;
       }
 
-      if (scanMsg) scanMsg.textContent = `Found ${discoveredDevices.length} nearby unit(s). Select to pair:`;
+      if (scanMsg) scanMsg.textContent = `Found ${discoveredDevices.length} nearby Aria Sense unit(s). Select to pair:`;
       renderDeviceList();
     } catch (e) {
       if (scanMsg) scanMsg.textContent = "Scan error. Please try again.";
@@ -193,7 +287,7 @@
       card.innerHTML = `
         <div class="card-icon">🎙️</div>
         <div class="card-info">
-          <div class="card-name">${escapeHtml(dev.name || "Aria Head Unit")}</div>
+          <div class="card-name">${escapeHtml(dev.name || "Aria Sense")}</div>
           <div class="card-mac">${escapeHtml(dev.mac)} • Signal: ${dev.rssi || -55} dBm</div>
         </div>
         <div class="card-select-radio">${selectedDeviceMac === dev.mac ? "●" : "○"}</div>
@@ -214,25 +308,40 @@
   }
 
   window.pairSelectedHeadUnit = async function () {
-    if (!selectedDeviceMac) return;
+    if (!selectedDeviceMac) {
+      showToast("⚠️ Please select an Aria Sense unit to pair.");
+      return;
+    }
+
+    const chosenSsid = (wifiSelectEl ? wifiSelectEl.value : "") || robotSsid;
+    const chosenPass = wifiPassEl ? wifiPassEl.value : "";
+
+    if (!chosenSsid) {
+      showToast("⚠️ Please select or enter a Wi-Fi network.");
+      return;
+    }
 
     if (btnPair) {
       btnPair.disabled = true;
-      btnPair.innerHTML = `<span class="spinner-inline"></span> Transmitting Wi-Fi to Head Unit...`;
+      btnPair.innerHTML = `<span class="spinner-inline"></span> Connecting Aria Sense to ${escapeHtml(chosenSsid)}...`;
     }
 
     try {
       const res = await fetch("/api/v1/head_unit/pair", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mac: selectedDeviceMac, ssid: targetSsid })
+        body: JSON.stringify({
+          mac: selectedDeviceMac,
+          ssid: chosenSsid,
+          password: chosenPass
+        })
       });
       const data = await res.json();
 
       if (res.ok) {
-        if (scanMsg) scanMsg.textContent = `✅ Sent credentials! Connecting ${selectedDeviceMac} to ${targetSsid}...`;
+        if (scanMsg) scanMsg.textContent = `✅ Transmitted Wi-Fi credentials! Connecting to ${chosenSsid}...`;
         
-        // Poll quickly for connection confirmation
+        // Fast polling for connection confirmation
         let checks = 0;
         const checkConn = setInterval(async () => {
           checks++;
@@ -241,17 +350,18 @@
             const stData = await stRes.json();
             if (stData.connected) {
               clearInterval(checkConn);
-              showToast("✨ Head Unit Paired! Live audio & camera stream active.");
+              showToast("✨ Aria Sense Connected! High-fidelity mic and camera active.");
               showConnectedView(stData);
               return;
             }
           }
-          if (checks > 12) {
+          if (checks > 15) {
             clearInterval(checkConn);
             if (btnPair) {
               btnPair.disabled = false;
-              btnPair.textContent = "Retry Pairing";
+              btnPair.textContent = "Connect & Pair Aria Sense";
             }
+            if (scanMsg) scanMsg.textContent = "Pairing timed out. Verify Wi-Fi password and try again.";
           }
         }, 1500);
 
@@ -259,14 +369,14 @@
         showToast("⚠️ " + (data.message || "Pairing failed"));
         if (btnPair) {
           btnPair.disabled = false;
-          btnPair.textContent = "Pair & Sync Wi-Fi";
+          btnPair.textContent = "Connect & Pair Aria Sense";
         }
       }
     } catch (err) {
       showToast("⚠️ Pairing error: " + err.message);
       if (btnPair) {
         btnPair.disabled = false;
-        btnPair.textContent = "Pair & Sync Wi-Fi";
+        btnPair.textContent = "Connect & Pair Aria Sense";
       }
     }
   };
@@ -274,6 +384,7 @@
   window.disconnectHeadUnit = function () {
     selectedDeviceMac = null;
     showUnpairedView();
+    loadAvailableWifi();
     startDeviceScan();
   };
 

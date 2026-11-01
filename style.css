@@ -6802,26 +6802,91 @@ select.kiosk-select option,
   color: #6366f1;
 }
 
-.head-unit-wifi-info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  background: #f1f5f9;
-  border-radius: 12px;
+.head-unit-config-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px;
   margin-bottom: 18px;
-  font-size: 13px;
 }
 
-.wifi-info-label {
-  font-weight: 600;
+.config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
   color: #475569;
 }
 
-.wifi-info-val {
-  font-weight: 800;
+.btn-refresh-wifi {
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6366f1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.btn-refresh-wifi:hover {
+  background: #ede9fe;
+}
+
+.head-unit-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 13px;
   color: #0f172a;
-  font-family: var(--font-mono);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.head-unit-input:focus {
+  border-color: #6366f1;
+}
+
+.input-password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-password-wrapper .head-unit-input {
+  padding-right: 42px;
+}
+
+.btn-pass-toggle {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.7;
+}
+
+.btn-pass-toggle:hover {
+  opacity: 1;
+}
+
+.config-hint {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
 }
 
 .btn-pair-head {

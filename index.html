@@ -54,8 +54,8 @@
           </div>
         </div>
 
-        <!-- Head Unit (Wireless Mic & Camera) Quick Button -->
-        <button class="head-unit-quick-btn" id="btn-open-head-unit" onclick="openHeadUnitSheet()" title="Aria Head Unit (Top Mic & Camera)">
+        <!-- Aria Sense (Wireless Mic & Camera) Quick Button -->
+        <button class="head-unit-quick-btn" id="btn-open-head-unit" onclick="openHeadUnitSheet()" title="Aria Sense (Top Mic & Camera)">
           <span class="head-unit-status-dot" id="head-unit-status-dot"></span>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align: -2px;">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -63,7 +63,7 @@
             <line x1="12" y1="19" x2="12" y2="23"></line>
             <line x1="8" y1="23" x2="16" y2="23"></line>
           </svg>
-          <span class="head-unit-btn-label">Head</span>
+          <span class="head-unit-btn-label">Aria Sense</span>
         </button>
 
         <!-- Wi-Fi & Setup Quick Button -->
@@ -1457,8 +1457,8 @@
           </svg>
         </div>
         <div>
-          <h3>Aria Head Unit (Top Mic & Camera)</h3>
-          <p class="sheet-subtitle" id="head-unit-subtitle">Seeed Studio XIAO ESP32-S3 Sense</p>
+          <h3>Aria Sense (Top Mic & Camera)</h3>
+          <p class="sheet-subtitle" id="head-unit-subtitle">Wireless High-Fidelity Perception Module</p>
         </div>
       </div>
       <button class="sheet-close-btn" onclick="closeHeadUnitSheet()">✕</button>
@@ -1468,20 +1468,37 @@
     <div id="head-unit-view-unpaired" class="sheet-content">
       <div class="head-unit-scan-status">
         <div class="scanning-pulse-circle"></div>
-        <span id="head-unit-scan-msg">Scanning for nearby Head Units via BLE...</span>
+        <span id="head-unit-scan-msg">Scanning for nearby Aria Sense units via BLE...</span>
       </div>
 
       <div class="head-unit-device-list" id="head-unit-device-list">
-        <!-- Populated dynamically via BLE scan: Aria-Head-42E8 -->
+        <!-- Populated dynamically via BLE scan: Aria-Sense-88A8 -->
       </div>
 
-      <div class="head-unit-wifi-info">
-        <span class="wifi-info-label">Sync with Robot Wi-Fi:</span>
-        <span class="wifi-info-val" id="head-unit-target-wifi">Detecting robot Wi-Fi...</span>
+      <!-- Wi-Fi Network & Password Configuration Card -->
+      <div class="head-unit-config-card">
+        <div class="config-field">
+          <label class="config-label" for="head-unit-wifi-select">
+            <span>Wi-Fi Network (2.4 GHz Required)</span>
+            <button class="btn-refresh-wifi" type="button" onclick="loadAvailableWifi(true)" title="Refresh Wi-Fi Networks">🔄 Scan</button>
+          </label>
+          <select id="head-unit-wifi-select" class="head-unit-input" onchange="onWifiSelectChange()">
+            <option value="">Scanning Wi-Fi...</option>
+          </select>
+        </div>
+
+        <div class="config-field" style="margin-top: 10px;">
+          <label class="config-label" for="head-unit-wifi-pass">Wi-Fi Password</label>
+          <div class="input-password-wrapper">
+            <input type="password" id="head-unit-wifi-pass" class="head-unit-input" placeholder="Enter Wi-Fi Password" autocomplete="off" />
+            <button type="button" class="btn-pass-toggle" id="btn-toggle-wifi-pass" onclick="toggleHeadUnitPassVisibility()" title="Show/Hide Password">👁️</button>
+          </div>
+          <span class="config-hint" id="head-unit-wifi-hint">Auto-detected from robot. Edit if required.</span>
+        </div>
       </div>
 
       <button class="btn btn-primary btn-block btn-pair-head" id="btn-pair-head-unit" onclick="pairSelectedHeadUnit()" disabled>
-        Pair & Sync Wi-Fi
+        Connect & Pair Aria Sense
       </button>
     </div>
 

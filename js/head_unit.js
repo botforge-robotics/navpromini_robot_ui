@@ -287,6 +287,9 @@
     else console.log("[Toast]", msg);
   }
 
+  window.startDeviceScan = startDeviceScan;
+  window.selectDevice = selectDevice;
+
   // Auto-init on DOMContentLoaded
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);

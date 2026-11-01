@@ -14,9 +14,12 @@
   let isListening = false;
   let isMuted = false;
   let isSpeaking = false;
+  let isUserSpeaking = false;
+  let userAudioLevel = 0.0;
   let audioLevel = 0.0;
   let waveformAnimId = null;
   let pollInterval = null;
+  let fastPollInterval = null;
 
   // DOM Elements
   let canvas = null;
@@ -59,6 +62,11 @@
     // Fetch initial dialog history & live stream state
     fetchDialog();
     checkLiveStatus();
+    if (!fastPollInterval) {
+      fastPollInterval = setInterval(() => {
+        checkLiveStatus();
+      }, 350);
+    }
   }
 
   function resizeCanvas() {
@@ -87,7 +95,7 @@
       ctx.clearRect(0, 0, width, height);
 
       const centerY = height / 2;
-      wavePhase += isListening ? 0.08 : (isSpeaking ? 0.06 : 0.025);
+      wavePhase += isSpeaking ? 0.09 : (isUserSpeaking ? 0.08 : (isListening ? 0.035 : 0.02));
 
       // Determine colors and amplitude based on active state
       let baseAmp = 6;
@@ -101,18 +109,31 @@
         strokeColor1 = "rgba(239, 68, 68, 0.45)";
         strokeColor2 = "rgba(220, 38, 38, 0.2)";
         strokeColor3 = "transparent";
-      } else if (isListening) {
-        baseAmp = 34 + Math.random() * 18;
-        strokeColor1 = "rgba(16, 185, 129, 0.95)";
-        strokeColor2 = "rgba(52, 211, 153, 0.55)";
-        strokeColor3 = "rgba(110, 231, 183, 0.35)";
-        glowColor = "rgba(16, 185, 129, 0.35)";
       } else if (isSpeaking) {
-        baseAmp = 28 + Math.sin(wavePhase * 2.2) * 14;
-        strokeColor1 = "rgba(99, 102, 241, 0.95)";
-        strokeColor2 = "rgba(129, 140, 248, 0.55)";
-        strokeColor3 = "rgba(165, 180, 252, 0.35)";
-        glowColor = "rgba(99, 102, 241, 0.35)";
+        // Robot Speaking: Vibrant Orange waves
+        baseAmp = 30 + Math.sin(wavePhase * 2.5) * 16;
+        strokeColor1 = "rgba(249, 115, 22, 0.95)";
+        strokeColor2 = "rgba(251, 146, 60, 0.65)";
+        strokeColor3 = "rgba(253, 186, 116, 0.40)";
+        glowColor = "rgba(249, 115, 22, 0.55)";
+      } else if (isListening) {
+        // Listening / User Speaking: Vibrant Green waves
+        if (isUserSpeaking || userAudioLevel > 0.05) {
+          // User is actively speaking: dynamic high amplitude emerald green waves
+          const boost = Math.min(32, Math.max(14, userAudioLevel * 50));
+          baseAmp = 24 + boost + Math.sin(wavePhase * 3.1) * 10;
+          strokeColor1 = "rgba(16, 185, 129, 0.95)";
+          strokeColor2 = "rgba(52, 211, 153, 0.70)";
+          strokeColor3 = "rgba(110, 231, 183, 0.45)";
+          glowColor = "rgba(16, 185, 129, 0.60)";
+        } else {
+          // Gentle resting breathing green wave
+          baseAmp = 12 + Math.sin(wavePhase * 1.6) * 4;
+          strokeColor1 = "rgba(16, 185, 129, 0.70)";
+          strokeColor2 = "rgba(52, 211, 153, 0.40)";
+          strokeColor3 = "rgba(110, 231, 183, 0.25)";
+          glowColor = "rgba(16, 185, 129, 0.25)";
+        }
       }
 
       // Draw tertiary harmonic wave
@@ -181,6 +202,12 @@
         const data = await res.json();
         isMuted = !!data.muted;
         isListening = !!data.listening;
+        if (data.speaking !== undefined) {
+          isSpeaking = !!data.speaking;
+        }
+        if (data.user_speaking !== undefined) {
+          isUserSpeaking = !!data.user_speaking;
+        }
         updateMuteButtonUI();
         updateMicSourceBadge(data);
         if (Array.isArray(data.messages)) {
@@ -344,6 +371,22 @@
     }
   };
 
+  window.handleVoiceEvent = function (ev, data) {
+    if (ev === "voice.speaking") {
+      isSpeaking = !!(data && data.speaking);
+      if (isSpeaking) {
+        isUserSpeaking = false;
+      }
+      updateLiveButtonUI();
+    } else if (ev === "voice.user_speaking") {
+      isUserSpeaking = !!(data && data.speaking);
+      if (data && typeof data.level === "number") {
+        userAudioLevel = data.level;
+      }
+      updateLiveButtonUI();
+    }
+  };
+
   async function checkLiveStatus() {
     if (isTogglingLive) return; // Do not overwrite user tap state while toggle is in flight
     try {
@@ -357,6 +400,9 @@
       if (data.speaking !== undefined) {
         isSpeaking = !!data.speaking;
       }
+      if (data.user_speaking !== undefined) {
+        isUserSpeaking = !!data.user_speaking;
+      }
       updateLiveButtonUI();
       updateMicSourceBadge(data);
     } catch (e) {
@@ -365,6 +411,16 @@
   }
 
   function updateLiveButtonUI() {
+    // Synchronize avatar status dot
+    const dot = document.querySelector(".voice-avatar-status-dot");
+    if (dot) {
+      if (isSpeaking) {
+        dot.classList.add("is-speaking");
+      } else {
+        dot.classList.remove("is-speaking");
+      }
+    }
+
     if (!btnTapToTalk) return;
     if (liveConnecting) {
       btnTapToTalk.className = "btn-clean-tap-to-talk is-connecting";
@@ -376,19 +432,47 @@
       return;
     }
     if (liveActive && !liveMuted) {
-      btnTapToTalk.className = "btn-clean-tap-to-talk is-live-streaming";
-      btnTapToTalk.innerHTML = `
-        <span class="live-indicator-dot"></span>
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-          <line x1="12" y1="19" x2="12" y2="23"></line>
-          <line x1="8" y1="23" x2="16" y2="23"></line>
-        </svg>
-        <span id="btn-voice-talk-label">Aria Listening • Speak Freely</span>
-      `;
       isListening = true;
       isMuted = false;
+
+      if (isSpeaking) {
+        // Robot Speaking: Orange button with pulse
+        btnTapToTalk.className = "btn-clean-tap-to-talk is-speaking-orange";
+        btnTapToTalk.innerHTML = `
+          <span class="live-indicator-dot" style="background:#f97316;box-shadow:0 0 10px #f97316;"></span>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <span id="btn-voice-talk-label">Aria Speaking • Tap to Barge In</span>
+        `;
+      } else if (isUserSpeaking) {
+        // User Speaking: Emerald green button with speech indicator
+        btnTapToTalk.className = "btn-clean-tap-to-talk is-user-speaking-green";
+        btnTapToTalk.innerHTML = `
+          <span class="live-indicator-dot" style="background:#10b981;box-shadow:0 0 12px #10b981;"></span>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+          <span id="btn-voice-talk-label">Listening to You • Speak Freely</span>
+        `;
+      } else {
+        // Ambient Listening: Calm green button
+        btnTapToTalk.className = "btn-clean-tap-to-talk is-live-streaming";
+        btnTapToTalk.innerHTML = `
+          <span class="live-indicator-dot"></span>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+          <span id="btn-voice-talk-label">Aria Listening • Speak Freely</span>
+        `;
+      }
     } else if (liveActive && liveMuted) {
       btnTapToTalk.className = "btn-clean-tap-to-talk is-live-muted";
       btnTapToTalk.innerHTML = `
@@ -676,8 +760,12 @@
     if (!pollInterval) {
       pollInterval = setInterval(() => {
         fetchDialog();
-        checkLiveStatus();
       }, 1500);
+    }
+    if (!fastPollInterval) {
+      fastPollInterval = setInterval(() => {
+        checkLiveStatus();
+      }, 350);
     }
   };
 

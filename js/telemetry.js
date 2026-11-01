@@ -736,6 +736,10 @@ function initSdkEventsWebSocket() {
             const ev = msg.data.event;
             const data = msg.data.data;
 
+            if (window.handleVoiceEvent) {
+              window.handleVoiceEvent(ev, data);
+            }
+
             if (ev === "mission.started") {
               const missionScreen = document.getElementById("screen-mission-progress");
               if (missionScreen) missionScreen.style.display = "flex";

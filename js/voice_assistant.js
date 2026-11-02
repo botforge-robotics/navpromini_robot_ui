@@ -110,25 +110,25 @@
         strokeColor2 = "rgba(220, 38, 38, 0.2)";
         strokeColor3 = "transparent";
       } else if (isSpeaking) {
-        // Robot Speaking: Vibrant Orange waves
-        baseAmp = 30 + Math.sin(wavePhase * 2.5) * 16;
+        // Robot Speaking: Vibrant Orange waves (scaled to keep waves untrimmed at top & bottom)
+        baseAmp = 25 + Math.sin(wavePhase * 2.5) * 8;
         strokeColor1 = "rgba(249, 115, 22, 0.95)";
         strokeColor2 = "rgba(251, 146, 60, 0.65)";
         strokeColor3 = "rgba(253, 186, 116, 0.40)";
         glowColor = "rgba(249, 115, 22, 0.55)";
       } else if (isListening || (liveActive && !liveMuted)) {
-        // Listening / User Speaking: Vibrant Green waves
+        // Listening / User Speaking: Vibrant Green waves (scaled with headroom)
         if (isUserSpeaking || userAudioLevel > 0.05) {
-          // User is actively speaking: dynamic high amplitude emerald green waves
-          const boost = Math.min(32, Math.max(14, userAudioLevel * 50));
-          baseAmp = 24 + boost + Math.sin(wavePhase * 3.1) * 10;
+          // User is actively speaking: dynamic responsive emerald green waves
+          const boost = Math.min(18, Math.max(8, userAudioLevel * 35));
+          baseAmp = 18 + boost + Math.sin(wavePhase * 3.1) * 6;
           strokeColor1 = "rgba(16, 185, 129, 0.95)";
           strokeColor2 = "rgba(52, 211, 153, 0.70)";
           strokeColor3 = "rgba(110, 231, 183, 0.45)";
           glowColor = "rgba(16, 185, 129, 0.60)";
         } else {
           // Gentle resting breathing green wave
-          baseAmp = 12 + Math.sin(wavePhase * 1.6) * 4;
+          baseAmp = 10 + Math.sin(wavePhase * 1.6) * 3;
           strokeColor1 = "rgba(16, 185, 129, 0.70)";
           strokeColor2 = "rgba(52, 211, 153, 0.40)";
           strokeColor3 = "rgba(110, 231, 183, 0.25)";

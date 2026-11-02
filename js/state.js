@@ -79,6 +79,11 @@ let interactionTimerInterval = null;
 
 // Toast Notifications Helper
 window.showToast = function(message, isError = false, duration = 3000) {
+  // DND Mode: Do not show floating toast popups on the voice avatar screen
+  if (typeof window.currentSwipeIndex === "number" && window.currentSwipeIndex === 3 && !isError) {
+    return;
+  }
+
   const container = document.getElementById("toast-container");
   if (!container) return;
 

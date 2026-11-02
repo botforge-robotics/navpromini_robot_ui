@@ -133,8 +133,18 @@ window.setSwipeIndex = function(index) {
       window.initMediaPlayer();
     }
   } else if (currentSwipeIndex === 3) {
-    window.isDndActive = false;
+    // DND Mode for Live Voice Avatar Screen: suppress navigation/mission popups and banners
+    window.isDndActive = true;
     if (dndPill) dndPill.style.display = "none";
+
+    // Mute/suppress any navigation popups, mission progress screens, and banners
+    const navScreen = document.getElementById("screen-nav-progress");
+    if (navScreen) navScreen.style.display = "none";
+    const missionScreen = document.getElementById("screen-mission-progress");
+    if (missionScreen) missionScreen.style.display = "none";
+    const floatingBanner = document.getElementById("mission-floating-banner");
+    if (floatingBanner) floatingBanner.style.display = "none";
+
     if (window.initVoiceAssistant) {
       window.initVoiceAssistant();
     }

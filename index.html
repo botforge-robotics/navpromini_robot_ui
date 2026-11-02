@@ -326,33 +326,33 @@
           <!-- ============================================================= -->
           <div class="swipe-slide" id="slide-voice">
             <div class="voice-clean-container">
-              <!-- Upper Free Space Stage (AI Assistant Avatar) -->
-              <div class="voice-upper-stage" id="voice-upper-stage">
+              <!-- Top: Aria Name Badge -->
+              <div class="voice-top-bar">
                 <div class="voice-avatar-name-badge">
                   <span class="voice-avatar-status-dot"></span>
                   <span class="voice-avatar-name">Aria</span>
                 </div>
-                <div class="voice-avatar-stage">
-                  <img src="assets/avatar_assistant.png?v=228" alt="Aria" class="voice-avatar-img" id="voice-avatar-img">
-                </div>
               </div>
 
-              <!-- Center Acoustic Waves (Vertically centered across the screen) -->
+              <!-- Acoustic Waves (Positioned ABOVE the Avatar) -->
               <div class="voice-waves-wrapper">
                 <canvas id="voice-waveform-canvas" class="voice-waveform-canvas-clean"></canvas>
               </div>
 
-              <!-- Floating Chat Dialogs (Below center waves, scrolling downward) -->
-              <div class="voice-clean-chat-container">
-                <div class="voice-chat-messages" id="voice-chat-messages">
-                  <!-- Dynamic chat bubbles -->
-                </div>
+              <!-- Main Stage: Big Avatar at the Bottom of the Screen -->
+              <div class="voice-avatar-stage-bottom" id="voice-avatar-stage-bottom">
+                <img src="assets/avatar_assistant.png?v=228" alt="Aria" class="voice-avatar-img-big" id="voice-avatar-img">
               </div>
 
-              <!-- Single Ergonomic Tap to Speak Button at the Bottom -->
+              <!-- Hidden Chat Container (Preserves DOM references without visual clutter) -->
+              <div class="voice-clean-chat-container" style="display: none !important;">
+                <div class="voice-chat-messages" id="voice-chat-messages"></div>
+              </div>
+
+              <!-- Floating Ergonomic Tap to Speak Button at the Bottom -->
               <div class="voice-clean-bottom">
                 <button type="button" class="btn-clean-tap-to-talk" id="btn-voice-tap-to-talk" onclick="window.toggleVoiceListening(event)" style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
-                  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                     <line x1="12" y1="19" x2="12" y2="23"></line>

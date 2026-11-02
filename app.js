@@ -98,6 +98,7 @@ function initSwipeGestures() {
 
 window.setSwipeIndex = function(index) {
   currentSwipeIndex = Math.max(0, Math.min(3, index));
+  window.currentSwipeIndex = currentSwipeIndex;
   const track = document.getElementById("swipe-track");
 
   if (track) {
@@ -120,13 +121,17 @@ window.setSwipeIndex = function(index) {
     window.isDndActive = true;
     if (dndPill) dndPill.style.display = "inline-flex";
 
-    // Mute/suppress any navigation popups, mission progress screens, and banners
+    // Mute/suppress any navigation popups, mission progress screens, charging overlays, and banners
     const navScreen = document.getElementById("screen-nav-progress");
     if (navScreen) navScreen.style.display = "none";
     const missionScreen = document.getElementById("screen-mission-progress");
     if (missionScreen) missionScreen.style.display = "none";
     const floatingBanner = document.getElementById("mission-floating-banner");
     if (floatingBanner) floatingBanner.style.display = "none";
+    const chargingScreen = document.getElementById("screen-charging");
+    if (chargingScreen) chargingScreen.style.display = "none";
+    const dockScreen = document.getElementById("screen-docking-progress");
+    if (dockScreen) dockScreen.style.display = "none";
 
     // Initialize/refresh media player
     if (window.initMediaPlayer) {
@@ -137,13 +142,17 @@ window.setSwipeIndex = function(index) {
     window.isDndActive = true;
     if (dndPill) dndPill.style.display = "none";
 
-    // Mute/suppress any navigation popups, mission progress screens, and banners
+    // Mute/suppress any navigation popups, mission progress screens, charging overlays, and banners
     const navScreen = document.getElementById("screen-nav-progress");
     if (navScreen) navScreen.style.display = "none";
     const missionScreen = document.getElementById("screen-mission-progress");
     if (missionScreen) missionScreen.style.display = "none";
     const floatingBanner = document.getElementById("mission-floating-banner");
     if (floatingBanner) floatingBanner.style.display = "none";
+    const chargingScreen = document.getElementById("screen-charging");
+    if (chargingScreen) chargingScreen.style.display = "none";
+    const dockScreen = document.getElementById("screen-docking-progress");
+    if (dockScreen) dockScreen.style.display = "none";
 
     if (window.initVoiceAssistant) {
       window.initVoiceAssistant();

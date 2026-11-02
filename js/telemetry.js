@@ -23,6 +23,16 @@ async function refreshCachedWaypoints() {
 window.refreshCachedWaypoints = refreshCachedWaypoints;
 refreshCachedWaypoints();
 
+function isVoiceAssistantOrDndActive() {
+  return Boolean(
+    window.isDndActive ||
+    (typeof window.currentSwipeIndex !== "undefined" && window.currentSwipeIndex === 3) ||
+    (typeof currentSwipeIndex !== "undefined" && currentSwipeIndex === 3) ||
+    document.getElementById("slide-voice")?.classList.contains("active") ||
+    document.getElementById("subpage-voice")?.classList.contains("active")
+  );
+}
+
 function updateNavigationState(navData, isMissionActive = false) {
   if (!navData) return;
   try {
@@ -45,8 +55,8 @@ function updateNavigationState(navData, isMissionActive = false) {
     const navScreen = document.getElementById("screen-nav-progress");
     if (!navScreen) return;
 
-    // DND Screen guard: if media player / DND screen is active, NEVER show navigation popup!
-    if (window.isDndActive) {
+    // DND Screen guard: if media player / avatar screen / DND is active, NEVER show navigation popup!
+    if (isVoiceAssistantOrDndActive()) {
       if (navScreen.style.display === "flex") {
         navScreen.style.display = "none";
       }
@@ -213,10 +223,7 @@ function updateDockingScreen(dockData, stateData, isMissionActive = false) {
   const cameraCard = document.getElementById("dock-camera-card");
   const tagStatusEl = document.getElementById("dock-camera-tag-status");
   const radarAnim = document.getElementById("docking-target-animation");
-  const isVoiceAssistantActive = Boolean(
-    (typeof currentSwipeIndex !== "undefined" && currentSwipeIndex === 3) ||
-    document.getElementById("subpage-voice")?.classList.contains("active")
-  );
+  const isVoiceAssistantActive = isVoiceAssistantOrDndActive();
 
   if (isDockActive) {
     if (!isVoiceAssistantActive && dockScreen.style.display !== "flex") dockScreen.style.display = "flex";
@@ -386,10 +393,7 @@ function updatePowerState(pState) {
 
       const setupScreen = document.getElementById("screen-setup");
       const isSetupActive = setupScreen && setupScreen.style.display === "flex";
-      const isVoiceAssistantActive = Boolean(
-        (typeof currentSwipeIndex !== "undefined" && currentSwipeIndex === 3) ||
-        document.getElementById("subpage-voice")?.classList.contains("active")
-      );
+      const isVoiceAssistantActive = isVoiceAssistantOrDndActive();
 
       // Auto-display charging screen ONLY when transitioning into docked charging (and not in setup or voice assistant)
       if (isSetupActive || isVoiceAssistantActive) {

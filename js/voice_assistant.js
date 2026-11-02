@@ -118,7 +118,7 @@
         glowColor = "rgba(249, 115, 22, 0.55)";
       } else if (isListening || (liveActive && !liveMuted)) {
         // Listening / User Speaking: Vibrant Green waves (scaled with headroom)
-        if (isUserSpeaking || userAudioLevel > 0.05) {
+        if (isUserSpeaking) {
           // User is actively speaking: dynamic responsive emerald green waves
           const boost = Math.min(18, Math.max(8, userAudioLevel * 35));
           baseAmp = 18 + boost + Math.sin(wavePhase * 3.1) * 6;
@@ -446,12 +446,15 @@
       isSpeaking = !!(data && data.speaking);
       if (isSpeaking) {
         isUserSpeaking = false;
+        userAudioLevel = 0.0;
       }
       updateLiveButtonUI();
     } else if (ev === "voice.user_speaking") {
       isUserSpeaking = !!(data && data.speaking);
       if (data && typeof data.level === "number") {
-        userAudioLevel = data.level;
+        userAudioLevel = isUserSpeaking ? data.level : 0.0;
+      } else if (!isUserSpeaking) {
+        userAudioLevel = 0.0;
       }
       if (liveActive && !liveMuted) {
         isListening = true;
@@ -484,9 +487,16 @@
       }
       if (data.speaking !== undefined) {
         isSpeaking = !!data.speaking;
+        if (isSpeaking) {
+          isUserSpeaking = false;
+          userAudioLevel = 0.0;
+        }
       }
       if (data.user_speaking !== undefined) {
-        isUserSpeaking = !!data.user_speaking;
+        isUserSpeaking = !isSpeaking && !!data.user_speaking;
+        if (!isUserSpeaking) {
+          userAudioLevel = 0.0;
+        }
       }
       updateLiveButtonUI();
       updateMicSourceBadge(data);

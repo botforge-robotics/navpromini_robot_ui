@@ -115,3 +115,49 @@ Build and execute directly on the Raspberry Pi:
 flutter build linux --release
 ./build/linux/arm64/release/bundle/navpromini_robot_ui
 ```
+
+---
+
+## ⚡ CPU & Load Optimization (Enable / Disable Touchscreen Kiosk)
+
+Rendering the Touchscreen UI on the physical display uses WebKitGTK and X11, which accounts for **~75% to 90% of a CPU core** and **~1 GB RAM** on the Raspberry Pi 5.
+
+When running autonomous missions, testing navigation limits at high speeds (0.4 m/s), or operating via the Flutter tablet app / Mission Planner studio, you can disable the local screen to immediately free CPU resources and lower operating temperatures:
+
+### CLI Control (`navpro-screen`)
+
+Run directly via SSH or terminal:
+
+```bash
+# Check status and running WebKit processes
+navpro-screen status
+
+# Disable autostart on boot and stop running WebKit (instantly reclaims ~80-90% CPU)
+navpro-screen disable
+
+# Re-enable autostart on boot and launch the touchscreen kiosk on display :0
+navpro-screen enable
+
+# Temporarily stop WebKit without altering boot config
+navpro-screen stop
+
+# Manually start the touchscreen UI
+navpro-screen start
+```
+
+### Remote REST API Control
+
+```bash
+# Query screen status
+curl http://<robot-ip>:8090/api/v1/system/screen
+
+# Disable touchscreen UI remotely
+curl -X POST http://<robot-ip>:8090/api/v1/system/screen \
+  -H "Content-Type: application/json" \
+  -d '{"action": "disable"}'
+
+# Re-enable touchscreen UI remotely
+curl -X POST http://<robot-ip>:8090/api/v1/system/screen \
+  -H "Content-Type: application/json" \
+  -d '{"action": "enable"}'
+```

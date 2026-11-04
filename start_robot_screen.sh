@@ -5,6 +5,13 @@
 
 set -e
 
+# Check if touchscreen UI is disabled to save CPU and power when running headless
+DISABLE_FLAG="${HOME}/.config/navpro_screen_disabled"
+if [[ -f "${DISABLE_FLAG}" ]] || [[ "${NAVPRO_SCREEN_ENABLED:-1}" == "0" ]]; then
+    echo "[Robot Screen] Touchscreen UI is disabled via ${DISABLE_FLAG} (NAVPRO_SCREEN_ENABLED=0). Exiting."
+    exit 0
+fi
+
 # Detect environment and display
 CURRENT_USER="$(whoami)"
 if [[ "${CURRENT_USER}" == "navpromini" ]]; then
